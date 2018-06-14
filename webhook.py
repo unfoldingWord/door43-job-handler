@@ -21,7 +21,7 @@ from resource_container.ResourceContainer import RC
 #from models.manifest import TxManifest
 
 
-MY_NAME = 'door43-job-handler'
+MY_NAME = 'DCS-job-handler'
 PRECONVERT_BUCKET_NAME = MY_NAME
 AWS_REGION_NAME = 'us-west-2'
 

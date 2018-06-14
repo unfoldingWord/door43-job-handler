@@ -22,10 +22,10 @@ info:
 	# Runs the rq info display with a one-second refresh
 	rq info --interval 1
 
-run:
+runDev:
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the redis queue
-	rq worker --config settings
+	QUEUE_PREFIX="dev-" rq worker --config settings
 
 XXXcomposeEnqueue:
 	# This runs the enqueue and redis processes via nginx/gunicorn

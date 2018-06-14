@@ -1,8 +1,9 @@
-print("settings.py got loaded")
+from os import getenv
+
 # NOTE: These variable names are defined by the rq package
 
-# TODO: Read the redis URL from an environment variable
-REDIS_URL = 'redis://127.0.0.1:6379'
+# Read the redis URL from an environment variable
+REDIS_URL = getenv('REDIS_URL','redis://127.0.0.1:6379')
 # You can also specify the Redis DB to use
 # REDIS_HOST = 'redis.example.com'
 # REDIS_PORT = 6380
@@ -10,8 +11,11 @@ REDIS_URL = 'redis://127.0.0.1:6379'
 # REDIS_PASSWORD = 'very secret'
 
 # Queues to listen on
-#QUEUES = ['high', 'normal', 'low']
-QUEUES = ['Door43','dev-Door43'] # NOTE: The first queue in the list is processed first
+#QUEUES = ['high', 'normal', 'low'] # NOTE: The first queue in the list is processed first
+OUR_NAME = 'DCS_webhook' # Becomes the queue name -- must match enqueueMain.py in door43-enqueue-job
+prefix = getenv('QUEUE_PREFIX','') # Gets (optional) QUEUE_PREFIX environment variable -- set to 'dev-' for development
+queue_name = prefix + OUR_NAME
+QUEUES = [queue_name]
 
 # If you're using Sentry to collect your runtime exceptions, you can use this
 # to configure RQ for it in a single step
