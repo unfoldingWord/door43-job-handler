@@ -1,5 +1,5 @@
 print( "webhook.py got loaded")
-# NOTE: This module name and function name are defined by the rq package
+# NOTE: This module name and function name are defined by the rq package and our own door43-enqueue-job package
 # This code adapted by RJH June 2018 from tx-manager/client_webhook/ClientWebhook/process_webhook
 
 # Python imports
@@ -10,11 +10,20 @@ import logging
 import ssl
 import urllib.request as urllib2
 import zipfile
+import json
+from datetime import datetime
+
+# Library (PyPi) imports
+from rq import get_current_job
+
+#Local imports
+from resource_container.ResourceContainer import RC
+#from models.manifest import TxManifest
 
 
-MY_NAME = 'tx-job-handler'
-pre_convert_bucket = MY_NAME
-aws_region_name = 'us-west-2'
+MY_NAME = 'door43-job-handler'
+PRECONVERT_BUCKET_NAME = MY_NAME
+AWS_REGION_NAME = 'us-west-2'
 
 
 logger = logging.getLogger()
@@ -29,7 +38,7 @@ def unzip(source_file, destination_dir):
     :param str|unicode source_file: The name of the file to read
     :param str|unicode destination_dir: The name of the directory to write the unzipped files
 
-    NOTE: This is unsafe if the zipfile comes from an untrusted source
+    NOTE: This is UNSAFE if the zipfile comes from an untrusted source
             as it may contain absolute paths outside of the desired folder.
         The zipfile should really be examined first.
     """
@@ -67,14 +76,14 @@ def download_repo(base_temp_dir, commit_url, repo_dir):
 
         download_file(repo_zip_url, repo_zip_file)
     finally:
-        logger.debug('finished.')
+        logger.debug('Downloading finished.')
 
     try:
         logger.debug('Unzipping {0}...'.format(repo_zip_file))
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
-        logger.debug('finished.')
+        logger.debug('Unzipping finished.')
 
     # clean up the downloaded zip file
     if os.path.isfile(repo_zip_file):
@@ -92,14 +101,15 @@ def get_repo_files(base_temp_dir, commit_url, repo_name):
 # end of get_repo_files
 
 
-def job(queued_json_payload):
-    print("Got a job from the Redis queue: {}".format(queued_json_payload))
+def process_job(prefix, queued_json_payload):
+    """
+    prefixable_vars = ['api_url', 'pre_convert_bucket', 'cdn_bucket', 'door43_bucket', 'language_stats_table_name',
+                       #'linter_messaging_name', 'db_name', 'db_user']
+    """
+    print("Processing {0}job: {1}".format(prefix+' ' if prefix else '', queued_json_payload))
 
     # Setup a temp folder to use
-    if pre_convert_bucket:
-        source_url_base = 'https://s3-{0}.amazonaws.com/{1}'.format(aws_region_name, pre_convert_bucket)
-    else:
-        source_url_base = None
+    source_url_base = 'https://s3-{0}.amazonaws.com/{1}'.format(AWS_REGION_NAME, prefix + PRECONVERT_BUCKET_NAME)
     # Move everything down one directory level for simple delete
     intermediate_dir = MY_NAME
     base_temp_dir = os.path.join(tempfile.gettempdir(), intermediate_dir)
@@ -107,6 +117,7 @@ def job(queued_json_payload):
         os.makedirs(base_temp_dir)
     except:
         pass
+    print("source_url_base", repr(source_url_base), "base_temp_dir", repr(base_temp_dir))
 
     # Get the commit_id, commit_url
     commit_id = queued_json_payload['after']
@@ -116,39 +127,45 @@ def job(queued_json_payload):
             break
     commit_id = commit_id[:10]  # Only use the short form
     commit_url = commit['url']
-
+    print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
+    print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message']
+    print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
 
     if 'pusher' in queued_json_payload:
         pusher = queued_json_payload['pusher']
     else:
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
+    print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir, commit_url, repo_name)
 
-    if 0: # Not fixed up yet -- how much of this code does the job handler need to do???
-        # Get the resource container
-        rc = RC(repo_dir, repo_name)
+    # Get the resource container
+    rc = RC(repo_dir, repo_name)
 
-        # Save manifest to manifest table
-        manifest_data = {
-            'repo_name': repo_name,
-            'user_name': user_name,
-            'lang_code': rc.resource.language.identifier,
-            'resource_id': rc.resource.identifier,
-            'resource_type': rc.resource.type,
-            'title': rc.resource.title,
-            'manifest': json.dumps(rc.as_dict()),
-            'last_updated': datetime.utcnow()
-        }
-        print("client_webhook got manifest_data:", manifest_data ) # RJH
+    # Save manifest to manifest table
+    manifest_data = {
+        'repo_name': repo_name,
+        'user_name': user_name,
+        'lang_code': rc.resource.language.identifier,
+        'resource_id': rc.resource.identifier,
+        'resource_type': rc.resource.type,
+        'title': rc.resource.title,
+        'manifest': json.dumps(rc.as_dict()),
+        'last_updated': datetime.utcnow()
+    }
+    print("client_webhook got manifest_data:", manifest_data ) # RJH
+
+
+    if 0: # Not fixed up yet -- how much of this code does the job handler need to do???
+
         # First see if manifest already exists in DB and update it if it is
         print("client_webhook getting manifest for {!r} with user {!r}".format(repo_name,user_name)) # RJH
         # RJH: Next line always fails on the first call! Why?
@@ -203,6 +220,7 @@ def job(queued_json_payload):
         }
         job.success = False
 
+
         converter = self.get_converter_module(job)
         linter = self.get_linter_module(job)
 
@@ -240,6 +258,28 @@ def job(queued_json_payload):
 
         # Update the project.json file
         self.update_project_json(commit_id, job, repo_name, user_name)
+#end of process_job
+
+
+def job(queued_json_payload):
+    """
+    This function is called by the rq package to process a job in the queue(s).
+
+    The job is removed from the queue before the job is started,
+        but if the job times out (specified in enqueue process)
+            then the job gets added to the 'failed' queue.
+    """
+    current_job = get_current_job()
+    #print("Current job: {}".format(current_job)) # Mostly just displays the job number and payload
+    #print("dir",dir(current_job))
+    #print("id",current_job.id) # Displays job number
+    #print("origin",current_job.origin) # Displays queue name
+    #print("meta",current_job.meta) # Empty dict
+
+    #print("Got a job from {0} queue: {1}".format(current_job.origin, queued_json_payload))
+    print("\nGot job {0} from {1} queue".format(current_job.id, current_job.origin))
+    prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
+    process_job(prefix, queued_json_payload)
 
     print("  Ok, job completed now!")
 # end of job

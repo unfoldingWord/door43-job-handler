@@ -1,1 +1,8 @@
 rq==0.11.0
+# yaml is used by file_utils used by ResourceContainer
+pyyaml==3.12
+# dateutil is used by file_utils used by ResourceContainer
+py-dateutil==2.2.0
+# sqlalchemy is used by manifest
+sqlalchemy==1.2.8
+

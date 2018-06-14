@@ -11,7 +11,7 @@ REDIS_URL = 'redis://127.0.0.1:6379'
 
 # Queues to listen on
 #QUEUES = ['high', 'normal', 'low']
-QUEUES = ['Door43']
+QUEUES = ['Door43','dev-Door43'] # NOTE: The first queue in the list is processed first
 
 # If you're using Sentry to collect your runtime exceptions, you can use this
 # to configure RQ for it in a single step
