@@ -1,14 +1,10 @@
-from __future__ import print_function, unicode_literals
 import json
 import shutil
 import sys
 import ssl
 from contextlib import closing
 
-try:
-    import urllib.request as urllib2
-except ImportError:
-    import urllib2
+import urllib.request as urllib2
 
 
 def get_url(url, catch_exception=False):
@@ -31,8 +27,8 @@ def _get_url(url, catch_exception, urlopen):
         with closing(urlopen(url)) as request:
             response = request.read()
 
-    # convert bytes to str (Python 3.5)
-    if type(response) is bytes:
+    # Convert bytes to str
+    if isinstance(response, bytes):
         return response.decode('utf-8')
     else:
         return response

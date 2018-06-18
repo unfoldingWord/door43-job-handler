@@ -1,4 +1,3 @@
-from __future__ import unicode_literals, print_function
 import copy
 from six import iteritems, string_types
 

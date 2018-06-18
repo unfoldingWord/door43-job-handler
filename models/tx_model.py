@@ -1,9 +1,8 @@
-from __future__ import unicode_literals, print_function
 from datetime import datetime, date
 
 from sqlalchemy import inspect
 
-from app.app import App
+from global_settings.global_settings import GlobalSettings
 
 
 class TxModel(object):
@@ -12,19 +11,19 @@ class TxModel(object):
         pass
 
     def insert(self):
-        App.db().add(self)
-        App.db().commit()
-        App.db().close()
+        GlobalSettings.db().add(self)
+        GlobalSettings.db().commit()
+        GlobalSettings.db().close()
 
     def update(self):
-        App.db().merge(self)
-        App.db().commit()
-        App.db().close()
+        GlobalSettings.db().merge(self)
+        GlobalSettings.db().commit()
+        GlobalSettings.db().close()
 
     def delete(self):
-        App.db().delete(self)
-        App.db().commit()
-        App.db().close()
+        GlobalSettings.db().delete(self)
+        GlobalSettings.db().commit()
+        GlobalSettings.db().close()
 
     @classmethod
     def get(cls, *args, **kwargs):
@@ -36,12 +35,12 @@ class TxModel(object):
         if args:
             kwargs[inspect(cls).primary_key[0].name] = args[0]
         item = cls.query(**kwargs).first()
-        App.db().close()
+        GlobalSettings.db().close()
         return item
 
     @classmethod
     def query(cls, **kwargs):
-        items = App.db().query(cls).filter_by(**kwargs)
+        items = GlobalSettings.db().query(cls).filter_by(**kwargs)
         return items
 
     def __iter__(self):

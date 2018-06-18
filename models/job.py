@@ -1,4 +1,3 @@
-from __future__ import unicode_literals, print_function
 from datetime import datetime
 
 from sqlalchemy import Column, String, DateTime, Boolean, Integer
@@ -6,12 +5,12 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from models.tx_model import TxModel
 from models.text_pickle_type import TextPickleType
-from app.app import App
+from global_settings.global_settings import GlobalSettings
 from general_tools.data_utils import convert_string_to_date
 
 
-class TxJob(App.Base, TxModel):
-    __tablename__ = App.job_table_name
+class TxJob(GlobalSettings.Base, TxModel):
+    __tablename__ = GlobalSettings.job_table_name
     job_id = Column(String(100), primary_key=True)
     manifests_id = Column(Integer, nullable=False)
     identifier = Column(String(255), nullable=True)
@@ -67,14 +66,14 @@ class TxJob(App.Base, TxModel):
     def log_message(self, message):
         self.log.append(message)
         flag_modified(self, 'log')
-        App.logger.info(message)
+        GlobalSettings.logger.info(message)
 
     def error_message(self, message):
         self.errors.append(message)
         flag_modified(self, 'errors')
-        App.logger.error(message)
+        GlobalSettings.logger.error(message)
 
     def warning_message(self, message):
         self.warnings.append(message)
         flag_modified(self, 'warnings')
-        App.logger.warning(message)
+        GlobalSettings.logger.warning(message)

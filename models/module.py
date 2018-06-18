@@ -1,14 +1,13 @@
-from __future__ import unicode_literals, print_function
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, DateTime, func
 from general_tools.data_utils import convert_string_to_date
 from models.tx_model import TxModel
 from models.text_pickle_type import TextPickleType
-from app.app import App
+from global_settings.global_settings import GlobalSettings
 
 
-class TxModule(App.Base, TxModel):
-    __tablename__ = App.module_table_name
+class TxModule(GlobalSettings.Base, TxModel):
+    __tablename__ = GlobalSettings.module_table_name
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     name = Column(String(100), unique=True, nullable=False)
     type = Column(String(100), nullable=False)

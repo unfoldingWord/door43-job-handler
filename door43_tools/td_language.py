@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 import json
 
 from general_tools import url_utils

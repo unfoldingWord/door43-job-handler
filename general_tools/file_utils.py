@@ -1,23 +1,13 @@
-from __future__ import unicode_literals, print_function
 import codecs
 import json
 import os
-import zipfile
 import sys
+import zipfile
 import shutil
 import yaml
 from mimetypes import MimeTypes
 
 from general_tools.data_utils import json_serial
-
-# we need this to check for string versus object
-PY3 = sys.version_info[0] == 3
-
-if PY3:
-    string_types = str,
-else:
-    # noinspection PyCompatibility
-    string_types = basestring,
 
 
 def unzip(source_file, destination_dir):
@@ -26,6 +16,10 @@ def unzip(source_file, destination_dir):
 
     :param str|unicode source_file: The name of the file to read
     :param str|unicode destination_dir: The name of the directory to write the unzipped files
+
+    NOTE: This is UNSAFE if the zipfile comes from an untrusted source
+            as it may contain absolute paths outside of the desired folder.
+        The zipfile should really be examined first.
     """
     with zipfile.ZipFile(source_file) as zf:
         zf.extractall(destination_dir)
@@ -127,7 +121,7 @@ def write_file(file_name, file_contents, indent=None):
     # make sure the directory exists
     make_dir(os.path.dirname(file_name))
 
-    if isinstance(file_contents, string_types):
+    if isinstance(file_contents, str):
         text_to_write = file_contents
     else:
         if os.path.splitext(file_name)[1] == '.yaml':

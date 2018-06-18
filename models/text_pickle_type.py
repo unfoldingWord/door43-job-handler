@@ -1,7 +1,7 @@
 import json
 import sqlalchemy
 from sqlalchemy.types import TypeDecorator
-from app.app import App
+from global_settings.global_settings import GlobalSettings
 
 SIZE = 65535
 
@@ -20,5 +20,5 @@ class TextPickleType(TypeDecorator):
             try:
                 value = json.loads(value)
             except:
-                App.logger.debug("Bad JSON: {0}".format(value))
+                GlobalSettings.logger.debug("Bad JSON: {0}".format(value))
         return value

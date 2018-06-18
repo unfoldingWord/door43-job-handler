@@ -1,5 +1,3 @@
-from __future__ import print_function, unicode_literals
-
 # console codes
 WARNING = '\033[95m'
 OKBLUE = '\033[94m'
