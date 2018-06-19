@@ -1,6 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
+*.py[od]
 
 # Distribution / packaging
 .Python
@@ -49,7 +49,6 @@ target/
 # virtualenv
 .venv
 venv/
-venv3/
 
 # mkdocs documentation
 /site

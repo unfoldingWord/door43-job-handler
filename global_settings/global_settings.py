@@ -14,6 +14,7 @@ from aws_tools.lambda_handler import LambdaHandler
 from gogs_tools.gogs_handler import GogsHandler
 
 
+# TODO: Investigate if this GlobalSettings (was tx-Manager App) class still needs to be resetable now
 def resetable(cls):
     cls._resetable_cache_ = cls.__dict__.copy()
     return cls
@@ -155,7 +156,7 @@ class GlobalSettings:
                 value = re.sub(url_re, r'\1{0}'.format(prefix), value)
             else:
                 value = prefix + value
-            print("  With prefix now {}={!r}".format(var,value))
+            #print("  With prefix now {}={!r}".format(var,value))
             setattr(GlobalSettings, var, value)
         cls.prefix = prefix
         cls.dirty = True

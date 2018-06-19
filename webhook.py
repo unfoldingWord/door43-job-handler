@@ -17,13 +17,14 @@ from datetime import datetime, timedelta
 
 # Library (PyPi) imports
 from rq import get_current_job
+from statsd import StatsClient # Graphite front-end
 
-#Local imports
+# Local imports
 from rq_settings import prefix
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
-from services.client.preprocessors import do_preprocess
+from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
 from models.job import TxJob
 from models.module import TxModule
@@ -31,11 +32,16 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-MY_NAME = 'DCS-job-handler'
+OUR_NAME = 'DCS-job-handler'
 GlobalSettings(prefix=prefix)
 converter_callback = '{0}/client/callback/converter'.format(GlobalSettings.api_url)
 linter_callback = '{0}/client/callback/linter'.format(GlobalSettings.api_url)
 
+
+# Get the Graphite URL from the environment, otherwise use a local test instance
+graphite_url = os.getenv('GRAPHITE_URL','localhost')
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=OUR_NAME)
+# TODO: Add some stats below -- (we don't use this yet)
 
 
 def send_request_to_converter(job, converter):
@@ -337,7 +343,7 @@ def process_job(prefix, queued_json_payload):
     # Setup a temp folder to use
     source_url_base = 'https://s3-{0}.amazonaws.com/{1}'.format(GlobalSettings.aws_region_name, GlobalSettings.pre_convert_bucket_name)
     # Move everything down one directory level for simple delete
-    intermediate_dir_name = MY_NAME
+    intermediate_dir_name = OUR_NAME
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
     try:
         os.makedirs(base_temp_dir_name)

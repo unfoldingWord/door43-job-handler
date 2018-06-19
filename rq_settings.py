@@ -12,7 +12,7 @@ REDIS_URL = getenv('REDIS_URL','redis://127.0.0.1:6379')
 
 # Queues to listen on
 #QUEUES = ['high', 'normal', 'low'] # NOTE: The first queue in the list is processed first
-OUR_NAME = 'DCS_webhook' # Becomes the queue name -- must match enqueueMain.py in door43-enqueue-job
+OUR_NAME = 'DCS_webhook' # Becomes the queue name -- MUST match enqueueMain.py in door43-enqueue-job
 prefix = getenv('QUEUE_PREFIX','') # Gets (optional) QUEUE_PREFIX environment variable -- set to 'dev-' for development
 queue_name = prefix + OUR_NAME
 QUEUES = [queue_name]

@@ -11,6 +11,9 @@ XXXclean_doc:
 dependencies:
 	pip install -r requirements.txt
 
+testDependencies:
+	pip install -r test_requirements.txt
+
 # NOTE: The following environment variables are expected to be set:
 #	REDIS_URL (can be omitted for testing to use a local instance)
 #	DEBUG_MODE (can be set to any non-blank string to run in debug mode for testing)
@@ -18,7 +21,7 @@ dependencies:
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
 
-XXXtest:
+test:
 	PYTHONPATH="enqueue/" python -m unittest discover -s tests/
 
 info:
