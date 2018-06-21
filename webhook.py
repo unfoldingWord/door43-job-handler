@@ -1,7 +1,7 @@
 # NOTE: This module name and function name are defined by the rq package and our own door43-enqueue-job package
 # This code adapted by RJH June 2018 from tx-manager/client_webhook/ClientWebhook/process_webhook
 
-# TODO: Collect timing stats with Graphite
+# TODO: Check to see which files brought in from tx-manager aren't actually needed (won't have .pyc files if not invoked)
 
 
 # Python imports
@@ -14,6 +14,7 @@ import urllib.request as urllib2
 import json
 import hashlib
 from datetime import datetime, timedelta
+from time import time
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -32,16 +33,15 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS-job-handler'
+OUR_NAME = 'DCS_job_handler'
 GlobalSettings(prefix=prefix)
-converter_callback = '{0}/client/callback/converter'.format(GlobalSettings.api_url)
-linter_callback = '{0}/client/callback/linter'.format(GlobalSettings.api_url)
+converter_callback = f'{GlobalSettings.api_url}/client/callback/converter'
+linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_URL','localhost')
 stats_client = StatsClient(host=graphite_url, port=8125, prefix=OUR_NAME)
-# TODO: Add some stats below -- (we don't use this yet)
 
 
 def send_request_to_converter(job, converter):
@@ -80,13 +80,13 @@ def send_payload_to_converter(payload, converter):
     if not isinstance(converter_name,str): # bytes in Python3 -- not sure where it gets set
         converter_name = converter_name.decode()
     print("converter_name", repr(converter_name))
-    GlobalSettings.logger.debug('Sending Payload to converter {0}:'.format(converter_name))
+    GlobalSettings.logger.debug(f'Sending Payload to converter {converter_name}:')
     GlobalSettings.logger.debug(payload)
-    converter_function = '{0}tx_convert_{1}'.format(GlobalSettings.prefix, converter_name)
+    converter_function = f'{GlobalSettings.prefix}tx_convert_{converter_name}'
     print("send_payload_to_converter: converter_function is {!r} payload={}".format(converter_function,payload))
+    stats_client.incr('ConvertersInvoked')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, async=True)
-    response = {'What?':'Did no conversion!'}
     GlobalSettings.logger.debug('finished.')
     return response
 # end of send_payload_to_converter function
@@ -137,13 +137,13 @@ def send_payload_to_linter(payload, linter):
     if not isinstance(linter_name,str): # bytes in Python3 -- not sure where it gets set
         linter_name = linter_name.decode()
     print("linter_name",repr(linter_name))
-    GlobalSettings.logger.debug('Sending Payload to linter {0}:'.format(linter_name))
+    GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:'
     GlobalSettings.logger.debug(payload)
-    linter_function = '{0}tx_lint_{1}'.format(GlobalSettings.prefix, linter_name)
+    linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
     print("send_payload_to_linter: linter_function is {!r}, payload={}".format(linter_function,payload))
+    stats_client.incr('LintersInvoked')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, async=True)
-    response = {'What?':'Did no linting!'}
     GlobalSettings.logger.debug('finished.')
     return response
 # end of send_payload_to_linter function
@@ -157,7 +157,7 @@ def update_project_json(base_temp_dir_name, commit_id, job, repo_name, repo_owne
     :param string repo_owner:
     :return:
     """
-    project_json_key = 'u/{0}/{1}/project.json'.format(repo_owner, repo_name)
+    project_json_key = f'u/{repo_owner}/{repo_name}/project.json'
     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
     project_json['user'] = repo_owner
     project_json['repo'] = repo_name
@@ -193,7 +193,7 @@ def upload_build_log_to_s3(base_temp_dir_name, build_log, s3_commit_key, part=''
     """
     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
     write_file(build_log_file, build_log)
-    upload_key = '{0}/{1}build_log.json'.format(s3_commit_key, part)
+    upload_key = f'{s3_commit_key}/{part}build_log.json'
     GlobalSettings.logger.debug('Saving build log to {}/{}'.format(GlobalSettings.cdn_bucket_name,upload_key))
     GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
     # GlobalSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
@@ -276,7 +276,7 @@ def get_unique_job_id():
 
 
 def upload_zip_file(commit_id, zip_filepath):
-    file_key = 'preconvert/{0}.zip'.format(commit_id)
+    file_key = f'preconvert/{commit_id}.zip'
     GlobalSettings.logger.debug('Uploading {0} to {1}/{2}...'.format(zip_filepath, GlobalSettings.pre_convert_bucket_name, file_key))
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
@@ -398,7 +398,6 @@ def process_job(prefix, queued_json_payload):
 
     # First see if manifest already exists in DB and update it if it is
     print("client_webhook getting manifest for {!r} with user {!r}".format(repo_name,user_name)) # RJH
-    # RJH: Next line always fails on the first call! Why?
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -539,7 +538,7 @@ def process_job(prefix, queued_json_payload):
                 if linter:
                     extra_payload = {
                         'single_file': book,
-                        's3_results_key': '{0}/{1}'.format(s3_commit_key, i)
+                        's3_results_key': f'{s3_commit_key}/{i}'
                     }
                     send_request_to_linter(book_job, linter, commit_url, extra_payload)
 
@@ -557,6 +556,9 @@ def job(queued_json_payload):
         but if the job times out (specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
+    start_time = time()
+    stats_client.incr('JobsStarted')
+
     current_job = get_current_job()
     #print("Current job: {}".format(current_job)) # Mostly just displays the job number and payload
     #print("dir",dir(current_job))
@@ -565,12 +567,15 @@ def job(queued_json_payload):
     #print("meta",current_job.meta) # Empty dict
 
     #print("Got a job from {0} queue: {1}".format(current_job.origin, queued_json_payload))
-    print("\nGot job {0} from {1} queue".format(current_job.id, current_job.origin))
+    print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     assert queue_prefix == prefix
     process_job(queue_prefix, queued_json_payload)
 
-    print("  Ok, job completed now!")
+    elapsed_seconds = round(time() - start_time)
+    stats_client.gauge('JobTimeSeconds', elapsed_seconds)
+    stats_client.incr('JobsCompleted')
+    print(f"  Ok, job completed in {elapsed_seconds} seconds!")
 # end of job function
 
 # end of webhook.py
