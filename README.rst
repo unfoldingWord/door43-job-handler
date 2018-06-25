@@ -22,8 +22,8 @@ develop:
 door43-job-handler (part of tx platform)
 ========================================
 
-This program accepts jobs from a rq/redis queue (placed their by the
-[door43-enqueue-job)[https://github.com/unfoldingWord-dev/door43-enqueue-job])
+This program accepts jobs from a rq/redis queue (placed there by the
+[door43-enqueue-job](https://github.com/unfoldingWord-dev/door43-enqueue-job)) program.
 
 Setup
 -----
