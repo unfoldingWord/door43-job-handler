@@ -1,14 +1,19 @@
 # rq and statsd/Graphite is used by the job handler
 rq==0.11.0
 statsd==3.2.2
+
 # yaml is used by file_utils used by ResourceContainer
 pyyaml==3.12
+
 # dateutil is used by file_utils used by ResourceContainer
 py-dateutil==2.2.0
+
 # sqlalchemy is used by manifest
 sqlalchemy==1.2.8
 pymysql==0.8.1
+
 # boto3 is used by aws_tools
 boto3==1.7.40
+
 #gogs_client is used by gogs_tools
 gogs_client==1.0.6

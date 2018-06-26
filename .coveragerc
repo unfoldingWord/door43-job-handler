@@ -1,7 +1,7 @@
 # .coveragerc to control coverage.py
 [run]
 source=
-    src
+    .
 
 omit =
     */__init__.py

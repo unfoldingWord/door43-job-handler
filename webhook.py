@@ -137,7 +137,7 @@ def send_payload_to_linter(payload, linter):
     if not isinstance(linter_name,str): # bytes in Python3 -- not sure where it gets set
         linter_name = linter_name.decode()
     print("linter_name",repr(linter_name))
-    GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:'
+    GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:')
     GlobalSettings.logger.debug(payload)
     linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
     print("send_payload_to_linter: linter_function is {!r}, payload={}".format(linter_function,payload))
@@ -553,7 +553,7 @@ def job(queued_json_payload):
     This function is called by the rq package to process a job in the queue(s).
 
     The job is removed from the queue before the job is started,
-        but if the job times out (specified in enqueue process)
+        but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
     start_time = time()

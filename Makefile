@@ -12,6 +12,7 @@ dependencies:
 	pip install -r requirements.txt
 
 testDependencies:
+dependenciesTest:
 	pip install -r test_requirements.txt
 
 # NOTE: The following environment variables are expected to be set:
@@ -22,7 +23,7 @@ testDependencies:
 #	AWS_SECRET_ACCESS_KEY
 
 test:
-	PYTHONPATH="enqueue/" python -m unittest discover -s tests/
+	python -m unittest discover -s tests/
 
 info:
 	# Runs the rq info display with a one-second refresh
@@ -36,5 +37,5 @@ runDev:
 run:
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the production redis queue
-	# TODO: Can the redis url go in here (i.e., is it public)?
+	# TODO: Can the AWS redis url go in here (i.e., is it public)?
 	REDIS_URL="dadada" rq worker --config rq_settings
