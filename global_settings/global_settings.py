@@ -21,7 +21,7 @@ def resetable(cls):
 
 
 def reset_class(cls):
-    print("reset_class()!!!")
+    #print("reset_class()!!!")
     cache = cls._resetable_cache_  # raises AttributeError on class without decorator
     for key in [key for key in cls.__dict__ if key not in cache and key != '_resetable_cache_']:
         delattr(cls, key)
@@ -124,7 +124,7 @@ class GlobalSettings:
         Using init to set the class variables with GlobalSettings(var=value)
         :param kwargs:
         """
-        print("GlobalSettings.__init__({})".format(kwargs))
+        #print("GlobalSettings.__init__({})".format(kwargs))
         self.init(**kwargs)
 
     @classmethod
@@ -134,7 +134,7 @@ class GlobalSettings:
         :param bool reset:
         :param kwargs:
         """
-        print("GlobalSettings.init(reset={}, {})".format(reset,kwargs))
+        #print("GlobalSettings.init(reset={}, {})".format(reset,kwargs))
         if cls.dirty and reset:
             GlobalSettings.db_close()
             reset_class(GlobalSettings)
@@ -163,7 +163,7 @@ class GlobalSettings:
 
     @classmethod
     def set_vars(cls, **kwargs):
-        print("GlobalSettings.set_vars()...")
+        #print("GlobalSettings.set_vars()...")
         # Sets all the given variables for the class, and then marks it as dirty
         for var, value in kwargs.items():
             if hasattr(GlobalSettings, var):
