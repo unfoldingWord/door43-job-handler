@@ -28,7 +28,9 @@ This program accepts jobs from a rq/redis queue (placed there by the
 Setup
 -----
 
-Satisfy basic depedencies:
+Requires Python 3. (Python2 compatibility has been removed.)
+
+Satisfy basic dependencies:
 
 .. code-block:: bash
 
