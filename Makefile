@@ -12,15 +12,20 @@ dependencies:
 	pip install -r requirements.txt
 
 testDependencies:
+	pip install -r test_requirements.txt
 dependenciesTest:
 	pip install -r test_requirements.txt
 
 # NOTE: The following environment variables are expected to be set:
-#	REDIS_URL (can be omitted for testing to use a local instance)
-#	DEBUG_MODE (can be set to any non-blank string to run in debug mode for testing)
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
+
+# NOTE: The following environment variables are optional:
+#	REDIS_URL (can be omitted for testing to use a local instance)
+#	DEBUG_MODE (can be set to any non-blank string to run in debug mode for testing)
+#	GRAPHITE_URL (defaults to localhost if missing)
+#	QUEUE_PREFIX (defaults to '', set to dev- for testing)
 
 test:
 	python -m unittest discover -s tests/

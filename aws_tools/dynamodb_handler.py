@@ -1,5 +1,4 @@
 import boto3
-from six import iteritems
 from boto3 import Session
 from boto3.dynamodb.conditions import Attr
 
@@ -47,7 +46,7 @@ class DynamoDBHandler(object):
         names = {}
         values = {}
 
-        for field, value in iteritems(data):
+        for field, value in data.items():
             if field not in keys:
                 name = field
                 if name.upper() in RESERVED_WORDS:
@@ -102,7 +101,7 @@ class DynamoDBHandler(object):
         """
         filter_expression = None
         if query and len(query) >= 1:
-            for field, value in iteritems(query):
+            for field, value in query.items():
                 value2 = None
                 if isinstance(value, dict) and 'condition' in value and 'value' in value:
                     condition_str = value['condition']

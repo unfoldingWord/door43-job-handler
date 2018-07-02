@@ -1,13 +1,6 @@
 from datetime import datetime, date
 from dateutil.parser import parse
 
-try:
-    basestring = basestring
-    check_for_bytes = False
-except NameError: # 'basestring' is undefined, must be Python 3
-    basestring = (str,bytes)
-    check_for_bytes = True
-
 
 def mask_fields(dictionary, fields_to_mask, show_num_chars=2):
     """
@@ -34,7 +27,7 @@ def mask_string(text, show_num_chars=2):
     :param int show_num_chars:
     :return:
     """
-    if not isinstance(text, basestring):
+    if not isinstance(text, (str,bytes)):
         return text
     return text[0:show_num_chars].ljust(len(text), "*")
 
@@ -45,7 +38,7 @@ def json_serial(obj):
     """
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
-    if check_for_bytes and isinstance(obj,bytes):
+    if isinstance(obj,bytes):
         return obj.decode()
 
     raise TypeError("Type %s not serializable" % type(obj))
@@ -56,7 +49,7 @@ def convert_string_to_date(date_str,ignoretz=True):
     :param string date_str:
     :return datetime:
     """
-    if isinstance(date_str, basestring):
+    if isinstance(date_str, (str,bytes)):
         return parse(date_str, ignoretz=ignoretz)
     else:
         return date_str

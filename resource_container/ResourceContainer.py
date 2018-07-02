@@ -7,10 +7,6 @@ from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
 from general_tools.file_utils import load_json_object, load_yaml_object, read_file
 
-try:
-    basestring = basestring
-except NameError: # 'basestring' is undefined, must be Python 3
-    basestring = (str,bytes)
 
 resource_map = {
     'udb': {
@@ -354,7 +350,7 @@ class Resource:
 
     @property
     def type(self):
-        if 'type' in self.resource and isinstance(self.resource['type'], basestring):
+        if 'type' in self.resource and isinstance(self.resource['type'], (str,bytes)):
             return self.resource['type'].lower()
         elif self.file_ext == 'usfm':
             if len(self.rc.usfm_files()):
@@ -468,7 +464,7 @@ class Resource:
             for translator in self.resource['translators']:
                 if isinstance(translator, dict) and 'name' in translator:
                     contributor.append(translator['name'])
-                elif isinstance(translator, basestring):
+                elif isinstance(translator, (str,bytes)):
                     contributor.append(translator)
             return contributor
         else:

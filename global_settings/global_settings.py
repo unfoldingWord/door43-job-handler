@@ -148,7 +148,7 @@ class GlobalSettings:
         Prefixes any variables in GlobalSettings.prefixable_variables. This includes URLs
         :return:
         """
-        print("GlobalSettings.prefix_vars with {!r}".format(prefix))
+        #print("GlobalSettings.prefix_vars with {!r}".format(prefix))
         url_re = re.compile(r'^(https*://)')  # Current prefix in URLs
         for var in cls.prefixable_vars:
             value = getattr(GlobalSettings, var)
@@ -172,7 +172,7 @@ class GlobalSettings:
 
     @classmethod
     def cdn_s3_handler(cls):
-        print("GlobalSettings.cdn_s3_handler()...")
+        #print("GlobalSettings.cdn_s3_handler()...")
         if not cls._cdn_s3_handler:
             cls._cdn_s3_handler = S3Handler(bucket_name=cls.cdn_bucket_name,
                                             aws_access_key_id=cls.aws_access_key_id,
@@ -182,7 +182,7 @@ class GlobalSettings:
 
     @classmethod
     def door43_s3_handler(cls):
-        print("GlobalSettings.door43_s3_handler()...")
+        #print("GlobalSettings.door43_s3_handler()...")
         if not cls._door43_s3_handler:
             cls._door43_s3_handler = S3Handler(bucket_name=cls.door43_bucket_name,
                                                aws_access_key_id=cls.aws_access_key_id,
@@ -192,7 +192,7 @@ class GlobalSettings:
 
     @classmethod
     def pre_convert_s3_handler(cls):
-        print("GlobalSettings.pre_convert_s3_handler()...")
+        #print("GlobalSettings.pre_convert_s3_handler()...")
         if not cls._pre_convert_s3_handler:
             cls._pre_convert_s3_handler = S3Handler(bucket_name=cls.pre_convert_bucket_name,
                                                     aws_access_key_id=cls.aws_access_key_id,
@@ -202,7 +202,7 @@ class GlobalSettings:
 
     @classmethod
     def language_stats_db_handler(cls):
-        print("GlobalSettings.language_stats_db_handler()...")
+        #print("GlobalSettings.language_stats_db_handler()...")
         if not cls._language_stats_db_handler:
             cls._language_stats_db_handler = DynamoDBHandler(table_name=cls.language_stats_table_name,
                                                              aws_access_key_id=cls.aws_access_key_id,
@@ -220,7 +220,7 @@ class GlobalSettings:
 
     @classmethod
     def gogs_handler(cls):
-        print("GlobalSettings.gogs_handler()...")
+        #print("GlobalSettings.gogs_handler()...")
         if not cls._gogs_handler:
             cls._gogs_handler = GogsHandler(gogs_url=cls.gogs_url)
         return cls._gogs_handler
@@ -230,7 +230,7 @@ class GlobalSettings:
         """
         :param mixed echo:
         """
-        print("GlobalSettings.db_engine(echo={0}) class method running...".format(echo))
+        #print("GlobalSettings.db_engine(echo={0}) class method running...".format(echo))
         if echo is None or not isinstance(echo, bool):
             echo = cls.echo
         if not cls._db_engine:
@@ -247,11 +247,9 @@ class GlobalSettings:
         """
         :param mixed echo:
         """
-        print("GlobalSettings.db(echo={0}) class method running...".format(echo))
+        #print("GlobalSettings.db(echo={0}) class method running...".format(echo))
         if not cls._db_session:
             cls._db_session = sessionmaker(bind=cls.db_engine(echo), expire_on_commit=False)()
-            # RJH: Why does this import always fail the first time (at the TxManifest class declaration)???
-            # Try moving the import to the top of file -- no seems it's here because of circular imports
             from models.manifest import TxManifest
             TxManifest.__table__.name = cls.manifest_table_name
             from models.job import TxJob
@@ -263,7 +261,7 @@ class GlobalSettings:
 
     @classmethod
     def db_close(cls):
-        print("GlobalSettings.db_close()...")
+        #print("GlobalSettings.db_close()...")
         if cls._db_session:
             cls._db_session.close_all()
             cls._db_session = None
@@ -273,12 +271,12 @@ class GlobalSettings:
 
     @classmethod
     def db_create_tables(cls, tables=None):
-        print("GlobalSettings.db_create_tables()...")
+        #print("GlobalSettings.db_create_tables()...")
         cls.Base.metadata.create_all(cls.db_engine(), tables=tables)
 
     @classmethod
     def construct_connection_string(cls):
-        print("GlobalSettings.construct_connection_string()...")
+        #print("GlobalSettings.construct_connection_string()...")
         db_connection_string = cls.db_protocol+'://'
         if cls.db_user:
             db_connection_string += cls.db_user
@@ -294,5 +292,5 @@ class GlobalSettings:
             db_connection_string += '/'+cls.db_name
         if cls.db_connection_string_params:
             db_connection_string += '?'+cls.db_connection_string_params
-        print( "  Returning", db_connection_string )
+        #print( "  Returning", db_connection_string )
         return db_connection_string

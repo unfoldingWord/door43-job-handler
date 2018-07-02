@@ -417,7 +417,7 @@ class TaPreprocessor(Preprocessor):
 
     def fix_links(self, content):
         # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
-        content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\p{P})\]\n$]+)',
+        content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
                          r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
         # fix links to other sections within the same manual (only one ../ and a section name)
         # e.g. [Section 2](../section2/01.md) => [Section 2](#section2)
