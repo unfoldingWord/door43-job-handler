@@ -5,10 +5,10 @@ WORKDIR /code
 
 RUN pip install -r requirements.txt
 
-EXPOSE 6379
+# EXPOSE 6379
 
 # Define environment variables
-# NOTE: The following environment variables are expected to be already set:
+# NOTE: The following environment variables are expected to be set:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
@@ -22,7 +22,9 @@ ENV DEBUG_MODE True
 ENV GRAPHITE_URL dash.door43.org
 
 
-CMD [ "rq", "worker", "-c", "rq_settings" ]
+CMD [ "rq", "worker", "--config", "rq_settings" ]
 
 # NOTE: To build use: docker build -t d43jobhandler .
-#       To test use: docker run --net="host" --rm d43jobhandler
+#
+#       To test use: docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --net="host" --name d43jobhandler --rm d43jobhandler
+#           (The above assumes that the three confidential environment variables are already set in the current environment
