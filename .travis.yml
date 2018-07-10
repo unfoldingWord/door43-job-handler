@@ -1,21 +1,50 @@
+# .travis.yml
+#
+# Requires the following environment variables to be set:
+#   QUEUE_PREFIX
+#   TX_DATABASE_PW
+#   AWS_ACCESS_KEY_ID
+#   ASW_SECRET_ACCESS_KEY
+##   DOCKER_USERNAME
+##   DOCKER_PASSWORD
+
 language: python
 # See available versions at https://docs.travis-ci.com/user/languages/python/
 python:
   - '3.6'
-#  - '3.7-dev' # rq fails
+#  - '3.7-dev' # rq 0.11.0 fails because async is now a Python keyword
+
+services:
+  - docker
 
 #before_install:
   #- pip install awscli
   #- scripts/travis_install_apex.sh
 
 install:
-  - pip install -r test_requirements.txt
-  - pip install coveralls
+  - pip3 install --requirement test_requirements.txt
+  - pip3 install coveralls
 
-script: coverage run -m unittest discover -s tests/
+# Run the tests first
+#  and if they succeed, make the docker image(s)
+#   (and check that both succeed)
+script:
+  #- coverage run -m unittest discover -s tests/
+  # NOTE: The full tests above are temporarily disabled (for testing the docker parts)
+  - coverage run -m unittest discover -s tests/global_settings_tests/
 
+# Only execute the following instructions in the case of a success
+#  (failing at this point won't mark the build as a failure).
+# To have `DOCKER_USERNAME` and `DOCKER_PASSWORD` filled
+#  you need to either use `travis`' cli and then `travis set ..`
+#  or go to the travis page of your repository
+#  and then change the environment in the settings pannel.
 after_success:
   - coveralls
+  - if [[ "$TRAVIS_BRANCH" == "master" ]]; then
+      docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD ;
+      make pushImage ;
+    fi
 
 env:
   global:

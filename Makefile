@@ -9,12 +9,12 @@ XXXclean_doc:
 	cd docs && rm -f source/enqueue*.rst
 
 dependencies:
-	pip install -r requirements.txt
+	pip3 install --requirement requirements.txt
 
 testDependencies:
-	pip install -r test_requirements.txt
+	pip3 install --requirement test_requirements.txt
 dependenciesTest:
-	pip install -r test_requirements.txt
+	pip3 install --requirement test_requirements.txt
 
 # NOTE: The following environment variables are expected to be set:
 #	TX_DATABASE_PW
@@ -28,7 +28,7 @@ dependenciesTest:
 #	QUEUE_PREFIX (defaults to '', set to dev- for testing)
 
 test:
-	python -m unittest discover -s tests/
+	python3 -m unittest discover -s tests/
 
 info:
 	# Runs the rq info display with a one-second refresh
@@ -44,3 +44,12 @@ run:
 	#   which removes and then processes jobs from the production redis queue
 	# TODO: Can the AWS redis url go in here (i.e., is it public)?
 	REDIS_URL="dadada" rq worker --config rq_settings
+
+image:
+	# Expects environment variable DOCKER_USERNAME to be set
+	docker build --tag $(DOCKER_USERNAME)/door43_job_handler:latest .
+
+pushImage:
+	# Expects environment variable DOCKER_USERNAME to be set
+	# Expects to be already logged into Docker, e.g., docker login -u $(DOCKER_USERNAME)
+	docker push $(DOCKER_USERNAME)/door43_job_handler:latest

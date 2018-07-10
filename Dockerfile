@@ -3,7 +3,7 @@ FROM python:alpine
 ADD . /code
 WORKDIR /code
 
-RUN pip install -r requirements.txt
+RUN pip3 install --requirement requirements.txt
 
 # EXPOSE 6379
 
@@ -24,7 +24,7 @@ ENV GRAPHITE_URL dash.door43.org
 
 CMD [ "rq", "worker", "--config", "rq_settings" ]
 
-# NOTE: To build use: docker build -t d43jobhandler .
+# NOTE: To build use: docker build --tag door43_job_handler .
 #
-#       To test use: docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --net="host" --name d43jobhandler --rm d43jobhandler
+#       To test use: docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --net="host" --name door43_job_handler --rm door43_job_handler
 #           (The above assumes that the three confidential environment variables are already set in the current environment
