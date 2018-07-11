@@ -22,8 +22,10 @@ services:
   #- scripts/travis_install_apex.sh
 
 install:
-  - pip install --requirement test_requirements.txt
-  - pip install coveralls
+  - pip3 install google-compute-engine
+  # Not totally sure why the above is required on Travis -- see https://github.com/GoogleCloudPlatform/compute-image-packages/issues/262
+  - pip3 install --requirement test_requirements.txt
+  - pip3 install coveralls
 
 # Run the tests first
 #  and if they succeed, make the docker image(s)
@@ -31,7 +33,7 @@ install:
 script:
   #- coverage run -m unittest discover -s tests/
   # NOTE: The full tests above are temporarily disabled (for testing the docker parts)
-  - coverage run -m unittest discover -s tests
+  - coverage run -m unittest discover -s tests/global_settings_tests/
 
 # Only execute the following instructions in the case of a success
 #  (failing at this point won't mark the build as a failure).
