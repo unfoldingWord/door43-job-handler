@@ -34,6 +34,7 @@ script:
   #- coverage run -m unittest discover -s tests/
   # NOTE: The full tests above are temporarily disabled (for testing the docker parts)
   - coverage run -m unittest discover -s tests/global_settings_tests/
+  - make image
 
 # Only execute the following instructions in the case of a success
 #  (failing at this point won't mark the build as a failure).
