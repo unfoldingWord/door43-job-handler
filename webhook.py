@@ -86,7 +86,7 @@ def send_payload_to_converter(payload, converter):
     print("send_payload_to_converter: converter_function is {!r} payload={}".format(converter_function,payload))
     stats_client.incr('ConvertersInvoked')
     # TODO: Put an alternative function call in here RJH
-    response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, async=True)
+    response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
     return response
 # end of send_payload_to_converter function
@@ -143,7 +143,7 @@ def send_payload_to_linter(payload, linter):
     print("send_payload_to_linter: linter_function is {!r}, payload={}".format(linter_function,payload))
     stats_client.incr('LintersInvoked')
     # TODO: Put an alternative function call in here RJH
-    response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, async=True)
+    response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
     return response
 # end of send_payload_to_linter function

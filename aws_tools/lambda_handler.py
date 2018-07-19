@@ -16,8 +16,8 @@ class LambdaHandler(object):
                                    aws_secret_access_key=self.aws_secret_access_key,
                                    region_name=self.aws_region_name)
 
-    def invoke(self, function_name, payload, async=False):
-        invocation_type = 'RequestResponse' if not async else 'Event'
+    def invoke(self, function_name, payload, asyncFlag=False):
+        invocation_type = 'RequestResponse' if not asyncFlag else 'Event'
         print('FUNCTIONNAME', repr(function_name))
         print('InvocationType', repr(invocation_type))
         print("PAYLOAD1", repr(payload))
