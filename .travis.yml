@@ -12,7 +12,7 @@ language: python
 # See available versions at https://docs.travis-ci.com/user/languages/python/
 python:
   - '3.6'
-#  - '3.7-dev' # rq 0.11.0 fails because async is now a Python keyword
+  - '3.7-dev'
 
 services:
   - docker
