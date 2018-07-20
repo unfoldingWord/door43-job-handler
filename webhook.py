@@ -1,14 +1,14 @@
 # NOTE: This module name and function name are defined by the rq package and our own door43-enqueue-job package
 # This code adapted by RJH June 2018 from tx-manager/client_webhook/ClientWebhook/process_webhook
 
-# TODO: Check to see which files brought in from tx-manager aren't actually needed (won't have .pyc files if not invoked)
-
+# NOTE: rq_settings.py is executed at program start-up, reads some environment variables, and sets queue name, etc.
+#       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
 # Python imports
 import os
 import shutil
 import tempfile
-import logging
+#import logging
 import ssl
 import urllib.request as urllib2
 import json
@@ -34,6 +34,7 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_job_handler'
+our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
 converter_callback = f'{GlobalSettings.api_url}/client/callback/converter'
 linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
@@ -41,7 +42,7 @@ linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_URL','localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=OUR_NAME)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
 
 
 def send_request_to_converter(job, converter):
