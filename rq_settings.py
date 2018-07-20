@@ -12,9 +12,9 @@ REDIS_URL = getenv('REDIS_URL', 'redis://127.0.0.1:6379')
 
 # Queues to listen on
 #QUEUES = ['high', 'normal', 'low'] # NOTE: The first queue in the list is processed first
-OUR_NAME = 'Door43_webhook' # Becomes the queue name -- MUST match enqueueMain.py in door43-enqueue-job
+ENQUEUE_NAME = 'Door43_webhook' # Becomes the queue name -- MUST match enqueueMain.py in door43-enqueue-job
 prefix = getenv('QUEUE_PREFIX', '') # Gets (optional) QUEUE_PREFIX environment variable -- set to 'dev-' for development
-queue_name = prefix + OUR_NAME
+queue_name = prefix + ENQUEUE_NAME
 QUEUES = [queue_name]
 
 # If you're using Sentry to collect your runtime exceptions, you can use this
