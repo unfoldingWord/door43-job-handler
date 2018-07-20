@@ -31,7 +31,7 @@ install:
 #  and if they succeed, make the docker image(s)
 #   (and check that both succeed)
 script: 
-  - coverage run -m unittest discover -v -s tests/ && make image
+  - coverage run -m unittest discover -v -s tests/
 
 # Only execute the following instructions in the case of a success
 #  (failing at this point won't mark the build as a failure).
