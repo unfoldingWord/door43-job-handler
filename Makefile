@@ -45,11 +45,16 @@ run:
 	# TODO: Can the AWS redis url go in here (i.e., is it public)?
 	REDIS_URL="dadada" rq worker --config rq_settings
 
-image:
-	# Expects environment variable DOCKER_USERNAME to be set
-	docker build --tag $(DOCKER_USERNAME)/door43_job_handler:latest .
+imageDev:
+	docker build --tag unfoldingword/door43_job_handler:develop .
 
-pushImage:
-	# Expects environment variable DOCKER_USERNAME to be set
+imageMaster:
+	docker build --tag unfoldingword/door43_job_handler:master .
+
+pushDevImage:
 	# Expects to be already logged into Docker, e.g., docker login -u $(DOCKER_USERNAME)
-	docker push $(DOCKER_USERNAME)/door43_job_handler:latest
+	docker push unfoldingword/door43_job_handler:develop
+
+pushMasterImage:
+	# Expects to be already logged into Docker, e.g., docker login -u $(DOCKER_USERNAME)
+	docker push unfoldingword/door43_job_handler:master
