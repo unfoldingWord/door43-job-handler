@@ -60,7 +60,7 @@ class GlobalSettings:
     For all things used for by this app, from DB connection to global handlers
     """
     _resetable_cache_ = {}
-    name = 'tx-new'
+    name = 'job-handler'
     dirty = False
 
     # Stage Variables, defaults
@@ -117,7 +117,7 @@ class GlobalSettings:
 
     # Logger
     logger = logging.getLogger()
-    setup_logger(logger, logging.DEBUG)
+    setup_logger(logger, logging.DEBUG if getenv('DEBUG_MODE', '') else logging.ERROR)
 
     def __init__(self, **kwargs):
         """
