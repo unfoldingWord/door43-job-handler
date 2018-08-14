@@ -16,13 +16,13 @@ testDependencies:
 dependenciesTest:
 	pip3 install --requirement test_requirements.txt
 
-# NOTE: The following environment variables are expected to be set:
+# NOTE: The following environment variables are expected to be set for testing:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
 
 # NOTE: The following environment variables are optional:
-#	REDIS_URL (can be omitted for testing to use a local instance)
+#	REDIS_URL (can be omitted for testing if a local instance is running)
 #	DEBUG_MODE (can be set to any non-blank string to run in debug mode for testing)
 #	GRAPHITE_URL (defaults to localhost if missing)
 #	QUEUE_PREFIX (defaults to '', set to dev- for testing)
@@ -58,3 +58,10 @@ pushDevImage:
 pushMasterImage:
 	# Expects to be already logged into Docker, e.g., docker login -u $(DOCKER_USERNAME)
 	docker push unfoldingword/door43_job_handler:master
+
+# NOTE: To test the container (assuming that the confidential environment variables are already set in the current environment) use:
+# 	docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+
+
+# NOTE: To run the container in production use with the desired values:
+#     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_URL=<graphite_url> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
