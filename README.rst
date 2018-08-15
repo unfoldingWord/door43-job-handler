@@ -51,3 +51,22 @@ Now load that virtual environment and install dependencies:
 
     source venv/bin/activate
     make dependencies
+
+Deploymemt
+----------
+
+Travis-CI is hooked to from GitHub to automatically test commits to both the `develop`
+and `master` branches, and on success, to build containers (tagged with those branch names)
+that are pushed to [DockerHub](https://hub.docker.com/u/unfoldingword/).
+
+To test the container (assuming that the confidential environment variables are already set in the current environment) use:
+.. code-block:: bash
+ 	docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+
+
+To run the container in production use with the desired values:
+.. code-block:: bash
+     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_URL=<graphite_url> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+
+The production container will be deployed to the unfoldingWord AWS EC2 instance, where
+[Watchtower](https://github.com/v2tec/watchtower) will automatically check for, pull, and run updated containers.
