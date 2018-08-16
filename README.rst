@@ -95,7 +95,7 @@ To run the container in production use with the desired values:
 
 .. code-block:: bash
 
-    docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL="redis://<redis_hostname>:6379" --net="host" --name door43_job_handler --rm unfoldingword/door43_job_handler:master
+    docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL="redis://<redis_hostname>:6379" --net="host" --name door43_job_handler --detach --rm unfoldingword/door43_job_handler:master
 
 Running containers can be viewed with (or append --all to see all containers):
 .. code-block:: bash
