@@ -52,21 +52,64 @@ Now load that virtual environment and install dependencies:
     source venv/bin/activate
     make dependencies
 
-Deploymemt
+Deployment
 ----------
 
 Travis-CI is hooked to from GitHub to automatically test commits to both the `develop`
 and `master` branches, and on success, to build containers (tagged with those branch names)
 that are pushed to [DockerHub](https://hub.docker.com/u/unfoldingword/).
 
-To test the container (assuming that the confidential environment variables are already set in the current environment) use:
-.. code-block:: bash
- 	docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+To fetch the container use something like:
 
+.. code-block:: bash
+
+    docker pull --all-tags unfoldingword/door43_job_handler
+or
+
+.. code-block:: bash
+
+    docker pull unfoldingword/door43_job_handler:develop
+
+To view downloaded images and their tags:
+
+.. code-block:: bash
+
+    docker images
+
+To test the container (assuming that the confidential environment variables are already set in the current environment) use:
+
+.. code-block:: bash
+
+    docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL="redis://<redis_hostname>:6379" --net="host" --name dev-door43_job_handler --rm unfoldingword/door43_job_handler:develop
+
+or if not (and adding optional GRAPHITE_HOSTNAME):
+
+.. code-block:: bash
+
+    docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL="redis://<redis_hostname>:6379" --env --net="host" --name dev-door43_job_handler --rm unfoldingword/door43_job_handler:develop
+
+NOTE: --rm automatically removes the container from the docker daemon when it exits
+            (it doesn't delete the pulled image from disk)
 
 To run the container in production use with the desired values:
+
 .. code-block:: bash
-     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_URL=<graphite_url> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+
+    docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL="redis://<redis_hostname>:6379" --net="host" --name door43_job_handler --rm unfoldingword/door43_job_handler:master
+
+Running containers can be viewed with (or append --all to see all containers):
+.. code-block:: bash
+
+    docker ps
+
+The container can be stopped with a command like:
+.. code-block:: bash
+
+    docker stop dev-door43_job_handler
+or using the full container name:
+.. code-block:: bash
+
+    docker stop unfoldingword/door43_job_handler:develop
 
 The production container will be deployed to the unfoldingWord AWS EC2 instance, where
 [Watchtower](https://github.com/v2tec/watchtower) will automatically check for, pull, and run updated containers.

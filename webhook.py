@@ -41,7 +41,7 @@ linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
-graphite_url = os.getenv('GRAPHITE_URL','localhost')
+graphite_url = os.getenv('GRAPHITE_HOSTNAME','localhost')
 stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
 
 

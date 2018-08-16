@@ -24,7 +24,7 @@ dependenciesTest:
 # NOTE: The following environment variables are optional:
 #	REDIS_URL (can be omitted for testing if a local instance is running)
 #	DEBUG_MODE (can be set to any non-blank string to run in debug mode for testing)
-#	GRAPHITE_URL (defaults to localhost if missing)
+#	GRAPHITE_HOSTNAME (defaults to localhost if missing)
 #	QUEUE_PREFIX (defaults to '', set to dev- for testing)
 
 test:
@@ -64,4 +64,4 @@ pushMasterImage:
 
 
 # NOTE: To run the container in production use with the desired values:
-#     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_URL=<graphite_url> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+#     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
