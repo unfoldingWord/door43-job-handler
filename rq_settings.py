@@ -4,7 +4,6 @@ from os import getenv
 
 # Read the redis URL from an environment variable
 REDIS_URL = getenv('REDIS_URL', 'redis://127.0.0.1:6379')
-print(f"Got REDIS_URL: {REDIS_URL!r}")
 # You can also specify the Redis DB to use
 # REDIS_HOST = 'redis.example.com'
 # REDIS_PORT = 6380
@@ -15,7 +14,6 @@ print(f"Got REDIS_URL: {REDIS_URL!r}")
 #QUEUES = ['high', 'normal', 'low'] # NOTE: The first queue in the list is processed first
 ENQUEUE_NAME = 'Door43_webhook' # Becomes the queue name -- MUST match enqueueMain.py in door43-enqueue-job
 prefix = getenv('QUEUE_PREFIX', '') # Gets (optional) QUEUE_PREFIX environment variable -- set to 'dev-' for development
-print(f"Got prefix: {prefix!r}")
 queue_name = prefix + ENQUEUE_NAME
 QUEUES = [queue_name]
 
