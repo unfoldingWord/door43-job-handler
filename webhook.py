@@ -11,6 +11,7 @@ import tempfile
 #import logging
 import ssl
 import urllib.request as urllib2
+from urllib.parse import urlencode
 import json
 import hashlib
 from datetime import datetime, timedelta
@@ -34,8 +35,12 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_job_handler'
+
 our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
+if prefix not in ('', 'dev-'):
+    GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+
 converter_callback = f'{GlobalSettings.api_url}/client/callback/converter'
 linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
 
@@ -234,6 +239,13 @@ def clear_commit_directory_in_cdn(s3_commit_key):
         GlobalSettings.logger.debug('Removing file: ' + obj.key)
         GlobalSettings.cdn_s3_handler().delete_file(obj.key)
 # end of clear_commit_directory_in_cdn function
+
+
+def build_multipart_source(self, file_key, book):
+    params = urlencode({'convert_only': book})
+    source_url = '{0}/{1}?{2}'.format(self.source_url_base, file_key, params)
+    return source_url
+# end of build_multipart_source function
 
 
 def get_converter_module(job):
