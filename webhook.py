@@ -241,9 +241,9 @@ def clear_commit_directory_in_cdn(s3_commit_key):
 # end of clear_commit_directory_in_cdn function
 
 
-def build_multipart_source(self, file_key, book):
+def build_multipart_source(source_url_base, file_key, book):
     params = urlencode({'convert_only': book})
-    source_url = '{0}/{1}?{2}'.format(self.source_url_base, file_key, params)
+    source_url = '{0}/{1}?{2}'.format(source_url_base, file_key, params)
     return source_url
 # end of build_multipart_source function
 
@@ -537,7 +537,7 @@ def process_job(prefix, queued_json_payload):
                     }
                     book_job.insert()
 
-                book_job.source = build_multipart_source(file_key, book)
+                book_job.source = build_multipart_source(source_url_base, file_key, book)
                 book_job.update()
                 book_build_log = create_build_log(commit_id, commit_message, commit_url, compare_url, book_job,
                                                         pusher_username, repo_name, user_name)
