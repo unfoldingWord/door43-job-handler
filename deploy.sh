@@ -4,7 +4,7 @@
 
 # Parameter $1 is expected to be develop or master
 
-docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD ;
+echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
 if [ "$1" == "master" ]; then
     echo "Making MASTER branch image and pushing it" ;
