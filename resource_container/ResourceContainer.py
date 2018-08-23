@@ -392,12 +392,16 @@ class Resource:
     @property
     def title(self):
         if 'title' in self.resource and self.resource['title']:
+            print(f"RESOURCE.title returning1 resource title {self.resource['title']!r}")
             return self.resource['title']
         elif 'name' in self.resource and self.resource['name']:
+            print(f"RESOURCE.title returning2 resource name {self.resource['name']!r}")
             return self.resource['name']
         elif self.identifier in resource_map:
+            print(f"RESOURCE.title returning3 resource_map title {resource_map[self.identifier]['title']!r}")
             return resource_map[self.identifier]['title']
         else:
+            print(f"RESOURCE.title (final ELSE) returning4 resource identifier {self.identifier!r}")
             return self.identifier
 
     @property
