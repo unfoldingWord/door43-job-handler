@@ -1,3 +1,6 @@
+# NOTE: This docker container is built automatically
+#       from Travis-CI after passing unit tests
+
 FROM python:alpine
 
 ADD . /code
@@ -7,7 +10,7 @@ RUN pip3 install --requirement requirements.txt
 
 # EXPOSE 6379
 
-CMD [ "rq", "worker", "--config", "rq_settings" ]
+CMD [ "rq", "worker", "--config", "rq_settings", "--name", "D43_JobHandler" ]
 
 # Define environment variables
 # NOTE: The following environment variables are expected to be set for testing:
@@ -22,7 +25,7 @@ CMD [ "rq", "worker", "--config", "rq_settings" ]
 
 
 # NOTE: To build use:
-#           docker build --tag door43_job_handler .
+#           docker build --file Dockerfile-masterBranch --tag unfoldingword/door43_job_handler:master .
 
 
 #       To test (assuming that the confidential environment variables are already set in the current environment) use:
