@@ -6,11 +6,11 @@
 
 # Python imports
 import os
-import shutil
+#import shutil
 import tempfile
 #import logging
-import ssl
-import urllib.request as urllib2
+#import ssl
+#import urllib.request as urllib2
 from urllib.parse import urlencode
 import json
 import hashlib
@@ -46,23 +46,23 @@ linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
-graphite_url = os.getenv('GRAPHITE_HOSTNAME','localhost')
+graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
 stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
 
 
-def send_request_to_converter(job, converter):
+def send_request_to_converter(srtc_job, converter):
     """
-    :param TxJob job:
+    :param TxJob srtc_job:
     :param TxModule converter:
     :return bool:
     """
     payload = {
-        'identifier': job.identifier,
-        'source_url': job.source,
-        'resource_id': job.resource_type,
-        'cdn_bucket': job.cdn_bucket,
-        'cdn_file': job.cdn_file,
-        'options': job.options,
+        'identifier': srtc_job.identifier,
+        'source_url': srtc_job.source,
+        'resource_id': srtc_job.resource_type,
+        'cdn_bucket': srtc_job.cdn_bucket,
+        'cdn_file': srtc_job.cdn_file,
+        'options': srtc_job.options,
         'convert_callback': converter_callback
     }
     return send_payload_to_converter(payload, converter)
@@ -83,13 +83,13 @@ def send_payload_to_converter(payload, converter):
         }
     }
     converter_name = converter.name
-    if not isinstance(converter_name,str): # bytes in Python3 -- not sure where it gets set
+    if not isinstance(converter_name, str): # bytes in Python3 -- not sure where it gets set
         converter_name = converter_name.decode()
     print("converter_name", repr(converter_name))
     GlobalSettings.logger.debug(f'Sending Payload to converter {converter_name}:')
     GlobalSettings.logger.debug(payload)
     converter_function = f'{GlobalSettings.prefix}tx_convert_{converter_name}'
-    print("send_payload_to_converter: converter_function is {!r} payload={}".format(converter_function,payload))
+    print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
     stats_client.incr('ConvertersInvoked')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, asyncFlag=True)
@@ -98,28 +98,28 @@ def send_payload_to_converter(payload, converter):
 # end of send_payload_to_converter function
 
 
-def send_request_to_linter(job, linter, commit_url, commit_data, extra_payload=None):
+def send_request_to_linter(srtl_job, linter, commit_url, commit_data, extra_payload=None):
     """
-    :param TxJob job:
+    :param TxJob srtl_job:
     :param TxModule linter:
     :param string commit_url:
     :param dict extra_payload:
     :return bool:
     """
     payload = {
-        'identifier': job.identifier,
-        'resource_id': job.resource_type,
-        'cdn_bucket': job.cdn_bucket,
-        'cdn_file': job.cdn_file,
-        'options': job.options,
+        'identifier': srtl_job.identifier,
+        'resource_id': srtl_job.resource_type,
+        'cdn_bucket': srtl_job.cdn_bucket,
+        'cdn_file': srtl_job.cdn_file,
+        'options': srtl_job.options,
         'lint_callback': linter_callback,
         'commit_data': commit_data
     }
     if extra_payload:
         payload.update(extra_payload)
-    if job.input_format == 'usfm' or job.resource_type == 'obs':
+    if srtl_job.input_format == 'usfm' or srtl_job.resource_type == 'obs':
         # Need to give the massaged source since it maybe was in chunks originally
-        payload['source_url'] = job.source
+        payload['source_url'] = srtl_job.source
     else:
         payload['source_url'] = commit_url.replace('commit', 'archive') + '.zip'
     return send_payload_to_linter(payload, linter)
@@ -140,13 +140,13 @@ def send_payload_to_linter(payload, linter):
         }
     }
     linter_name = linter.name
-    if not isinstance(linter_name,str): # bytes in Python3 -- not sure where it gets set
+    if not isinstance(linter_name, str): # bytes in Python3 -- not sure where it gets set
         linter_name = linter_name.decode()
-    print("linter_name",repr(linter_name))
+    print("linter_name", repr(linter_name))
     GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:')
     GlobalSettings.logger.debug(payload)
     linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
-    print("send_payload_to_linter: linter_function is {!r}, payload={}".format(linter_function,payload))
+    print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
     stats_client.incr('LintersInvoked')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, asyncFlag=True)
@@ -155,10 +155,10 @@ def send_payload_to_linter(payload, linter):
 # end of send_payload_to_linter function
 
 
-def update_project_json(base_temp_dir_name, commit_id, job, repo_name, repo_owner):
+def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_owner):
     """
     :param string commit_id:
-    :param TxJob job:
+    :param TxJob upj_job:
     :param string repo_name:
     :param string repo_owner:
     :return:
@@ -167,17 +167,18 @@ def update_project_json(base_temp_dir_name, commit_id, job, repo_name, repo_owne
     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
     project_json['user'] = repo_owner
     project_json['repo'] = repo_name
-    project_json['repo_url'] = 'https://git.door43.org/{0}/{1}'.format(repo_owner, repo_name)
+    project_json['repo_url'] = f'https://git.door43.org/{repo_owner}/{repo_name}'
     commit = {
         'id': commit_id,
-        'created_at': job.created_at,
-        'status': job.status,
-        'success': job.success,
+        'created_at': upj_job.created_at,
+        'status': upj_job.status,
+        'success': upj_job.success,
         'started_at': None,
         'ended_at': None
     }
     if 'commits' not in project_json:
         project_json['commits'] = []
+    # TODO: Rewrite the following lines as a list comprehension
     commits = []
     for c in project_json['commits']:
         if c['id'] != commit_id:
@@ -200,25 +201,25 @@ def upload_build_log_to_s3(base_temp_dir_name, build_log, s3_commit_key, part=''
     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
     write_file(build_log_file, build_log)
     upload_key = f'{s3_commit_key}/{part}build_log.json'
-    GlobalSettings.logger.debug('Saving build log to {}/{}'.format(GlobalSettings.cdn_bucket_name,upload_key))
+    GlobalSettings.logger.debug(f'Saving build log to {GlobalSettings.cdn_bucket_name}/{upload_key}')
     GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
     # GlobalSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
 #end of upload_build_log_to_s3
 
 
-def create_build_log(commit_id, commit_message, commit_url, compare_url, job, pusher_username, repo_name, repo_owner):
+def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job, pusher_username, repo_name, repo_owner):
     """
     :param string commit_id:
     :param string commit_message:
     :param string commit_url:
     :param string compare_url:
-    :param TxJob job:
+    :param TxJob cbl_job:
     :param string pusher_username:
     :param string repo_name:
     :param string repo_owner:
     :return dict:
     """
-    build_log_json = dict(job)
+    build_log_json = dict(cbl_job)
     build_log_json['repo_name'] = repo_name
     build_log_json['repo_owner'] = repo_owner
     build_log_json['commit_id'] = commit_id
@@ -243,34 +244,34 @@ def clear_commit_directory_in_cdn(s3_commit_key):
 
 def build_multipart_source(source_url_base, file_key, book):
     params = urlencode({'convert_only': book})
-    source_url = '{0}/{1}?{2}'.format(source_url_base, file_key, params)
+    source_url = f'{source_url_base}/{file_key}?{params}'
     return source_url
 # end of build_multipart_source function
 
 
-def get_converter_module(job):
+def get_converter_module(gcm_job):
     """
-    :param TxJob job:
+    :param TxJob gcm_job:
     :return TxModule:
     """
-    converters = TxModule.query().filter(TxModule.type=='converter') \
-        .filter(TxModule.input_format.contains(job.input_format)) \
-        .filter(TxModule.output_format.contains(job.output_format))
-    converter = converters.filter(TxModule.resource_types.contains(job.resource_type)).first()
+    converters = TxModule.query().filter(TxModule.type == 'converter') \
+        .filter(TxModule.input_format.contains(gcm_job.input_format)) \
+        .filter(TxModule.output_format.contains(gcm_job.output_format))
+    converter = converters.filter(TxModule.resource_types.contains(gcm_job.resource_type)).first()
     if not converter:
         converter = converters.filter(TxModule.resource_types.contains('other')).first()
     return converter
 # end if get_converter_module function
 
 
-def get_linter_module(job):
+def get_linter_module(glm_job):
     """
-    :param TxJob job:
+    :param TxJob glm_job:
     :return TxModule:
     """
-    linters = TxModule.query().filter(TxModule.type=='linter') \
-        .filter(TxModule.input_format.contains(job.input_format))
-    linter = linters.filter(TxModule.resource_types.contains(job.resource_type)).first()
+    linters = TxModule.query().filter(TxModule.type == 'linter') \
+        .filter(TxModule.input_format.contains(glm_job.input_format))
+    linter = linters.filter(TxModule.resource_types.contains(glm_job.resource_type)).first()
     if not linter:
         linter = linters.filter(TxModule.resource_types.contains('other')).first()
     return linter
@@ -290,7 +291,7 @@ def get_unique_job_id():
 
 def upload_zip_file(commit_id, zip_filepath):
     file_key = f'preconvert/{commit_id}.zip'
-    GlobalSettings.logger.debug('Uploading {0} to {1}/{2}...'.format(zip_filepath, GlobalSettings.pre_convert_bucket_name, file_key))
+    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key}...')
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
     except Exception as e:
@@ -303,8 +304,8 @@ def upload_zip_file(commit_id, zip_filepath):
 
 
 def get_repo_files(base_temp_dir_name, commit_url, repo_name):
-    temp_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='{0}_'.format(repo_name))
-    download_repo(base_temp_dir_name,commit_url, temp_dir)
+    temp_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix=f'{repo_name}_')
+    download_repo(base_temp_dir_name, commit_url, temp_dir)
     repo_dir = os.path.join(temp_dir, repo_name.lower())
     if not os.path.isdir(repo_dir):
         repo_dir = temp_dir
@@ -323,7 +324,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
     try:
-        GlobalSettings.logger.debug('Downloading {0}...'.format(repo_zip_url))
+        GlobalSettings.logger.debug(f'Downloading {repo_zip_url}...')
 
         # if the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -334,7 +335,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
         GlobalSettings.logger.debug('Downloading finished.')
 
     try:
-        GlobalSettings.logger.debug('Unzipping {0}...'.format(repo_zip_file))
+        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file}...')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
@@ -346,15 +347,44 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
 #end of download_repo function
 
 
-def process_job(prefix, queued_json_payload):
+def process_job(pj_prefix, queued_json_payload):
     """
-    prefixable_vars = ['api_url', 'pre_convert_bucket_name', 'cdn_bucket_name', 'door43_bucket_name', 'language_stats_table_name',
-                       #'linter_messaging_name', 'db_name', 'db_user']
+    Sets up a temp folder in the AWS S3 bucket.
+
+    It gathers details from the JSON payload.
+
+    It downloads a zip file from the DSC repo to the temp folder and unzips the files,
+        and then creates a ResourceContainer (RC) object.
+
+    It creates a manifest_data dictionary,
+        gets a TXManifest from the DB and updates it,
+        or creates a new one if none existed.
+
+    It then gets and runs a preprocessor on the files in the temp folder.
+        A preprocessor has a ResourceContainer (RC) and source and output folders.
+        It copies the file(s) from the RC in the source folder, over to the output folder,
+            assembling chunks/chapters if necessary.
+
+    The preprocessed files are zipped up in the temp folder
+        and then uploaded to the pre-convert bucket in S3.
+
+    A TxJob is now setup and passed on in order to
+            select a converter module, and
+            a linter module.
+        The converter and linter settings are then added to the job info
+            and the job is inserted into the DB table.
+
+    An S3 folder is now prepared
+        and a build log dictionary is created and uploaded to it.
+    The project.json is also updated, e.g., with new commits.
+
+    Conversion and linting are now initiated by sending a request to each,
+        or by creating book_jobs and sending multiple requests.
     """
-    print("Processing {0}job: {1}".format(prefix+' ' if prefix else '', queued_json_payload))
+    print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
 
     # Setup a temp folder to use
-    source_url_base = 'https://s3-{0}.amazonaws.com/{1}'.format(GlobalSettings.aws_region_name, GlobalSettings.pre_convert_bucket_name)
+    source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
     # Move everything down one directory level for simple delete
     intermediate_dir_name = OUR_NAME
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
@@ -406,132 +436,131 @@ def process_job(prefix, queued_json_payload):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    print("client_webhook got manifest_data:", manifest_data ) # RJH
+    print("client_webhook got manifest_data:", manifest_data) # RJH
 
 
     # First see if manifest already exists in DB and update it if it is
-    print("client_webhook getting manifest for {!r} with user {!r}".format(repo_name,user_name)) # RJH
+    print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}") # RJH
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
             setattr(tx_manifest, key, value)
-        GlobalSettings.logger.debug('Updating manifest in manifest table: {0}'.format(manifest_data))
+        GlobalSettings.logger.debug(f'Updating manifest in manifest table: {manifest_data}')
         tx_manifest.update()
     else:
         tx_manifest = TxManifest(**manifest_data)
-        GlobalSettings.logger.debug('Inserting manifest into manifest table: {0}'.format(tx_manifest))
+        GlobalSettings.logger.debug(f'Inserting manifest into manifest table: {tx_manifest}')
         tx_manifest.insert()
 
     # Preprocess the files
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    results, preprocessor = do_preprocess(rc, repo_dir, preprocess_dir)
+    preprocessor_result, preprocessor = do_preprocess(rc, repo_dir, preprocess_dir)
 
     # Zip up the massaged files
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
-    GlobalSettings.logger.debug('Zipping files from {0} to {1}...'.format(preprocess_dir, zip_filepath))
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
-    # Upload zipped file to the S3 bucket
+    # Upload zipped file to the S3 pre-convert bucket
     file_key = upload_zip_file(commit_id, zip_filepath)
 
-    #print("Webhook.process_job setting up TxJob with username={0}...".format(user.username))
+    #print(f"Webhook.process_job setting up TxJob with username={user.username}...")
     print("Webhook.process_job setting up TxJob...")
-    job = TxJob()
-    job.job_id = get_unique_job_id()
-    job.identifier = job.job_id
-    job.user_name = user_name
-    job.repo_name = repo_name
-    job.commit_id = commit_id
-    job.manifests_id = tx_manifest.id
-    job.created_at = datetime.utcnow()
+    pj_job = TxJob()
+    pj_job.job_id = get_unique_job_id()
+    pj_job.identifier = pj_job.job_id
+    pj_job.user_name = user_name
+    pj_job.repo_name = repo_name
+    pj_job.commit_id = commit_id
+    pj_job.manifests_id = tx_manifest.id
+    pj_job.created_at = datetime.utcnow()
     # Seems never used (RJH)
-    #job.user = user.username  # Username of the token, not necessarily the repo's owner
-    job.input_format = rc.resource.file_ext
-    job.resource_type = rc.resource.identifier
-    job.source = source_url_base + "/" + file_key
-    job.cdn_bucket = GlobalSettings.cdn_bucket_name
-    job.cdn_file = 'tx/job/{0}.zip'.format(job.job_id)
-    job.output = 'https://{0}/{1}'.format(GlobalSettings.cdn_bucket_name, job.cdn_file)
-    job.callback = GlobalSettings.api_url + '/client/callback'
-    job.output_format = 'html'
-    job.links = {
-        "href": "{0}/tx/job/{1}".format(GlobalSettings.api_url, job.job_id),
+    #pj_job.user = user.username  # Username of the token, not necessarily the repo's owner
+    pj_job.input_format = rc.resource.file_ext
+    pj_job.resource_type = rc.resource.identifier
+    pj_job.source = source_url_base + "/" + file_key
+    pj_job.cdn_bucket = GlobalSettings.cdn_bucket_name
+    pj_job.cdn_file = f'tx/job/{pj_job.job_id}.zip'
+    pj_job.output = f'https://{GlobalSettings.cdn_bucket_name}/{pj_job.cdn_file}'
+    pj_job.callback = GlobalSettings.api_url + '/client/callback'
+    pj_job.output_format = 'html'
+    pj_job.links = {
+        "href": f'{GlobalSettings.api_url}/tx/job/{pj_job.job_id}',
         "rel": "self",
         "method": "GET"
     }
-    job.success = False
+    pj_job.success = False
 
 
-    converter = get_converter_module(job)
-    linter = get_linter_module(job)
+    converter = get_converter_module(pj_job)
+    linter = get_linter_module(pj_job)
 
     if converter:
-        job.convert_module = converter.name
-        job.started_at = datetime.utcnow()
-        job.expires_at = job.started_at + timedelta(days=1)
-        job.eta = job.started_at + timedelta(minutes=5)
-        job.status = 'started'
-        job.message = 'Conversion started...'
-        job.log_message('Started job for {0}/{1}/{2}'.format(job.user_name, job.repo_name, job.commit_id))
+        pj_job.convert_module = converter.name
+        pj_job.started_at = datetime.utcnow()
+        pj_job.expires_at = pj_job.started_at + timedelta(days=1)
+        pj_job.eta = pj_job.started_at + timedelta(minutes=5)
+        pj_job.status = 'started'
+        pj_job.message = 'Conversion started...'
+        pj_job.log_message(f'Started job for {pj_job.user_name}/{pj_job.repo_name}/{pj_job.commit_id}')
     else:
-        job.error_message('No converter was found to convert {0} from {1} to {2}'.format(job.resource_type,
-                                                                                            job.input_format,
-                                                                                            job.output_format))
-        job.message = 'No converter found'
-        job.status = 'failed'
+        pj_job.error_message(f'No converter was found to convert {pj_job.resource_type} ' \
+                                    f'from {pj_job.input_format} to {pj_job.output_format}')
+        pj_job.message = 'No converter found'
+        pj_job.status = 'failed'
 
     if linter:
-        job.lint_module = linter.name
+        pj_job.lint_module = linter.name
     else:
-        GlobalSettings.logger.debug('No linter was found to lint {0}'.format(job.resource_type))
+        GlobalSettings.logger.debug(f'No linter was found to lint {pj_job.resource_type}')
 
-    job.insert()
+    pj_job.insert() # into DB
 
     # Get S3 bucket/dir ready
-    s3_commit_key = 'u/{0}/{1}/{2}'.format(job.user_name, job.repo_name, job.commit_id)
+    s3_commit_key = f'u/{pj_job.user_name}/{pj_job.repo_name}/{pj_job.commit_id}'
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Create a build log
-    build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, job,
+    build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job,
                                             pusher_username, repo_name, user_name)
     # Upload an initial build_log
     upload_build_log_to_s3(base_temp_dir_name, build_log_json, s3_commit_key)
 
     # Update the project.json file
-    update_project_json(base_temp_dir_name, commit_id, job, repo_name, user_name)
+    update_project_json(base_temp_dir_name, commit_id, pj_job, repo_name, user_name)
 
     # Convert and lint
     if converter:
         if not preprocessor.is_multiple_jobs():
-            send_request_to_converter(job, converter)
+            send_request_to_converter(pj_job, converter)
             if linter:
-                extra_payload = { 's3_results_key': s3_commit_key }
-                send_request_to_linter(job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
+                extra_payload = {'s3_results_key': s3_commit_key}
+                send_request_to_linter(pj_job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
         else:
             # -----------------------------
-            # multiple book project
+            # Project with multiple books
             # -----------------------------
             books = preprocessor.get_book_list()
             GlobalSettings.logger.debug('Splitting job into separate parts for books: ' + ','.join(books))
             book_count = len(books)
             build_log_json['multiple'] = True
             build_log_json['build_logs'] = []
-            for i in range(0, len(books)):
+            for i, book in enumerate(books):
                 book = books[i]
-                GlobalSettings.logger.debug('Adding job for {0}, part {1} of {2}'.format(book, i, book_count))
+                GlobalSettings.logger.debug(f'Adding job for {book}, part {i} of {book_count}')
                 # Send job request to tx-manager
                 if i == 0:
-                    book_job = job  # use the original job created above for the first book
-                    book_job.identifier = '{0}/{1}/{2}/{3}'.format(job.job_id, book_count, i, book)
+                    book_job = pj_job  # use the original job created above for the first book
+                    book_job.identifier = f'{pj_job.job_id}/{book_count}/{i}/{book}'
                 else:
-                    book_job = job.clone()  # copy the original job for this book's job
+                    book_job = pj_job.clone()  # copy the original job for this book's job
                     book_job.job_id = get_unique_job_id()
-                    book_job.identifier = '{0}/{1}/{2}/{3}'.format(book_job.job_id, book_count, i, book)
-                    book_job.cdn_file = 'tx/job/{0}.zip'.format(book_job.job_id)
-                    book_job.output = 'https://{0}/{1}'.format(GlobalSettings.cdn_bucket_name, book_job.cdn_file)
+                    book_job.identifier = f'{book_job.job_id}/{book_count}/{i}/{book}'
+                    book_job.cdn_file = f'tx/job/{book_job.job_id}.zip'
+                    book_job.output = f'https://{GlobalSettings.cdn_bucket_name}/{book_job.cdn_file}'
                     book_job.links = {
-                        "href": "{0}/tx/job/{1}".format(GlobalSettings.api_url, book_job.job_id),
+                        "href": f"{GlobalSettings.api_url}/tx/job/{book_job.job_id}",
                         "rel": "self",
                         "method": "GET"
                     }
@@ -556,7 +585,7 @@ def process_job(prefix, queued_json_payload):
                     send_request_to_linter(book_job, linter, commit_url, extra_payload)
 
     remove_tree(base_temp_dir_name)  # cleanup
-    print("process_job() is returning:", build_log_json )
+    print("process_job() is returning:", build_log_json)
     return build_log_json
 #end of process_job function
 
@@ -573,13 +602,13 @@ def job(queued_json_payload):
     stats_client.incr('JobsStarted')
 
     current_job = get_current_job()
-    #print("Current job: {}".format(current_job)) # Mostly just displays the job number and payload
+    #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
     #print("dir",dir(current_job))
     #print("id",current_job.id) # Displays job number
     #print("origin",current_job.origin) # Displays queue name
     #print("meta",current_job.meta) # Empty dict
 
-    #print("Got a job from {0} queue: {1}".format(current_job.origin, queued_json_payload))
+    #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     assert queue_prefix == prefix
