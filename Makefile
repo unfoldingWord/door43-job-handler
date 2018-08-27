@@ -20,6 +20,19 @@ dependenciesTest:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
+checkEnvVariables:
+	@ if [ -z "${TX_DATABASE_PW}" ]; then \
+		echo "Need to set TX_DATABASE_PW"; \
+		exit 1; \
+	fi
+	@ if [ -z "${AWS_ACCESS_KEY_ID}" ]; then \
+		echo "Need to set AWS_ACCESS_KEY_ID"; \
+		exit 1; \
+	fi
+	@ if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then \
+		echo "Need to set AWS_SECRET_ACCESS_KEY"; \
+		exit 1; \
+	fi
 
 # NOTE: The following environment variables are optional:
 #	REDIS_URL (can be omitted for testing if a local instance is running)
@@ -34,7 +47,7 @@ info:
 	# Runs the rq info display with a one-second refresh
 	rq info --interval 1
 
-runDev:
+runDev: checkEnvVariables
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the local redis dev- queue
 	QUEUE_PREFIX="dev-" rq worker --config rq_settings
