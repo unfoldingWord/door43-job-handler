@@ -204,14 +204,14 @@ class ObsPreprocessor(Preprocessor):
 class BiblePreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
-        self.books = []
+        self.book_filenames = []
 
     def is_multiple_jobs(self):
-        return len(self.books) > 1
+        return len(self.book_filenames) > 1
 
     def get_book_list(self):
-        self.books.sort()
-        return self.books
+        self.book_filenames.sort()
+        return self.book_filenames
 
     def run(self):
         for idx, project in enumerate(self.rc.projects):
@@ -225,7 +225,7 @@ class BiblePreprocessor(Preprocessor):
                 else:
                     filename = file_format.format(str(idx+1).zfill(2), project.identifier.upper())
                 copy(project_path, os.path.join(self.output_dir, filename))
-                self.books.append(filename)
+                self.book_filenames.append(filename)
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
                 usfm_files = glob(os.path.join(project_path, '*.usfm'))
@@ -239,7 +239,7 @@ class BiblePreprocessor(Preprocessor):
                         output_file_path = os.path.join(self.output_dir, filename)
                         if os.path.isfile(usfm_path) and not os.path.exists(output_file_path):
                             copy(usfm_path, output_file_path)
-                        self.books.append(filename)
+                        self.book_filenames.append(filename)
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
                     chapters = self.rc.chapters(project.identifier)
@@ -291,7 +291,7 @@ class BiblePreprocessor(Preprocessor):
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
                         write_file(os.path.join(self.output_dir, filename), usfm)
-                        self.books.append(filename)
+                        self.book_filenames.append(filename)
         return True
 
 
@@ -586,13 +586,13 @@ class TnPreprocessor(Preprocessor):
 
     def __init__(self, *args, **kwargs):
         super(TnPreprocessor, self).__init__(*args, **kwargs)
-        self.books = []
+        self.book_filenames = []
 
     def is_multiple_jobs(self):
         return True
 
     def get_book_list(self):
-        return self.books
+        return self.book_filenames
 
     def run(self):
         index_json = {
@@ -646,7 +646,7 @@ class TnPreprocessor(Preprocessor):
                         markdown += text
                 markdown = self.fix_links(markdown)
                 book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
-                self.books.append(book_file_name)
+                self.book_filenames.append(book_file_name)
                 file_path = os.path.join(self.output_dir, book_file_name)
                 write_file(file_path, markdown)
             else:
