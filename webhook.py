@@ -41,8 +41,8 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 
-converter_callback = f'{GlobalSettings.api_url}/client/callback/converter'
-linter_callback = f'{GlobalSettings.api_url}/client/callback/linter'
+CONVERTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/converter'
+LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -63,7 +63,7 @@ def send_request_to_converter(srtc_job, converter):
         'cdn_bucket': srtc_job.cdn_bucket,
         'cdn_file': srtc_job.cdn_file,
         'options': srtc_job.options,
-        'convert_callback': converter_callback
+        'convert_callback': CONVERTER_CALLBACK
     }
     return send_payload_to_converter(payload, converter)
 # end of send_request_to_converter function
@@ -112,7 +112,7 @@ def send_request_to_linter(srtl_job, linter, commit_url, commit_data, extra_payl
         'cdn_bucket': srtl_job.cdn_bucket,
         'cdn_file': srtl_job.cdn_file,
         'options': srtl_job.options,
-        'lint_callback': linter_callback,
+        'lint_callback': LINTER_CALLBACK,
         'commit_data': commit_data
     }
     if extra_payload:
@@ -242,8 +242,8 @@ def clear_commit_directory_in_cdn(s3_commit_key):
 # end of clear_commit_directory_in_cdn function
 
 
-def build_multipart_source(source_url_base, file_key, book):
-    params = urlencode({'convert_only': book})
+def build_multipart_source(source_url_base, file_key, book_filename):
+    params = urlencode({'convert_only': book_filename})
     source_url = f'{source_url_base}/{file_key}?{params}'
     return source_url
 # end of build_multipart_source function
@@ -541,22 +541,21 @@ def process_job(pj_prefix, queued_json_payload):
             # -----------------------------
             # Project with multiple books
             # -----------------------------
-            books = preprocessor.get_book_list()
-            GlobalSettings.logger.debug('Splitting job into separate parts for books: ' + ','.join(books))
-            book_count = len(books)
+            book_filenames = preprocessor.get_book_list()
+            GlobalSettings.logger.debug('Splitting job into separate parts for books: ' + ','.join(book_filenames))
+            book_count = len(book_filenames)
             build_log_json['multiple'] = True
             build_log_json['build_logs'] = []
-            for i, book in enumerate(books):
-                book = books[i]
-                GlobalSettings.logger.debug(f'Adding job for {book}, part {i} of {book_count}')
+            for i, book_filename in enumerate(book_filenames):
+                GlobalSettings.logger.debug(f'Adding job for {book_filename}, part {i} of {book_count}')
                 # Send job request to tx-manager
                 if i == 0:
                     book_job = pj_job  # use the original job created above for the first book
-                    book_job.identifier = f'{pj_job.job_id}/{book_count}/{i}/{book}'
+                    book_job.identifier = f'{pj_job.job_id}/{book_count}/{i}/{book_filename}'
                 else:
                     book_job = pj_job.clone()  # copy the original job for this book's job
                     book_job.job_id = get_unique_job_id()
-                    book_job.identifier = f'{book_job.job_id}/{book_count}/{i}/{book}'
+                    book_job.identifier = f'{book_job.job_id}/{book_count}/{i}/{book_filename}'
                     book_job.cdn_file = f'tx/job/{book_job.job_id}.zip'
                     book_job.output = f'https://{GlobalSettings.cdn_bucket_name}/{book_job.cdn_file}'
                     book_job.links = {
@@ -566,23 +565,23 @@ def process_job(pj_prefix, queued_json_payload):
                     }
                     book_job.insert()
 
-                book_job.source = build_multipart_source(source_url_base, file_key, book)
+                book_job.source = build_multipart_source(source_url_base, file_key, book_filename)
                 book_job.update()
                 book_build_log = create_build_log(commit_id, commit_message, commit_url, compare_url, book_job,
                                                         pusher_username, repo_name, user_name)
-                if len(book) > 0:
+                if len(book_filename) > 0:
                     part = str(i)
-                    book_build_log['book'] = book
+                    book_build_log['book'] = book_filename
                     book_build_log['part'] = part
                 build_log_json['build_logs'].append(book_build_log)
                 upload_build_log_to_s3(base_temp_dir_name, book_build_log, s3_commit_key, str(i) + "/")
                 send_request_to_converter(book_job, converter)
                 if linter:
                     extra_payload = {
-                        'single_file': book,
+                        'single_file': book_filename,
                         's3_results_key': f'{s3_commit_key}/{i}'
                     }
-                    send_request_to_linter(book_job, linter, commit_url, extra_payload)
+                    send_request_to_linter(book_job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
 
     remove_tree(base_temp_dir_name)  # cleanup
     print("process_job() is returning:", build_log_json)
