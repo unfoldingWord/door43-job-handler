@@ -75,7 +75,7 @@ class Preprocessor(object):
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
                     chapters = self.rc.chapters(project.identifier)
-                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier)}'")
+                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier}'")
                     if chapters:
                         text = ''
                         for chapter in chapters:
@@ -179,12 +179,12 @@ class ObsPreprocessor(Preprocessor):
                     copy(file_path, output_file_path)
             if self.is_chunked(project):
                 for chapter in self.get_chapters(project_path):
-                    markdown = f'# {chapter['title']}\n\n'
+                    markdown = f"# {chapter['title']}\n\n"
                     for frame in chapter['frames']:
-                        markdown += f'![Frame {frame.get('id')}](https://cdn.door43.org/obs/jpg/360px/obs-en-{frame.get('id')}.jpg)\n\n'
+                        markdown += f"![Frame {frame.get('id')}](https://cdn.door43.org/obs/jpg/360px/obs-en-{frame.get('id')}.jpg)\n\n"
                         markdown += frame['text'] + '\n\n'
-                    markdown += f'_{chapter['reference']}_\n'
-                    output_file = os.path.join(self.output_dir, f'{chapter.get('id')}.md')
+                    markdown += f"_{chapter['reference']}_\n"
+                    output_file = os.path.join(self.output_dir, f"{chapter.get('id')}.md")
                     write_file(output_file, markdown)
             else:
                 for chapter in self.rc.chapters(project.identifier):
