@@ -29,7 +29,7 @@ def do_preprocess(rc, repo_dir, output_dir):
         GlobalSettings.logger.debug("do_preprocess: using TnPreprocessor")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.debug("do_preprocess: using Preprocessor for resource: {0}".format(rc.resource.identifier))
+        GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier}")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run(), preprocessor
 
@@ -59,15 +59,13 @@ class Preprocessor(object):
             if os.path.isfile(project_path):
                 # Case #1: Project path is a file, then we copy the file over to the output dir
                 if project.identifier.lower() in BOOK_NUMBERS:
-                    filename = '{0}-{1}.{2}'.format(BOOK_NUMBERS[project.identifier.lower()],
-                                                    project.identifier.upper(), self.rc.resource.file_ext)
+                    filename = f'{BOOK_NUMBERS[project.identifier.lower()]}-{project.identifier.upper()}.{self.rc.resource.file_ext}'
                 else:
-                    filename = '{0}-{1}.{2}'.format(str(idx + 1).zfill(2), project.identifier,
-                                                    self.rc.resource.file_ext)
+                    filename = f'{str(idx + 1).zfill(2)}-{project.identifier}.{self.rc.resource.file_ext}'
                 copy(project_path, os.path.join(self.output_dir, filename))
             else:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
-                files = glob(os.path.join(project_path, '*.{0}'.format(self.rc.resource.file_ext)))
+                files = glob(os.path.join(project_path, f'*.{self.rc.resource.file_ext}'))
                 if len(files):
                     for file_path in files:
                         output_file_path = os.path.join(self.output_dir, os.path.basename(file_path))
@@ -77,7 +75,7 @@ class Preprocessor(object):
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
                     chapters = self.rc.chapters(project.identifier)
-                    GlobalSettings.logger.debug("Merging chapters in '{0}'".format(project.identifier))
+                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier)}'"
                     if len(chapters):
                         text = ''
                         for chapter in chapters:
