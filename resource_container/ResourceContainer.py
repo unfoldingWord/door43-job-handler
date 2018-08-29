@@ -345,6 +345,7 @@ class Resource:
         return {
             'text/usx': 'usx',
             'text/usfm': 'usfm',
+            'text/usfm3': 'usfm',
             'text/markdown': 'md'
         }.get(self.format, 'txt')
 
