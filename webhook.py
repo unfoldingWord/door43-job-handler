@@ -65,6 +65,7 @@ def send_request_to_converter(srtc_job, converter):
         'options': srtc_job.options,
         'convert_callback': CONVERTER_CALLBACK
     }
+    # NOTE: The returned result is not currently used
     return send_payload_to_converter(payload, converter)
 # end of send_request_to_converter function
 
@@ -122,6 +123,7 @@ def send_request_to_linter(srtl_job, linter, commit_url, commit_data, extra_payl
         payload['source_url'] = srtl_job.source
     else:
         payload['source_url'] = commit_url.replace('commit', 'archive') + '.zip'
+    # NOTE: The returned result is not currently used
     return send_payload_to_linter(payload, linter)
 # end of send_request_to_linter function
 
