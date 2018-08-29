@@ -381,7 +381,7 @@ def process_job(pj_prefix, queued_json_payload):
     Conversion and linting are now initiated by sending a request to each,
         or by creating book_jobs and sending multiple requests.
     """
-    print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    #print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -392,7 +392,7 @@ def process_job(pj_prefix, queued_json_payload):
         os.makedirs(base_temp_dir_name)
     except:
         pass
-    print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
+    #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
     # Get the commit_id, commit_url
     commit_id = queued_json_payload['after']
@@ -402,7 +402,7 @@ def process_job(pj_prefix, queued_json_payload):
             break
     commit_id = commit_id[:10]  # Only use the short form
     commit_url = commit['url']
-    print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
+    #print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
@@ -410,14 +410,14 @@ def process_job(pj_prefix, queued_json_payload):
     print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message']
-    print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
+    #print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
 
     if 'pusher' in queued_json_payload:
         pusher = queued_json_payload['pusher']
     else:
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
-    print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
+    #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
@@ -569,10 +569,9 @@ def process_job(pj_prefix, queued_json_payload):
                 book_job.update()
                 book_build_log = create_build_log(commit_id, commit_message, commit_url, compare_url, book_job,
                                                         pusher_username, repo_name, user_name)
-                if len(book_filename) > 0:
-                    part = str(i)
+                if book_filename:
                     book_build_log['book'] = book_filename
-                    book_build_log['part'] = part
+                    book_build_log['part'] = str(i)
                 build_log_json['build_logs'].append(book_build_log)
                 upload_build_log_to_s3(base_temp_dir_name, book_build_log, s3_commit_key, str(i) + "/")
                 send_request_to_converter(book_job, converter)
@@ -608,7 +607,7 @@ def job(queued_json_payload):
     #print("meta",current_job.meta) # Empty dict
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
-    print(f"\nGot job {current_job.id} from {current_job.origin} queue")
+    #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     assert queue_prefix == prefix
     process_job(queue_prefix, queued_json_payload)
