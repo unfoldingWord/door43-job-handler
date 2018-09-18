@@ -23,13 +23,15 @@ def resetable(cls):
 def reset_class(cls):
     #print("reset_class()!!!")
     cache = cls._resetable_cache_  # raises AttributeError on class without decorator
+    # Remove any class variables that weren't in the original class as first instantiated
     for key in [key for key in cls.__dict__ if key not in cache and key != '_resetable_cache_']:
         delattr(cls, key)
-    for key, value in cache.items():  # reset the items to original values
+    # Reset the items to original values
+    for key, value in cache.items():
         try:
             if key != '_resetable_cache_':
                 setattr(cls, key, value)
-        except AttributeError:
+        except AttributeError: # When/Why would we get this
             pass
     cls.dirty = False
 

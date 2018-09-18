@@ -41,6 +41,7 @@ checkEnvVariables:
 #	QUEUE_PREFIX (defaults to '', set to dev- for testing)
 
 test:
+	# You should have already installed the testDependencies before this
 	python3 -m unittest discover -s tests/
 
 info:

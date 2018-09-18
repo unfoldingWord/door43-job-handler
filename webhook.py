@@ -8,10 +8,12 @@
 import os
 #import shutil
 import tempfile
-#import logging
+import logging
 #import ssl
 #import urllib.request as urllib2
+from urllib import error as urllib_error
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 import json
 import hashlib
 from datetime import datetime, timedelta
@@ -35,6 +37,9 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_job_handler'
+
+ # Enable DEBUG logging for dev- instances (but less logging for production)
+logging.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
 
 our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
@@ -178,14 +183,24 @@ def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_
         'started_at': None,
         'ended_at': None
     }
+    # TODO: CHECK AND DELETE Rewrite of the following lines as a list comprehension
     if 'commits' not in project_json:
         project_json['commits'] = []
-    # TODO: Rewrite the following lines as a list comprehension
-    commits = []
+    commits1 = []
     for c in project_json['commits']:
         if c['id'] != commit_id:
-            commits.append(c)
-    commits.append(commit)
+            commits1.append(c)
+    commits1.append(commit)
+    #project_json['commits'] = commits1
+    print(f"project_json['commits (old)'] = {commits1}")
+    # Get all other previous commits, and then add this one
+    if 'commits' in project_json:
+        commits = [c for c in project_json['commits'] if c['id'] != commit_id]
+        commits.append(commit)
+    else:
+        commits = [commit]
+    print(f"project_json['commits (new)'] = {commits}")
+    assert commits == commits1
     project_json['commits'] = commits
     project_file = os.path.join(base_temp_dir_name, 'project.json')
     write_file(project_file, project_json)
@@ -239,7 +254,7 @@ def clear_commit_directory_in_cdn(s3_commit_key):
     Clear out the commit directory in the cdn bucket for this project revision.
     """
     for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-        GlobalSettings.logger.debug('Removing file: ' + obj.key)
+        GlobalSettings.logger.debug('Removing s3 cdn file: ' + obj.key)
         GlobalSettings.cdn_s3_handler().delete_file(obj.key)
 # end of clear_commit_directory_in_cdn function
 
@@ -355,11 +370,11 @@ def process_job(pj_prefix, queued_json_payload):
 
     It gathers details from the JSON payload.
 
-    It downloads a zip file from the DSC repo to the temp folder and unzips the files,
+    It downloads a zip file from the DCS repo to the temp folder and unzips the files,
         and then creates a ResourceContainer (RC) object.
 
     It creates a manifest_data dictionary,
-        gets a TXManifest from the DB and updates it,
+        gets a TxManifest from the DB and updates it with the above,
         or creates a new one if none existed.
 
     It then gets and runs a preprocessor on the files in the temp folder.
@@ -370,18 +385,28 @@ def process_job(pj_prefix, queued_json_payload):
     The preprocessed files are zipped up in the temp folder
         and then uploaded to the pre-convert bucket in S3.
 
-    A TxJob is now setup and passed on in order to
+    A TxJob is now setup and passed on to TxModule in order to
+            query the AWS Dynamo DB to
             select a converter module, and
             a linter module.
         The converter and linter settings are then added to the job info
             and the job is inserted into the DB table.
 
-    An S3 folder is now prepared
+    An S3 CDN folder is now named and emptied
         and a build log dictionary is created and uploaded to it.
-    The project.json is also updated, e.g., with new commits.
+
+    The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
 
     Conversion and linting are now initiated by sending a request to each,
-        or by creating book_jobs and sending multiple requests.
+        or by creating book_jobs and sending multiple requests to each.
+    (These requests are currently initiated by invoking AWS Lambda functions
+        which in turn call tX-manager functions.)
+
+    This code is "successful" once the conversion/linting jobs are submitted --
+        it currently has no way to determine if they actually get completed.
+
+    The given payload will be appended to the 'failed' queue
+        if an exception is thrown in this module.
     """
     #print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
 
@@ -409,7 +434,7 @@ def process_job(pj_prefix, queued_json_payload):
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
-    print("user_name", repr(user_name), "repo_name", repr(repo_name))
+    #print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message']
     #print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
@@ -519,7 +544,7 @@ def process_job(pj_prefix, queued_json_payload):
 
     pj_job.insert() # into DB
 
-    # Get S3 bucket/dir ready
+    # Get S3 cdn bucket/dir and empty it
     s3_commit_key = f'u/{pj_job.user_name}/{pj_job.repo_name}/{pj_job.commit_id}'
     clear_commit_directory_in_cdn(s3_commit_key)
 
@@ -532,6 +557,33 @@ def process_job(pj_prefix, queued_json_payload):
     # Update the project.json file
     update_project_json(base_temp_dir_name, commit_id, pj_job, repo_name, user_name)
 
+    # Pass the work onto the tX system
+    # NOTE: The system isn't implemented yet -- this is just the beginnings of it
+    tx_post_url = f'http://git.door43.org/{prefix}tx/'
+    print(f"About to POST request to tX system @ {tx_post_url}")
+    # TODO: What headers do we really need?
+    headers = {"Content-type": "application/json",}
+    # TODO: What payload do we really need?
+    tx_payload = {
+        'identifier': pj_job.identifier,
+        'source_url': pj_job.source,
+        'resource_id': pj_job.resource_type,
+        'cdn_bucket': pj_job.cdn_bucket,
+        'cdn_file': pj_job.cdn_file,
+        'options': pj_job.options,
+        'callback': f'http://git.door43.org/{prefix}client/webhook/tx-callback/',
+    }
+    req = Request(tx_post_url, urlencode(tx_payload).encode(), headers)
+    try:
+        response = urlopen(req)
+        print("response", response)
+        response_json = response.read().decode()
+        print("response json", response_json)
+    except urllib_error.HTTPError as e:
+        logging.error(f"tX POST request got {e}")
+
+    # For now, we ignore the above
+    #   and just go ahead and process it the old way anyway so it keeps working
     # Convert and lint
     if converter:
         if not preprocessor.is_multiple_jobs():
