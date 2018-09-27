@@ -33,6 +33,10 @@ checkEnvVariables:
 		echo "Need to set AWS_SECRET_ACCESS_KEY"; \
 		exit 1; \
 	fi
+	@ if [ -z "${GOGS_USER_TOKEN}" ]; then \
+		echo "Need to set GOGS_USER_TOKEN"; \
+		exit 1; \
+	fi
 
 # NOTE: The following environment variables are optional:
 #	REDIS_URL (can be omitted for testing if a local instance is running)
@@ -51,7 +55,7 @@ info:
 runDev: checkEnvVariables
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the local redis dev- queue
-	QUEUE_PREFIX="dev-" rq worker --config rq_settings --name D43_Dev_JobHandler
+	QUEUE_PREFIX="dev-" DEBUG_MODE="true" rq worker --config rq_settings --name D43_Dev_JobHandler
 
 run:
 	# This runs the rq job handler

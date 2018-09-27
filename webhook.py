@@ -8,23 +8,23 @@
 import os
 #import shutil
 import tempfile
-import logging
+#import logging
 #import ssl
-#import urllib.request as urllib2
-from urllib import error as urllib_error
+#from urllib import error as urllib_error
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+#from urllib.request import Request, urlopen
+import requests
 import json
 import hashlib
 from datetime import datetime, timedelta
 from time import time
 
 # Library (PyPi) imports
-from rq import get_current_job
+#from rq import get_current_job
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix
+from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -37,15 +37,17 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_job_handler'
-
- # Enable DEBUG logging for dev- instances (but less logging for production)
-logging.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
-
 our_adjusted_name = prefix + OUR_NAME
+
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 
+# Enable DEBUG logging for dev- instances (but less logging for production)
+#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
+
+
+DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 CONVERTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/converter'
 LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 
@@ -53,6 +55,7 @@ LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
 stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+
 
 
 def send_request_to_converter(srtc_job, converter):
@@ -183,24 +186,12 @@ def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_
         'started_at': None,
         'ended_at': None
     }
-    # TODO: CHECK AND DELETE Rewrite of the following lines as a list comprehension
-    if 'commits' not in project_json:
-        project_json['commits'] = []
-    commits1 = []
-    for c in project_json['commits']:
-        if c['id'] != commit_id:
-            commits1.append(c)
-    commits1.append(commit)
-    #project_json['commits'] = commits1
-    print(f"project_json['commits (old)'] = {commits1}")
     # Get all other previous commits, and then add this one
     if 'commits' in project_json:
         commits = [c for c in project_json['commits'] if c['id'] != commit_id]
         commits.append(commit)
     else:
         commits = [commit]
-    print(f"project_json['commits (new)'] = {commits}")
-    assert commits == commits1
     project_json['commits'] = commits
     project_file = os.path.join(base_temp_dir_name, 'project.json')
     write_file(project_file, project_json)
@@ -333,8 +324,8 @@ def get_repo_files(base_temp_dir_name, commit_url, repo_name):
 def download_repo(base_temp_dir_name, commit_url, repo_dir):
     """
     Downloads and unzips a git repository from Github or git.door43.org
-    :param str|unicode commit_url: The URL of the repository to download
-    :param str|unicode repo_dir:   The directory where the downloaded file should be unzipped
+    :param str commit_url: The URL of the repository to download
+    :param str repo_dir:   The directory where the downloaded file should be unzipped
     :return: None
     """
     repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
@@ -408,7 +399,7 @@ def process_job(pj_prefix, queued_json_payload):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    #print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -557,30 +548,37 @@ def process_job(pj_prefix, queued_json_payload):
     # Update the project.json file
     update_project_json(base_temp_dir_name, commit_id, pj_job, repo_name, user_name)
 
+
     # Pass the work onto the tX system
-    # NOTE: The system isn't implemented yet -- this is just the beginnings of it
-    tx_post_url = f'http://git.door43.org/{prefix}tx/'
-    print(f"About to POST request to tX system @ {tx_post_url}")
-    # TODO: What headers do we really need?
-    headers = {"Content-type": "application/json",}
-    # TODO: What payload do we really need?
+    # NOTE: The system isn't implemented yet --
+    #           this is just the beginnings of it for testing purposes
+    #       For now, we still continue on to use the lambda calls below!
+    GlobalSettings.logger.debug(f"About to POST request to tX system @ {tx_post_url}")
     tx_payload = {
-        'identifier': pj_job.identifier,
-        'source_url': pj_job.source,
-        'resource_id': pj_job.resource_type,
-        'cdn_bucket': pj_job.cdn_bucket,
-        'cdn_file': pj_job.cdn_file,
-        'options': pj_job.options,
-        'callback': f'http://git.door43.org/{prefix}client/webhook/tx-callback/',
+        'user_token': gogs_user_token,
+        'resource_type': pj_job.resource_type,
+        'input_format': rc.resource.file_ext,
+        'output_format': 'html',
+        'source': pj_job.source,
+        'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    else DOOR43_CALLBACK_URL,
     }
-    req = Request(tx_post_url, urlencode(tx_payload).encode(), headers)
+    if pj_job.identifier:
+        tx_payload['identifier'] = pj_job.identifier
+    if pj_job.options:
+        tx_payload['options'] = pj_job.options
+
+    response = requests.post(tx_post_url, json=tx_payload)
+    print("response.status_code", response.status_code)
+    print("response.reason", response.reason)
+    print("response.headers", response.headers)
+    print("response.text", response.text)
     try:
-        response = urlopen(req)
-        print("response", response)
-        response_json = response.read().decode()
-        print("response json", response_json)
-    except urllib_error.HTTPError as e:
-        logging.error(f"tX POST request got {e}")
+        print("response.json", response.json())
+    except json.decoder.JSONDecodeError:
+        print("No valid response JSON found")
+
 
     # For now, we ignore the above
     #   and just go ahead and process it the old way anyway so it keeps working
@@ -650,10 +648,11 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
+    GlobalSettings.logger.info("Door43-Job-Handler received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr('JobsStarted')
 
-    current_job = get_current_job()
+    #current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
     #print("dir",dir(current_job))
     #print("id",current_job.id) # Displays job number
@@ -662,9 +661,9 @@ def job(queued_json_payload):
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
-    queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
-    assert queue_prefix == prefix
-    process_job(queue_prefix, queued_json_payload)
+    #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
+    #assert queue_prefix == prefix
+    process_job(prefix, queued_json_payload)
 
     elapsed_seconds = round(time() - start_time)
     stats_client.gauge('JobTimeSeconds', elapsed_seconds)
