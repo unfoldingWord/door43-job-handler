@@ -55,6 +55,11 @@ info:
 runDev: checkEnvVariables
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the local redis dev- queue
+	QUEUE_PREFIX="dev-" rq worker --config rq_settings --name D43_Dev_JobHandler
+
+runDevDebug: checkEnvVariables
+	# This runs the rq job handler
+	#   which removes and then processes jobs from the local redis dev- queue
 	QUEUE_PREFIX="dev-" DEBUG_MODE="true" rq worker --config rq_settings --name D43_Dev_JobHandler
 
 run:
