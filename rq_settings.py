@@ -23,3 +23,6 @@ QUEUES = [callback_queue_name, webhook_queue_name] # Callback (i.e., finishing o
 # to configure RQ for it in a single step
 # The 'sync+' prefix is required for raven: https://github.com/nvie/rq/issues/350#issuecomment-43592410
 #SENTRY_DSN = 'sync+http://public:secret@example.com/1'
+
+# Our stuff
+REDIS_JOB_LIST = f'{prefix}Door43_outstanding_jobs'

@@ -13,6 +13,7 @@ def my_get_current_job():
     class Result:
         id = 12345
         origin = webhook_queue_name
+        connection = None
     return Result()
 
 class TestWebhook(TestCase):
