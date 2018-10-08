@@ -20,6 +20,7 @@ dependenciesTest:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
+#	GOGS_USER_TOKEN
 checkEnvVariables:
 	@ if [ -z "${TX_DATABASE_PW}" ]; then \
 		echo "Need to set TX_DATABASE_PW"; \
