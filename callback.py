@@ -332,7 +332,7 @@ def process_callback(pc_prefix, queued_json_payload):
 
     #GlobalSettings.logger.info("process_callback() is returning:", build_log_json)
     #return build_log_json
-    return {"ok":"ok"}
+    #return {"ok":"ok"}
 #end of process_callback function
 
 

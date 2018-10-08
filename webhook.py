@@ -635,8 +635,8 @@ def process_job(pj_prefix, queued_json_payload):
                     send_request_to_linter(book_job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
 
     remove_tree(base_temp_dir_name)  # cleanup
-    print("process_job() is returning:", build_log_json)
-    return build_log_json
+    #print("process_job() is returning:", build_log_json)
+    #return build_log_json
 #end of process_job function
 
 
