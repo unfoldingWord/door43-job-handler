@@ -37,14 +37,15 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_callback_handler'
-our_adjusted_name = prefix + OUR_NAME
+our_adjusted_name = prefix + OUR_NAME # Used for statsd prefix
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 
 # Enable DEBUG logging for dev- instances (but less logging for production)
-#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
+# NOTE: Done in global_settings.py
+#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.INFO)
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -361,10 +362,10 @@ def job(queued_json_payload):
     #assert queue_prefix == prefix
     process_callback(prefix, queued_json_payload)
 
-    elapsed_seconds = round(time() - start_time)
-    stats_client.gauge('CallbackTimeSeconds', elapsed_seconds)
+    elapsed_milliseconds = round((time() - start_time) * 1000)
+    stats_client.timing('CallbackTimeSeconds', elapsed_milliseconds)
     stats_client.incr('CallbacksCompleted')
-    GlobalSettings.logger.info(f"  Ok, callback job completed in {elapsed_seconds} seconds!")
+    GlobalSettings.logger.info(f"DCS callback handling completed in {elapsed_milliseconds:,} milliseconds!")
 # end of job function
 
 # end of callback.py

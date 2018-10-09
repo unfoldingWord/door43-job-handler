@@ -37,14 +37,15 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'DCS_job_handler'
-our_adjusted_name = prefix + OUR_NAME
+our_adjusted_name = prefix + OUR_NAME # Used for statsd prefix
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 
 # Enable DEBUG logging for dev- instances (but less logging for production)
-#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
+# NOTE: Done in global_settings.py
+#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.INFO)
 
 
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
@@ -553,7 +554,7 @@ def process_job(pj_prefix, queued_json_payload):
     # NOTE: The system isn't implemented yet --
     #           this is just the beginnings of it for testing purposes
     #       For now, we still continue on to use the lambda calls below!
-    GlobalSettings.logger.debug(f"About to POST request to tX system @ {tx_post_url}")
+    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
     tx_payload = {
         'user_token': gogs_user_token,
         'resource_type': pj_job.resource_type,
@@ -665,10 +666,10 @@ def job(queued_json_payload):
     #assert queue_prefix == prefix
     process_job(prefix, queued_json_payload)
 
-    elapsed_seconds = round(time() - start_time)
-    stats_client.gauge('JobTimeSeconds', elapsed_seconds)
+    elapsed_milliseconds = round((time() - start_time) * 1000)
+    stats_client.timing('JobTime', elapsed_milliseconds)
     stats_client.incr('JobsCompleted')
-    print(f"  Ok, job completed in {elapsed_seconds} seconds!")
+    GlobalSettings.logger.info(f"DCS job handling completed in {elapsed_milliseconds:,} milliseconds!")
 # end of job function
 
 # end of webhook.py
