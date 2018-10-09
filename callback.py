@@ -363,7 +363,7 @@ def job(queued_json_payload):
     process_callback(prefix, queued_json_payload)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('CallbackTimeSeconds', elapsed_milliseconds)
+    stats_client.timing('CallbackTime', elapsed_milliseconds)
     stats_client.incr('CallbacksCompleted')
     GlobalSettings.logger.info(f"DCS callback handling completed in {elapsed_milliseconds:,} milliseconds!")
 # end of job function
