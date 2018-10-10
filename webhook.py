@@ -43,10 +43,6 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 
-# Enable DEBUG logging for dev- instances (but less logging for production)
-# NOTE: Done in global_settings.py
-#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.INFO)
-
 
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 CONVERTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/converter'

@@ -29,5 +29,5 @@ gogs_user_token = environ['GOGS_USER_TOKEN']
 
 debug_mode_flag = getenv('DEBUG_MODE', False)
 
-tx_post_url = f'http://127.0.0.1:8090/' if prefix and debug_mode_flag \
+tx_post_url = 'http://127.0.0.1:8090/' if prefix and debug_mode_flag \
                 else f'https://git.door43.org/{prefix}tx/'
