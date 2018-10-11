@@ -8,22 +8,22 @@
 import os
 #import shutil
 import tempfile
-import logging
 #import ssl
 #from urllib import error as urllib_error
-from urllib.parse import urlencode
+#from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
-import json
-import hashlib
-from datetime import datetime, timedelta
+#import json
+#import hashlib
+from datetime import datetime #, timedelta
 from time import time
 
 # Library (PyPi) imports
+#import requests
 from rq import get_current_job
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, REDIS_JOB_LIST
+from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST
 from general_tools.file_utils import unzip, write_file, remove_tree
 from general_tools.url_utils import download_file
 #from resource_container.ResourceContainer import RC
@@ -35,20 +35,18 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS_callback_handler'
+#OUR_NAME = 'Door43_callback_handler'
 
- # Enable DEBUG logging for dev- instances (but less logging for production)
-logging.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
-
-our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.callback-handler"
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+
 
 
 def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_owner):
@@ -72,24 +70,12 @@ def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_
         'started_at': None,
         'ended_at': None
     }
-    # TODO: CHECK AND DELETE Rewrite of the following lines as a list comprehension
-    if 'commits' not in project_json:
-        project_json['commits'] = []
-    commits1 = []
-    for c in project_json['commits']:
-        if c['id'] != commit_id:
-            commits1.append(c)
-    commits1.append(commit)
-    #project_json['commits'] = commits1
-    print(f"project_json['commits (old)'] = {commits1}")
     # Get all other previous commits, and then add this one
     if 'commits' in project_json:
         commits = [c for c in project_json['commits'] if c['id'] != commit_id]
         commits.append(commit)
     else:
         commits = [commit]
-    print(f"project_json['commits (new)'] = {commits}")
-    assert commits == commits1
     project_json['commits'] = commits
     project_file = os.path.join(base_temp_dir_name, 'project.json')
     write_file(project_file, project_json)
@@ -220,20 +206,23 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 
     Return True or False
     """
-    print(f"\nverify_expected_job({vej_job_dict})")
-    outstanding_jobs_dict = vej_redis_connection.hgetall(REDIS_JOB_LIST)
+    GlobalSettings.logger.debug(f"verify_expected_job({vej_job_dict['job_id']})")
+    outstanding_jobs_dict = vej_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
     if not outstanding_jobs_dict:
         GlobalSettings.logger.error("No expected jobs found")
         return False
-    print("Got outstanding_jobs_dict:", outstanding_jobs_dict)
-    print(f"Currently have {len(outstanding_jobs_dict)} outstanding job(s) in {REDIS_JOB_LIST!r}")
-    if vej_job_dict['job_id'] not in outstanding_jobs_dict:
+    GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: {outstanding_jobs_dict}")
+    GlobalSettings.logger.debug(f"Currently have {len(outstanding_jobs_dict)}"
+                                f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+    job_id_bytes = vej_job_dict['job_id'].encode()
+    if job_id_bytes not in outstanding_jobs_dict:
         GlobalSettings.logger.error(f"Not expecting job with id of {vej_job_dict['job_id']}")
         return False
     # We found a match -- delete that job from the outstanding list
-    print(f"Found match with {outstanding_jobs_dict[vej_job_dict['job_id']]}")
-    del outstanding_jobs_dict[vej_job_dict['job_id']]
-    print(f"Still have {len(outstanding_jobs_dict)} outstanding job(s) in {REDIS_JOB_LIST!r}")
+    GlobalSettings.logger.debug(f"Found match with {outstanding_jobs_dict[job_id_bytes]}")
+    del outstanding_jobs_dict[job_id_bytes]
+    GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_dict)} outstanding job(s)"
+                                f" in {REDIS_JOB_LIST!r}")
     vej_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
     return True
 # end of verify_expected_job
@@ -250,7 +239,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    print(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {queued_json_payload}")
 
     ## Setup a temp folder to use
     #source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -279,81 +268,81 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
 
     job_id_parts = identifier.split('/')
     job_id = job_id_parts[0]
-    job = TxJob.get(job_id)
+    this_job = TxJob.get(job_id)
 
-    if not job:
-        error = 'No job found for job_id = {0}, identifier = {0}'.format(job_id, identifier)
+    if not this_job:
+        error = f"No job found for job_id = {job_id}, identifier = {identifier}"
         GlobalSettings.logger.error(error)
         raise Exception(error)
 
     if len(job_id_parts) == 4:
         part_count, part_id, book = job_id_parts[1:]
-        GlobalSettings.logger.debug(f'Multiple project, part {part_id} of {part_count}, converting book {book}')
+        GlobalSettings.logger.debug(f"Multiple project, part {part_id} of {part_count}, converting book {book}")
         multiple_project = True
     else:
         GlobalSettings.logger.debug('Single project')
         part_id = None
         multiple_project = False
 
-    job.ended_at = datetime.utcnow()
-    job.success = success
+    this_job.ended_at = datetime.utcnow()
+    this_job.success = success
     for message in log:
-        job.log_message(message)
+        this_job.log_message(message)
     for message in warnings:
-        job.warnings_message(message)
+        this_job.warnings_message(message)
     for message in errors:
-        job.error_message(message)
+        this_job.error_message(message)
     if len(errors):
-        job.log_message('{0} function returned with errors.'.format(job.convert_module))
+        this_job.log_message('{0} function returned with errors.'.format(this_job.convert_module))
     elif len(warnings):
-        job.log_message('{0} function returned with warnings.'.format(job.convert_module))
+        this_job.log_message('{0} function returned with warnings.'.format(this_job.convert_module))
     else:
-        job.log_message('{0} function returned successfully.'.format(job.convert_module))
+        this_job.log_message('{0} function returned successfully.'.format(this_job.convert_module))
 
-    if not success or len(job.errors):
-        job.success = False
-        job.status = "failed"
+    if not success or this_job.errors:
+        this_job.success = False
+        this_job.status = "failed"
         message = "Conversion failed"
-        GlobalSettings.logger.debug("Conversion failed, success: {0}, errors: {1}".format(success, job.errors))
-    elif len(job.warnings) > 0:
-        job.success = True
-        job.status = "warnings"
+        GlobalSettings.logger.debug(f"Conversion failed, success: {success}, errors: {this_job.errors}")
+    elif this_job.warnings:
+        this_job.success = True
+        this_job.status = "warnings"
         message = "Conversion successful with warnings"
     else:
-        job.success = True
-        job.status = "success"
+        this_job.success = True
+        this_job.status = "success"
         message = "Conversion successful"
 
-    job.message = message
-    job.log_message(message)
-    job.log_message('Finished job {0} at {1}'.format(job.job_id, job.ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")))
+    this_job.message = message
+    this_job.log_message(message)
+    this_job.log_message('Finished job {0} at {1}'.format(this_job.job_id, this_job.ended_at.strftime("%Y-%m-%dT%H:%M:%SZ")))
 
-    s3_commit_key = 'u/{0}/{1}/{2}'.format(job.user_name, job.repo_name, job.commit_id)
+    s3_commit_key = 'u/{0}/{1}/{2}'.format(this_job.user_name, this_job.repo_name, this_job.commit_id)
     upload_key = s3_commit_key
     if multiple_project:
         upload_key += "/" + part_id
 
-    GlobalSettings.logger.debug('Callback for commit {0}...'.format(s3_commit_key))
+    GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key}...")
 
     # Download the ZIP file of the converted files
-    converted_zip_url = job.output
+    converted_zip_url = this_job.output
     converted_zip_file = os.path.join(temp_dir, converted_zip_url.rpartition('/')[2])
     remove(converted_zip_file)  # make sure old file not present
     download_success = True
-    GlobalSettings.logger.debug('Downloading converted zip file from {0}...'.format(converted_zip_url))
+    GlobalSettings.logger.debug(f"Downloading converted zip file from {converted_zip_url}...")
     try:
         download_file(converted_zip_url, converted_zip_file)
     except:
         download_success = False  # if multiple project we note fail and move on
         if not multiple_project:
             remove_tree(temp_dir)  # cleanup
-        if job.errors is None:
-            job.errors = []
-        job.errors.append("Missing converted file: " + converted_zip_url)
+        if this_job.errors is None:
+            this_job.errors = []
+        this_job.errors.append("Missing converted file: " + converted_zip_url)
     finally:
-        GlobalSettings.logger.debug('download finished, success={0}'.format(str(download_success)))
+        GlobalSettings.logger.debug(f"download finished, success={download_success}")
 
-    job.update()
+    this_job.update()
 
     if download_success:
         # Unzip the archive
@@ -380,11 +369,9 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         all_parts_completed = True
         build_log_json = results
 
-    #remove_tree(base_temp_dir_name)  # cleanup
-    #print("process_callback() is returning:", build_log_json)
+    remove_tree(temp_dir)  # cleanup
+    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() is finishing with: {build_log_json}")
     #return build_log_json
-    print("Door43-Job-Handler process_callback() is returning:", build_log_json)
-    return build_log_json
 #end of process_callback function
 
 
@@ -396,8 +383,9 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
+    GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('CallbacksStarted')
+    stats_client.incr('callbacks.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -411,10 +399,10 @@ def job(queued_json_payload):
     #assert queue_prefix == prefix
     process_callback(prefix, queued_json_payload, current_job.connection)
 
-    elapsed_seconds = round(time() - start_time)
-    stats_client.gauge('CallbackTimeSeconds', elapsed_seconds)
-    stats_client.incr('CallbacksCompleted')
-    print(f"  Ok, DCS callback job completed in {elapsed_seconds} seconds!")
+    elapsed_milliseconds = round((time() - start_time) * 1000)
+    stats_client.timing('callback.duration', elapsed_milliseconds)
+    stats_client.incr('callbacks.completed')
+    GlobalSettings.logger.info(f"Door43 callback handling completed in {elapsed_milliseconds:,} milliseconds")
 # end of job function
 
-# end of callback.py
+# end of callback.py for door43_enqueue_job

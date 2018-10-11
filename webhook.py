@@ -8,23 +8,22 @@
 import os
 #import shutil
 import tempfile
-import logging
 #import ssl
-#import urllib.request as urllib2
-from urllib import error as urllib_error
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+#from urllib import error as urllib_error
+#from urllib.parse import urlencode
+#from urllib.request import Request, urlopen
 import json
 import hashlib
 from datetime import datetime
 from time import time
 
 # Library (PyPi) imports
+import requests
 from rq import get_current_job
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, REDIS_JOB_LIST
+from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url, REDIS_JOB_LIST
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -36,23 +35,21 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS_job_handler'
+OUR_NAME = 'Door43_job_handler'
 
- # Enable DEBUG logging for dev- instances (but less logging for production)
-logging.basicConfig(level=logging.DEBUG if prefix else logging.ERROR)
-
-our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
+
 
 TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
-OUR_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
 
 
 
@@ -183,8 +180,8 @@ def get_repo_files(base_temp_dir_name, commit_url, repo_name):
 def download_repo(base_temp_dir_name, commit_url, repo_dir):
     """
     Downloads and unzips a git repository from Github or git.door43.org
-    :param str|unicode commit_url: The URL of the repository to download
-    :param str|unicode repo_dir:   The directory where the downloaded file should be unzipped
+    :param str commit_url: The URL of the repository to download
+    :param str repo_dir:   The directory where the downloaded file should be unzipped
     :return: None
     """
     repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
@@ -219,16 +216,19 @@ def remember_job(rj_job_dict, rj_redis_connection):
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
     """
-    print(f"\nremember_job({rj_job_dict})")
-    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST)
+    GlobalSettings.logger.debug(f"remember_job({rj_job_dict})")
+    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
     if outstanding_jobs_dict is None:
-        print("Created new outstanding_jobs_dict")
+        GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    else: print("Got outstanding_jobs_dict:", outstanding_jobs_dict)
-    print(f"Already had {len(outstanding_jobs_dict)} outstanding job(s) in {REDIS_JOB_LIST!r}")
-    assert rj_job_dict['job_id'] not in outstanding_jobs_dict
+    else:
+        GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: {outstanding_jobs_dict}")
+    GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
+                               f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+    assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
-    GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)} outstanding job(s) in {REDIS_JOB_LIST!r}")
+    GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
+                               f" outstanding job(s) in {REDIS_JOB_LIST!r}")
     rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
 # end of remember_job
 
@@ -283,7 +283,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    #print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -338,11 +338,11 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    print("client_webhook got manifest_data:", manifest_data)
+    #print("client_webhook got manifest_data:", manifest_data)
 
 
     # First see if manifest already exists in DB and update it if it is
-    print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
+    GlobalSettings.logger.info(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -355,22 +355,22 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
         tx_manifest.insert()
 
     # Preprocess the files
-    print("Preprocessing files...")
+    GlobalSettings.logger.info("Preprocessing files...")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     do_preprocess(rc, repo_dir, preprocess_dir)
 
     # Zip up the massaged files
-    print("Zipping files...")
+    GlobalSettings.logger.info("Zipping files...")
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
     GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
     # Upload zipped file to the S3 pre-convert bucket
-    print("Uploading zip file...")
+    GlobalSettings.logger.info("Uploading zip file...")
     file_key = upload_zip_file(commit_id, zip_filepath)
 
-    print("Webhook.process_job setting up job dict...")
+    GlobalSettings.logger.info("Webhook.process_job setting up job dict...")
     pj_job_dict = {}
     pj_job_dict['job_id'] = get_unique_job_id()
     pj_job_dict['identifier'] = pj_job_dict['job_id']
@@ -414,32 +414,41 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     # Update the project.json file
     update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
 
+
     # Pass the work onto the tX system
-    print(f"About to POST request to tX system @ {TX_POST_URL}")
-    # TODO: What headers do we really need?
-    headers = {"Content-type": "application/json",}
-    # TODO: What payload do we really need?
+    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url} ...")
     tx_payload = {
-        'identifier': pj_job_dict['identifier'],
-        'source_url': pj_job_dict['source'],
-        'resource_id': pj_job_dict['resource_type'],
-        'cdn_bucket': pj_job_dict['cdn_bucket'],
-        'cdn_file': pj_job_dict['cdn_file'],
-        'callback': OUR_CALLBACK_URL,
+        'job_id': pj_job_dict['job_id'],
+        'user_token': gogs_user_token,
+        'resource_type': pj_job_dict['resource_type'],
+        'input_format': rc.resource.file_ext,
+        'output_format': 'html',
+        'source': pj_job_dict['source'],
+        'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    else DOOR43_CALLBACK_URL,
     }
+    if 'identifier' in pj_job_dict:
+        tx_payload['identifier'] = pj_job_dict['identifier']
     if 'options' in pj_job_dict:
         tx_payload['options'] = pj_job_dict['options']
-    req = Request(TX_POST_URL, urlencode(tx_payload).encode(), headers)
+
     try:
-        response = urlopen(req)
-        print('response', response)
-        response_json = response.read().decode()
-        print('response json', response_json)
-    except urllib_error.HTTPError as e:
-        logging.error(f'tX POST request got {e}')
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
+    if response:
+        GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        try:
+            GlobalSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            GlobalSettings.logger.info("No valid response JSON found")
+            GlobalSettings.logger.debug(f"response.text = {response.text}")
 
     remove_tree(base_temp_dir_name)  # cleanup
-    print(f"{pj_prefix}Door43-Job-Handler process_job() is finishing with: {build_log_json}")
+    GlobalSettings.logger.info(f"{pj_prefix}Door43-Job-Handler process_job() is finishing with: {build_log_json}")
     #return build_log_json
 #end of process_job function
 
@@ -452,8 +461,9 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
+    GlobalSettings.logger.info("Door43-Job-Handler received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('JobsStarted')
+    stats_client.incr('jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -471,10 +481,10 @@ def job(queued_json_payload):
     #assert queue_prefix == prefix
     process_job(prefix, queued_json_payload, current_job.connection)
 
-    elapsed_seconds = round(time() - start_time)
-    stats_client.gauge('JobTimeSeconds', elapsed_seconds)
-    stats_client.incr('JobsCompleted')
-    print(f"  Ok, {prefix}Door43 job submission to tX completed in {elapsed_seconds} seconds!")
+    elapsed_milliseconds = round((time() - start_time) * 1000)
+    stats_client.timing('job.duration', elapsed_milliseconds)
+    stats_client.incr('jobs.completed')
+    GlobalSettings.logger.info(f"Door43 job handling completed in {elapsed_milliseconds:,} milliseconds")
 # end of job function
 
-# end of webhook.py
+# end of webhook.py for door43_enqueue_job

@@ -4,7 +4,7 @@ import json
 
 import sqlalchemy
 
-from rq_settings import prefix, webhook_queue_name
+from rq_settings import prefix, callback_queue_name
 from webhook import job, GlobalSettings
 
 from rq import get_current_job
@@ -12,8 +12,7 @@ from rq import get_current_job
 def my_get_current_job():
     class Result:
         id = 12345
-        origin = webhook_queue_name
-        connection = None
+        origin = callback_queue_name
     return Result()
 
 class TestWebhook(TestCase):
@@ -26,14 +25,14 @@ class TestWebhook(TestCase):
         self.assertEqual(prefix, GlobalSettings.prefix)
 
     @skip("Not currently working")
-    @patch('webhook.get_current_job', side_effect=my_get_current_job)
+    @patch('callback.get_current_job', side_effect=my_get_current_job)
     def test_bad_payload(self, mocked_get_current_job_function):
         test_payload = {'something': 'anything',}
         with self.assertRaises(KeyError):
             job(test_payload)
 
     @skip("Skip this test on Travis-CI coz it fails with AWS test credentials - leave for standalone testing")
-    @patch('webhook.get_current_job', side_effect=my_get_current_job)
+    @patch('callback.get_current_job', side_effect=my_get_current_job)
     def test_typical_full_payload(self, mocked_get_current_job_function):
         with open( 'tests/resources/webhook_post.json', 'rt' ) as json_file:
             payload_json = json.load(json_file)
