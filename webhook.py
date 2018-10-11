@@ -566,15 +566,20 @@ def process_job(pj_prefix, queued_json_payload):
     if pj_job.options:
         tx_payload['options'] = pj_job.options
 
-    response = requests.post(tx_post_url, json=tx_payload)
-    print("response.status_code", response.status_code)
-    print("response.reason", response.reason)
-    print("response.headers", response.headers)
-    print("response.text", response.text)
     try:
-        print("response.json", response.json())
-    except json.decoder.JSONDecodeError:
-        print("No valid response JSON found")
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
+    if response:
+        GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        try:
+            GlobalSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            GlobalSettings.logger.info("No valid response JSON found")
+            GlobalSettings.logger.debug(f"response.text = {response.text}")
+    GlobalSettings.logger.info("Continuing on (ignoring tx system) to process the job myself!!!")
 
 
     # For now, we ignore the above
