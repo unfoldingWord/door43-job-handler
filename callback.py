@@ -36,21 +36,18 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS_callback_handler'
-our_adjusted_name = prefix + OUR_NAME # Used for statsd prefix
+#OUR_NAME = 'Door43_callback_handler'
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
-
-# Enable DEBUG logging for dev- instances (but less logging for production)
-# NOTE: Done in global_settings.py
-#GlobalSettings.logger.basicConfig(level=logging.DEBUG if prefix else logging.INFO)
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.callback-handler"
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+
 
 
 def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_owner):

@@ -13,13 +13,13 @@ import tempfile
 #from urllib import error as urllib_error
 from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
-import requests
 import json
 import hashlib
 from datetime import datetime, timedelta
 from time import time
 
 # Library (PyPi) imports
+import requests
 #from rq import get_current_job
 from statsd import StatsClient # Graphite front-end
 
@@ -36,12 +36,12 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS_job_handler'
-our_adjusted_name = prefix + OUR_NAME # Used for statsd prefix
+OUR_NAME = 'Door43_job_handler'
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
 
 
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
@@ -51,7 +51,7 @@ LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
 
 
 
@@ -91,12 +91,12 @@ def send_payload_to_converter(payload, converter):
     converter_name = converter.name
     if not isinstance(converter_name, str): # bytes in Python3 -- not sure where it gets set
         converter_name = converter_name.decode()
-    print("converter_name", repr(converter_name))
-    GlobalSettings.logger.debug(f'Sending Payload to converter {converter_name}:')
+    #print("converter_name", repr(converter_name))
+    GlobalSettings.logger.debug(f'Sending payload to converter {converter_name}:')
     GlobalSettings.logger.debug(payload)
     converter_function = f'{GlobalSettings.prefix}tx_convert_{converter_name}'
-    print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
-    stats_client.incr('ConvertersInvoked')
+    #print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
+    stats_client.incr('converters.attempted')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
@@ -149,12 +149,12 @@ def send_payload_to_linter(payload, linter):
     linter_name = linter.name
     if not isinstance(linter_name, str): # bytes in Python3 -- not sure where it gets set
         linter_name = linter_name.decode()
-    print("linter_name", repr(linter_name))
+    #print("linter_name", repr(linter_name))
     GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:')
     GlobalSettings.logger.debug(payload)
     linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
-    print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
-    stats_client.incr('LintersInvoked')
+    #print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
+    stats_client.incr('linters.attempted')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
@@ -451,7 +451,7 @@ def process_job(pj_prefix, queued_json_payload):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    print("client_webhook got manifest_data:", manifest_data) # RJH
+    #print("client_webhook got manifest_data:", manifest_data)
 
 
     # First see if manifest already exists in DB and update it if it is
@@ -647,7 +647,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info("Door43-Job-Handler received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('JobsStarted')
+    stats_client.incr('jobs.attempted')
 
     #current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -663,8 +663,8 @@ def job(queued_json_payload):
     process_job(prefix, queued_json_payload)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('JobTime', elapsed_milliseconds)
-    stats_client.incr('JobsCompleted')
+    stats_client.timing('job.duration', elapsed_milliseconds)
+    stats_client.incr('jobs.completed')
     GlobalSettings.logger.info(f"DCS job handling completed in {elapsed_milliseconds:,} milliseconds!")
 # end of job function
 
