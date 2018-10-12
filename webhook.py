@@ -40,11 +40,14 @@ OUR_NAME = 'Door43_job_handler'
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
 
 
 TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
+                                    if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                                 else DOOR43_CALLBACK_URL
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -342,7 +345,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
 
 
     # First see if manifest already exists in DB and update it if it is
-    GlobalSettings.logger.info(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
+    #GlobalSettings.logger.info(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -416,23 +419,26 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
 
 
     # Pass the work onto the tX system
-    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url} ...")
+    # NOTE: The system isn't implemented yet --
+    #           this is just the beginnings of it for testing purposes
+    #       For now, we still continue on to use the lambda calls below!
+    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
     tx_payload = {
-        'job_id': pj_job_dict['job_id'],
         'user_token': gogs_user_token,
-        'resource_type': pj_job_dict['resource_type'],
+        'resource_type': rc.resource.identifier,
         'input_format': rc.resource.file_ext,
         'output_format': 'html',
-        'source': pj_job_dict['source'],
+        'source': source_url_base + '/' + file_key,
         'callback': 'http://127.0.0.1:8080/tx-callback/' \
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
-    }
-    if 'identifier' in pj_job_dict:
-        tx_payload['identifier'] = pj_job_dict['identifier']
-    if 'options' in pj_job_dict:
-        tx_payload['options'] = pj_job_dict['options']
+        'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
+        }
+    if pj_job.options:
+        GlobalSettings.logger.info(f"Have options: {pj_job.option}!")
+        tx_payload['options'] = pj_job.options
 
+    GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
     try:
         response = requests.post(tx_post_url, json=tx_payload)
     except requests.exceptions.ConnectionError as e:
@@ -447,8 +453,9 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
             GlobalSettings.logger.info("No valid response JSON found")
             GlobalSettings.logger.debug(f"response.text = {response.text}")
 
+
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{pj_prefix}Door43-Job-Handler process_job() is finishing with: {build_log_json}")
+    GlobalSettings.logger.info(f"{pj_prefix}{OUR_NAME} process_job() is finishing with: {build_log_json}")
     #return build_log_json
 #end of process_job function
 
@@ -461,7 +468,7 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
-    GlobalSettings.logger.info("Door43-Job-Handler received a job" + (" (in debug mode)" if debug_mode_flag else ""))
+    GlobalSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr('jobs.attempted')
 
@@ -483,8 +490,9 @@ def job(queued_json_payload):
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
+    GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling completed in {elapsed_milliseconds:,} milliseconds")
+
     stats_client.incr('jobs.completed')
-    GlobalSettings.logger.info(f"Door43 job handling completed in {elapsed_milliseconds:,} milliseconds")
 # end of job function
 
 # end of webhook.py for door43_enqueue_job

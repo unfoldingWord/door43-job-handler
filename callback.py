@@ -40,7 +40,7 @@ from global_settings.global_settings import GlobalSettings
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.callback-handler"
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -385,7 +385,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('callbacks.attempted')
+    stats_client.incr('callback.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -400,9 +400,18 @@ def job(queued_json_payload):
     process_callback(prefix, queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('callback.duration', elapsed_milliseconds)
-    stats_client.incr('callbacks.completed')
+    stats_client.timing('callback.job.duration', elapsed_milliseconds)
     GlobalSettings.logger.info(f"Door43 callback handling completed in {elapsed_milliseconds:,} milliseconds")
+
+    # Calculate total elapsed time for the job
+    total_elapsed_time = datetime.utcnow() - \
+                         datetime.strptime(queued_json_payload['door43_webhook_received_at'],
+                                           ("%Y-%m-%dT%H:%M:%SZ"))
+    total_elapsed_milliseconds = round(total_elapsed_time.total_seconds() * 1000)
+    GlobalSettings.logger.info(f"Door43 total job completed in {total_elapsed_milliseconds:,} milliseconds")
+    stats_client.timing('total.job.duration', total_elapsed_milliseconds)
+
+    stats_client.incr('callback.jobs.succeeded')
 # end of job function
 
 # end of callback.py for door43_enqueue_job
