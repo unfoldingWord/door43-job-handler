@@ -41,10 +41,14 @@ OUR_NAME = 'Door43_job_handler'
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
 
 
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
+                                    if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                                 else DOOR43_CALLBACK_URL
+
 CONVERTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/converter'
 LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 
@@ -455,7 +459,7 @@ def process_job(pj_prefix, queued_json_payload):
 
 
     # First see if manifest already exists in DB and update it if it is
-    print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}") # RJH
+    #print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}") # RJH
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -481,7 +485,7 @@ def process_job(pj_prefix, queued_json_payload):
     file_key = upload_zip_file(commit_id, zip_filepath)
 
     #print(f"Webhook.process_job setting up TxJob with username={user.username}...")
-    print("Webhook.process_job setting up TxJob...")
+    #print("Webhook.process_job setting up TxJob...")
     pj_job = TxJob()
     pj_job.job_id = get_unique_job_id()
     pj_job.identifier = pj_job.job_id
@@ -513,6 +517,8 @@ def process_job(pj_prefix, queued_json_payload):
 
     if converter:
         pj_job.convert_module = converter.name
+        if isinstance(pj_job.convert_module, bytes): # TODO: Where is converter.name set to bytes?
+            pj_job.convert_module = pj_job.convert_module.decode()
         pj_job.started_at = datetime.utcnow()
         pj_job.expires_at = pj_job.started_at + timedelta(days=1)
         pj_job.eta = pj_job.started_at + timedelta(minutes=5)
@@ -527,6 +533,8 @@ def process_job(pj_prefix, queued_json_payload):
 
     if linter:
         pj_job.lint_module = linter.name
+        if isinstance(pj_job.lint_module, bytes): # TODO: Where is linter.name set to bytes?
+            pj_job.lint_module = pj_job.lint_module.decode()
     else:
         GlobalSettings.logger.debug(f'No linter was found to lint {pj_job.resource_type}')
 
@@ -546,44 +554,44 @@ def process_job(pj_prefix, queued_json_payload):
     update_project_json(base_temp_dir_name, commit_id, pj_job, repo_name, user_name)
 
 
-    # Pass the work onto the tX system
-    # NOTE: The system isn't implemented yet --
-    #           this is just the beginnings of it for testing purposes
-    #       For now, we still continue on to use the lambda calls below!
-    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
-    tx_payload = {
-        'user_token': gogs_user_token,
-        'resource_type': pj_job.resource_type,
-        'input_format': rc.resource.file_ext,
-        'output_format': 'html',
-        'source': pj_job.source,
-        'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                    else DOOR43_CALLBACK_URL,
-    }
-    if pj_job.identifier:
-        tx_payload['identifier'] = pj_job.identifier
-    if pj_job.options:
-        tx_payload['options'] = pj_job.options
+    ## Pass the work onto the tX system
+    ## NOTE: The system isn't implemented yet --
+    ##           this is just the beginnings of it for testing purposes
+    ##       For now, we still continue on to use the lambda calls below!
+    #GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
+    #tx_payload = {
+        #'user_token': gogs_user_token,
+        #'resource_type': rc.resource.identifier,
+        #'input_format': rc.resource.file_ext,
+        #'output_format': 'html',
+        #'source': source_url_base + '/' + file_key,
+        #'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        #if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    #else DOOR43_CALLBACK_URL,
+        #'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
+        #}
+    #if pj_job.options:
+        #GlobalSettings.logger.info(f"Have options: {pj_job.option}!")
+        #tx_payload['options'] = pj_job.options
 
-    try:
-        response = requests.post(tx_post_url, json=tx_payload)
-    except requests.exceptions.ConnectionError as e:
-        GlobalSettings.logger.critical(f"Callback connection error: {e}")
-        response = None
-    if response:
-        GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-        GlobalSettings.logger.debug(f"response.headers = {response.headers}")
-        try:
-            GlobalSettings.logger.info(f"response.json = {response.json()}")
-        except json.decoder.JSONDecodeError:
-            GlobalSettings.logger.info("No valid response JSON found")
-            GlobalSettings.logger.debug(f"response.text = {response.text}")
-    GlobalSettings.logger.info("Continuing on (ignoring tx system) to process the job myself!!!")
-
-
+    #GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    #try:
+        #response = requests.post(tx_post_url, json=tx_payload)
+    #except requests.exceptions.ConnectionError as e:
+        #GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        #response = None
+    #if response:
+        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        #try:
+            #GlobalSettings.logger.info(f"response.json = {response.json()}")
+        #except json.decoder.JSONDecodeError:
+            #GlobalSettings.logger.info("No valid response JSON found")
+            #GlobalSettings.logger.debug(f"response.text = {response.text}")
+    #GlobalSettings.logger.info("Continuing on (ignoring tx system) to process the job myself!!!")
     # For now, we ignore the above
     #   and just go ahead and process it the old way anyway so it keeps working
+
     # Convert and lint
     if converter:
         if not preprocessor.is_multiple_jobs():
@@ -637,7 +645,7 @@ def process_job(pj_prefix, queued_json_payload):
                     send_request_to_linter(book_job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
 
     remove_tree(base_temp_dir_name)  # cleanup
-    #print("process_job() is returning:", build_log_json)
+    GlobalSettings.logger.debug(f"webhook.process_job() is finishing with {build_log_json}")
     #return build_log_json
 #end of process_job function
 
@@ -669,8 +677,9 @@ def job(queued_json_payload):
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
+    GlobalSettings.logger.info(f"Door43 webhook job handling completed in {elapsed_milliseconds:,} milliseconds")
+
     stats_client.incr('jobs.completed')
-    GlobalSettings.logger.info(f"DCS job handling completed in {elapsed_milliseconds:,} milliseconds!")
 # end of job function
 
 # end of webhook.py
