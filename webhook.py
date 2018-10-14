@@ -89,7 +89,7 @@ def send_payload_to_converter(payload, converter):
     payload = {
         'data': payload,
         'vars': {
-            'prefix': GlobalSettings.prefix
+            'prefix': prefix
         }
     }
     converter_name = converter.name
@@ -98,7 +98,7 @@ def send_payload_to_converter(payload, converter):
     #print("converter_name", repr(converter_name))
     GlobalSettings.logger.debug(f'Sending payload to converter {converter_name}:')
     GlobalSettings.logger.debug(payload)
-    converter_function = f'{GlobalSettings.prefix}tx_convert_{converter_name}'
+    converter_function = f'{prefix}tx_convert_{converter_name}'
     #print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
     stats_client.incr('converters.attempted')
     # TODO: Put an alternative function call in here RJH
@@ -147,7 +147,7 @@ def send_payload_to_linter(payload, linter):
     payload = {
         'data': payload,
         'vars': {
-            'prefix': GlobalSettings.prefix
+            'prefix': prefix
         }
     }
     linter_name = linter.name
@@ -156,7 +156,7 @@ def send_payload_to_linter(payload, linter):
     #print("linter_name", repr(linter_name))
     GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:')
     GlobalSettings.logger.debug(payload)
-    linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
+    linter_function = f'{prefix}tx_lint_{linter_name}'
     #print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
     stats_client.incr('linters.attempted')
     # TODO: Put an alternative function call in here RJH
@@ -356,7 +356,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
 #end of download_repo function
 
 
-def process_job(pj_prefix, queued_json_payload):
+def process_job(queued_json_payload):
     """
     Sets up a temp folder in the AWS S3 bucket.
 
@@ -400,7 +400,15 @@ def process_job(pj_prefix, queued_json_payload):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    GlobalSettings.logger.debug(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+
+
+    #  Update repo/owner/pusher stats
+    #   (all the following fields are expected from the Gitea webhook from push)
+    stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+    stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+    stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -413,6 +421,7 @@ def process_job(pj_prefix, queued_json_payload):
         pass
     #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
+
     # Get the commit_id, commit_url
     commit_id = queued_json_payload['after']
     commit = None
@@ -422,6 +431,7 @@ def process_job(pj_prefix, queued_json_payload):
     commit_id = commit_id[:10]  # Only use the short form
     commit_url = commit['url']
     #print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
+
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
@@ -438,11 +448,14 @@ def process_job(pj_prefix, queued_json_payload):
     pusher_username = pusher['username']
     #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
+
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
 
+
     # Get the resource container
     rc = RC(repo_dir, repo_name)
+
 
     # Save manifest to manifest table
     manifest_data = {
@@ -471,9 +484,11 @@ def process_job(pj_prefix, queued_json_payload):
         GlobalSettings.logger.debug(f'Inserting manifest into manifest table: {tx_manifest}')
         tx_manifest.insert()
 
+
     # Preprocess the files
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     preprocessor_result, preprocessor = do_preprocess(rc, repo_dir, preprocess_dir)
+
 
     # Zip up the massaged files
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
@@ -481,8 +496,10 @@ def process_job(pj_prefix, queued_json_payload):
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
+
     # Upload zipped file to the S3 pre-convert bucket
     file_key = upload_zip_file(commit_id, zip_filepath)
+
 
     #print(f"Webhook.process_job setting up TxJob with username={user.username}...")
     #print("Webhook.process_job setting up TxJob...")
@@ -673,7 +690,7 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_job(prefix, queued_json_payload)
+    process_job(queued_json_payload)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
