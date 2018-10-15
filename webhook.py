@@ -219,13 +219,23 @@ def remember_job(rj_job_dict, rj_redis_connection):
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
     """
-    GlobalSettings.logger.debug(f"remember_job({rj_job_dict})")
-    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
-    if outstanding_jobs_dict is None:
-        GlobalSettings.logger.info("Created new outstanding_jobs_dict")
+    GlobalSettings.logger.debug(f"remember_job({rj_job_dict['job_id']})")
+    if debug_mode_flag:
+        GlobalSettings.logger.debug(f"{OUR_NAME} DEBUG_MODE: Emptying outstanding_jobs_dict!!!")
+        for this_key in rj_redis_connection.hkeys(REDIS_JOB_LIST):
+            print("  Deleting key:", this_key)
+            del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, this_key)
+            #print("  Got delete result:", del_result)
+            assert del_result == 1
         outstanding_jobs_dict = {}
-    else:
-        GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: {outstanding_jobs_dict}")
+    else: # not debug mode
+        outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
+        if outstanding_jobs_dict is None:
+            GlobalSettings.logger.info("Created new outstanding_jobs_dict")
+            outstanding_jobs_dict = {}
+        else:
+            GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+                                        f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
     GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in {REDIS_JOB_LIST!r}")
     assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
@@ -237,7 +247,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
 
 
 
-def process_job(pj_prefix, queued_json_payload, redis_connection):
+def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
         pj_prefix in '' or 'dev-'
@@ -286,7 +296,15 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    GlobalSettings.logger.debug(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+
+
+    #  Update repo/owner/pusher stats
+    #   (all the following fields are expected from the Gitea webhook from push)
+    stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+    stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+    stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -299,6 +317,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
         pass
     #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
+
     # Get the commit_id, commit_url
     commit_id = queued_json_payload['after']
     commit = None
@@ -308,6 +327,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     commit_id = commit_id[:10]  # Only use the short form
     commit_url = commit['url']
     #print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
+
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
@@ -324,11 +344,14 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     pusher_username = pusher['username']
     #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
+
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
 
+
     # Get the resource container
     rc = RC(repo_dir, repo_name)
+
 
     # Save manifest to manifest table
     manifest_data = {
@@ -357,10 +380,12 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
         GlobalSettings.logger.debug(f'Inserting manifest into manifest table: {tx_manifest}')
         tx_manifest.insert()
 
+
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files...")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     do_preprocess(rc, repo_dir, preprocess_dir)
+
 
     # Zip up the massaged files
     GlobalSettings.logger.info("Zipping files...")
@@ -368,6 +393,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
+
 
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file...")
@@ -381,7 +407,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
-    pj_job_dict['created_at'] = datetime.utcnow()
+    pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     # Seems never used (RJH)
     #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
     pj_job_dict['input_format'] = rc.resource.file_ext
@@ -418,13 +444,10 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
     update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
 
 
-    # Pass the work onto the tX system
-    # NOTE: The system isn't implemented yet --
-    #           this is just the beginnings of it for testing purposes
-    #       For now, we still continue on to use the lambda calls below!
-    GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
+    # Pass the work request onto the tX system
+    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} ...")
     tx_payload = {
-        'user_token': gogs_user_token,
+        'job_id': pj_job_dict['job_id'],
         'resource_type': rc.resource.identifier,
         'input_format': rc.resource.file_ext,
         'output_format': 'html',
@@ -432,11 +455,12 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
         'callback': 'http://127.0.0.1:8080/tx-callback/' \
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
+        'user_token': gogs_user_token,
         'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
-    if pj_job.options:
-        GlobalSettings.logger.info(f"Have options: {pj_job.option}!")
-        tx_payload['options'] = pj_job.options
+    if 'options' in pj_job_dict and pj_job_dict['options']:
+        GlobalSettings.logger.info(f"Have options: {pj_job_dict['options']}!")
+        tx_payload['options'] = pj_job_dict['options']
 
     GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
     try:
@@ -455,7 +479,7 @@ def process_job(pj_prefix, queued_json_payload, redis_connection):
 
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{pj_prefix}{OUR_NAME} process_job() is finishing with: {build_log_json}")
+    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() is finishing with: {build_log_json}")
     #return build_log_json
 #end of process_job function
 
@@ -486,7 +510,7 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_job(prefix, queued_json_payload, current_job.connection)
+    process_job(queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
