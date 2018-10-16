@@ -6,12 +6,7 @@
 
 # Python imports
 import os
-#import shutil
 import tempfile
-#import ssl
-#from urllib import error as urllib_error
-#from urllib.parse import urlencode
-#from urllib.request import Request, urlopen
 import json
 import hashlib
 from datetime import datetime
@@ -468,18 +463,25 @@ def process_job(queued_json_payload, redis_connection):
     except requests.exceptions.ConnectionError as e:
         GlobalSettings.logger.critical(f"Callback connection error: {e}")
         response = None
+
     if response:
-        GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-        GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
         try:
             GlobalSettings.logger.info(f"response.json = {response.json()}")
         except json.decoder.JSONDecodeError:
             GlobalSettings.logger.info("No valid response JSON found")
             GlobalSettings.logger.debug(f"response.text = {response.text}")
-
+        if response.status_code != 200:
+            GlobalSettings.logger.critical(f"Failed to submit job to tX:"
+                                           f" {response.status_code}={response.reason}")
+    else: # no response
+        error_msg = "Submission of job to tX system got no response"
+        GlobalSettings.logger.critical(error_msg)
+        #raise Exception(error_msg) # Is this the best thing to do here?
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() is finishing with: {build_log_json}")
+    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() is finishing with {build_log_json}")
     #return build_log_json
 #end of process_job function
 
