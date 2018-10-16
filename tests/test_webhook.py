@@ -3,11 +3,12 @@ from unittest.mock import Mock, patch
 import json
 
 import sqlalchemy
+from rq import get_current_job
 
 from rq_settings import prefix, webhook_queue_name
-from webhook import job, GlobalSettings
+from global_settings.global_settings import GlobalSettings
+from webhook import job
 
-from rq import get_current_job
 
 def my_get_current_job():
     class Result:
@@ -15,6 +16,7 @@ def my_get_current_job():
         origin = webhook_queue_name
         connection = None
     return Result()
+
 
 class TestWebhook(TestCase):
 
