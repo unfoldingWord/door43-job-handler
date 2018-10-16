@@ -10,19 +10,21 @@ import os
 import tempfile
 #import logging
 #import ssl
-#import urllib.request as urllib2
+#from urllib import error as urllib_error
 from urllib.parse import urlencode
+#from urllib.request import Request, urlopen
 import json
 import hashlib
 from datetime import datetime, timedelta
 from time import time
 
 # Library (PyPi) imports
-from rq import get_current_job
+import requests
+#from rq import get_current_job
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix
+from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -34,12 +36,18 @@ from global_settings.global_settings import GlobalSettings
 
 
 
-OUR_NAME = 'DCS_job_handler'
+OUR_NAME = 'Door43_job_handler'
 
-our_adjusted_name = prefix + OUR_NAME
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
+
+
+DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
+                                    if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                                 else DOOR43_CALLBACK_URL
 
 CONVERTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/converter'
 LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
@@ -47,7 +55,8 @@ LINTER_CALLBACK = f'{GlobalSettings.api_url}/client/callback/linter'
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=our_adjusted_name)
+stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+
 
 
 def send_request_to_converter(srtc_job, converter):
@@ -80,18 +89,18 @@ def send_payload_to_converter(payload, converter):
     payload = {
         'data': payload,
         'vars': {
-            'prefix': GlobalSettings.prefix
+            'prefix': prefix
         }
     }
     converter_name = converter.name
     if not isinstance(converter_name, str): # bytes in Python3 -- not sure where it gets set
         converter_name = converter_name.decode()
-    print("converter_name", repr(converter_name))
-    GlobalSettings.logger.debug(f'Sending Payload to converter {converter_name}:')
+    #print("converter_name", repr(converter_name))
+    GlobalSettings.logger.debug(f'Sending payload to converter {converter_name}:')
     GlobalSettings.logger.debug(payload)
-    converter_function = f'{GlobalSettings.prefix}tx_convert_{converter_name}'
-    print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
-    stats_client.incr('ConvertersInvoked')
+    converter_function = f'{prefix}tx_convert_{converter_name}'
+    #print(f"send_payload_to_converter: converter_function is {converter_function!r} payload={payload}")
+    stats_client.incr('converters.attempted')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=converter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
@@ -138,18 +147,18 @@ def send_payload_to_linter(payload, linter):
     payload = {
         'data': payload,
         'vars': {
-            'prefix': GlobalSettings.prefix
+            'prefix': prefix
         }
     }
     linter_name = linter.name
     if not isinstance(linter_name, str): # bytes in Python3 -- not sure where it gets set
         linter_name = linter_name.decode()
-    print("linter_name", repr(linter_name))
+    #print("linter_name", repr(linter_name))
     GlobalSettings.logger.debug(f'Sending payload to linter {linter_name}:')
     GlobalSettings.logger.debug(payload)
-    linter_function = f'{GlobalSettings.prefix}tx_lint_{linter_name}'
-    print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
-    stats_client.incr('LintersInvoked')
+    linter_function = f'{prefix}tx_lint_{linter_name}'
+    #print(f"send_payload_to_linter: linter_function is {linter_function!r}, payload={payload}")
+    stats_client.incr('linters.attempted')
     # TODO: Put an alternative function call in here RJH
     response = GlobalSettings.lambda_handler().invoke(function_name=linter_function, payload=payload, asyncFlag=True)
     GlobalSettings.logger.debug('finished.')
@@ -178,14 +187,12 @@ def update_project_json(base_temp_dir_name, commit_id, upj_job, repo_name, repo_
         'started_at': None,
         'ended_at': None
     }
-    if 'commits' not in project_json:
-        project_json['commits'] = []
-    # TODO: Rewrite the following lines as a list comprehension
-    commits = []
-    for c in project_json['commits']:
-        if c['id'] != commit_id:
-            commits.append(c)
-    commits.append(commit)
+    # Get all other previous commits, and then add this one
+    if 'commits' in project_json:
+        commits = [c for c in project_json['commits'] if c['id'] != commit_id]
+        commits.append(commit)
+    else:
+        commits = [commit]
     project_json['commits'] = commits
     project_file = os.path.join(base_temp_dir_name, 'project.json')
     write_file(project_file, project_json)
@@ -239,7 +246,7 @@ def clear_commit_directory_in_cdn(s3_commit_key):
     Clear out the commit directory in the cdn bucket for this project revision.
     """
     for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-        GlobalSettings.logger.debug('Removing file: ' + obj.key)
+        GlobalSettings.logger.debug('Removing s3 cdn file: ' + obj.key)
         GlobalSettings.cdn_s3_handler().delete_file(obj.key)
 # end of clear_commit_directory_in_cdn function
 
@@ -318,8 +325,8 @@ def get_repo_files(base_temp_dir_name, commit_url, repo_name):
 def download_repo(base_temp_dir_name, commit_url, repo_dir):
     """
     Downloads and unzips a git repository from Github or git.door43.org
-    :param str|unicode commit_url: The URL of the repository to download
-    :param str|unicode repo_dir:   The directory where the downloaded file should be unzipped
+    :param str commit_url: The URL of the repository to download
+    :param str repo_dir:   The directory where the downloaded file should be unzipped
     :return: None
     """
     repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
@@ -349,17 +356,17 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
 #end of download_repo function
 
 
-def process_job(pj_prefix, queued_json_payload):
+def process_job(queued_json_payload):
     """
     Sets up a temp folder in the AWS S3 bucket.
 
     It gathers details from the JSON payload.
 
-    It downloads a zip file from the DSC repo to the temp folder and unzips the files,
+    It downloads a zip file from the DCS repo to the temp folder and unzips the files,
         and then creates a ResourceContainer (RC) object.
 
     It creates a manifest_data dictionary,
-        gets a TXManifest from the DB and updates it,
+        gets a TxManifest from the DB and updates it with the above,
         or creates a new one if none existed.
 
     It then gets and runs a preprocessor on the files in the temp folder.
@@ -370,20 +377,38 @@ def process_job(pj_prefix, queued_json_payload):
     The preprocessed files are zipped up in the temp folder
         and then uploaded to the pre-convert bucket in S3.
 
-    A TxJob is now setup and passed on in order to
+    A TxJob is now setup and passed on to TxModule in order to
+            query the AWS Dynamo DB to
             select a converter module, and
             a linter module.
         The converter and linter settings are then added to the job info
             and the job is inserted into the DB table.
 
-    An S3 folder is now prepared
+    An S3 CDN folder is now named and emptied
         and a build log dictionary is created and uploaded to it.
-    The project.json is also updated, e.g., with new commits.
+
+    The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
 
     Conversion and linting are now initiated by sending a request to each,
-        or by creating book_jobs and sending multiple requests.
+        or by creating book_jobs and sending multiple requests to each.
+    (These requests are currently initiated by invoking AWS Lambda functions
+        which in turn call tX-manager functions.)
+
+    This code is "successful" once the conversion/linting jobs are submitted --
+        it currently has no way to determine if they actually get completed.
+
+    The given payload will be appended to the 'failed' queue
+        if an exception is thrown in this module.
     """
-    #print(f"Processing {pj_prefix+' ' if pj_prefix else ''}job: {queued_json_payload}")
+    GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+
+
+    #  Update repo/owner/pusher stats
+    #   (all the following fields are expected from the Gitea webhook from push)
+    stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+    stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+    stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+
 
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
@@ -396,6 +421,7 @@ def process_job(pj_prefix, queued_json_payload):
         pass
     #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
+
     # Get the commit_id, commit_url
     commit_id = queued_json_payload['after']
     commit = None
@@ -406,10 +432,11 @@ def process_job(pj_prefix, queued_json_payload):
     commit_url = commit['url']
     #print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
 
+
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
-    print("user_name", repr(user_name), "repo_name", repr(repo_name))
+    #print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message']
     #print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
@@ -421,11 +448,14 @@ def process_job(pj_prefix, queued_json_payload):
     pusher_username = pusher['username']
     #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
+
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
 
+
     # Get the resource container
     rc = RC(repo_dir, repo_name)
+
 
     # Save manifest to manifest table
     manifest_data = {
@@ -438,11 +468,11 @@ def process_job(pj_prefix, queued_json_payload):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    print("client_webhook got manifest_data:", manifest_data) # RJH
+    #print("client_webhook got manifest_data:", manifest_data)
 
 
     # First see if manifest already exists in DB and update it if it is
-    print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}") # RJH
+    #print(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}") # RJH
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -454,9 +484,11 @@ def process_job(pj_prefix, queued_json_payload):
         GlobalSettings.logger.debug(f'Inserting manifest into manifest table: {tx_manifest}')
         tx_manifest.insert()
 
+
     # Preprocess the files
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     preprocessor_result, preprocessor = do_preprocess(rc, repo_dir, preprocess_dir)
+
 
     # Zip up the massaged files
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
@@ -464,11 +496,13 @@ def process_job(pj_prefix, queued_json_payload):
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
+
     # Upload zipped file to the S3 pre-convert bucket
     file_key = upload_zip_file(commit_id, zip_filepath)
 
+
     #print(f"Webhook.process_job setting up TxJob with username={user.username}...")
-    print("Webhook.process_job setting up TxJob...")
+    #print("Webhook.process_job setting up TxJob...")
     pj_job = TxJob()
     pj_job.job_id = get_unique_job_id()
     pj_job.identifier = pj_job.job_id
@@ -500,6 +534,8 @@ def process_job(pj_prefix, queued_json_payload):
 
     if converter:
         pj_job.convert_module = converter.name
+        if isinstance(pj_job.convert_module, bytes): # TODO: Where is converter.name set to bytes?
+            pj_job.convert_module = pj_job.convert_module.decode()
         pj_job.started_at = datetime.utcnow()
         pj_job.expires_at = pj_job.started_at + timedelta(days=1)
         pj_job.eta = pj_job.started_at + timedelta(minutes=5)
@@ -514,12 +550,14 @@ def process_job(pj_prefix, queued_json_payload):
 
     if linter:
         pj_job.lint_module = linter.name
+        if isinstance(pj_job.lint_module, bytes): # TODO: Where is linter.name set to bytes?
+            pj_job.lint_module = pj_job.lint_module.decode()
     else:
         GlobalSettings.logger.debug(f'No linter was found to lint {pj_job.resource_type}')
 
     pj_job.insert() # into DB
 
-    # Get S3 bucket/dir ready
+    # Get S3 cdn bucket/dir and empty it
     s3_commit_key = f'u/{pj_job.user_name}/{pj_job.repo_name}/{pj_job.commit_id}'
     clear_commit_directory_in_cdn(s3_commit_key)
 
@@ -531,6 +569,45 @@ def process_job(pj_prefix, queued_json_payload):
 
     # Update the project.json file
     update_project_json(base_temp_dir_name, commit_id, pj_job, repo_name, user_name)
+
+
+    ## Pass the work onto the tX system
+    ## NOTE: The system isn't implemented yet --
+    ##           this is just the beginnings of it for testing purposes
+    ##       For now, we still continue on to use the lambda calls below!
+    #GlobalSettings.logger.info(f"About to POST request to tX system @ {tx_post_url}")
+    #tx_payload = {
+        #'user_token': gogs_user_token,
+        #'resource_type': rc.resource.identifier,
+        #'input_format': rc.resource.file_ext,
+        #'output_format': 'html',
+        #'source': source_url_base + '/' + file_key,
+        #'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        #if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    #else DOOR43_CALLBACK_URL,
+        #'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
+        #}
+    #if pj_job.options:
+        #GlobalSettings.logger.info(f"Have options: {pj_job.option}!")
+        #tx_payload['options'] = pj_job.options
+
+    #GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    #try:
+        #response = requests.post(tx_post_url, json=tx_payload)
+    #except requests.exceptions.ConnectionError as e:
+        #GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        #response = None
+    #if response:
+        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        #try:
+            #GlobalSettings.logger.info(f"response.json = {response.json()}")
+        #except json.decoder.JSONDecodeError:
+            #GlobalSettings.logger.info("No valid response JSON found")
+            #GlobalSettings.logger.debug(f"response.text = {response.text}")
+    #GlobalSettings.logger.info("Continuing on (ignoring tx system) to process the job myself!!!")
+    # For now, we ignore the above
+    #   and just go ahead and process it the old way anyway so it keeps working
 
     # Convert and lint
     if converter:
@@ -585,8 +662,8 @@ def process_job(pj_prefix, queued_json_payload):
                     send_request_to_linter(book_job, linter, commit_url, queued_json_payload, extra_payload=extra_payload)
 
     remove_tree(base_temp_dir_name)  # cleanup
-    print("process_job() is returning:", build_log_json)
-    return build_log_json
+    GlobalSettings.logger.debug(f"webhook.process_job() is finishing with {build_log_json}")
+    #return build_log_json
 #end of process_job function
 
 
@@ -598,10 +675,11 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
+    GlobalSettings.logger.info("Door43-Job-Handler received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('JobsStarted')
+    stats_client.incr('jobs.attempted')
 
-    current_job = get_current_job()
+    #current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
     #print("dir",dir(current_job))
     #print("id",current_job.id) # Displays job number
@@ -610,14 +688,15 @@ def job(queued_json_payload):
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
-    queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
-    assert queue_prefix == prefix
-    process_job(queue_prefix, queued_json_payload)
+    #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
+    #assert queue_prefix == prefix
+    process_job(queued_json_payload)
 
-    elapsed_seconds = round(time() - start_time)
-    stats_client.gauge('JobTimeSeconds', elapsed_seconds)
-    stats_client.incr('JobsCompleted')
-    print(f"  Ok, job completed in {elapsed_seconds} seconds!")
+    elapsed_milliseconds = round((time() - start_time) * 1000)
+    stats_client.timing('job.duration', elapsed_milliseconds)
+    GlobalSettings.logger.info(f"Door43 webhook job handling completed in {elapsed_milliseconds:,} milliseconds")
+
+    stats_client.incr('jobs.completed')
 # end of job function
 
 # end of webhook.py

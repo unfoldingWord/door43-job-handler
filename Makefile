@@ -20,6 +20,7 @@ dependenciesTest:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
+#	GOGS_USER_TOKEN
 checkEnvVariables:
 	@ if [ -z "${TX_DATABASE_PW}" ]; then \
 		echo "Need to set TX_DATABASE_PW"; \
@@ -33,6 +34,10 @@ checkEnvVariables:
 		echo "Need to set AWS_SECRET_ACCESS_KEY"; \
 		exit 1; \
 	fi
+	@ if [ -z "${GOGS_USER_TOKEN}" ]; then \
+		echo "Need to set GOGS_USER_TOKEN"; \
+		exit 1; \
+	fi
 
 # NOTE: The following environment variables are optional:
 #	REDIS_URL (can be omitted for testing if a local instance is running)
@@ -41,6 +46,7 @@ checkEnvVariables:
 #	QUEUE_PREFIX (defaults to '', set to dev- for testing)
 
 test:
+	# You should have already installed the testDependencies before this
 	python3 -m unittest discover -s tests/
 
 info:
@@ -51,6 +57,11 @@ runDev: checkEnvVariables
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the local redis dev- queue
 	QUEUE_PREFIX="dev-" rq worker --config rq_settings --name D43_Dev_JobHandler
+
+runDevDebug: checkEnvVariables
+	# This runs the rq job handler
+	#   which removes and then processes jobs from the local redis dev- queue
+	QUEUE_PREFIX="dev-" DEBUG_MODE="true" rq worker --config rq_settings --name D43_Dev_JobHandler
 
 run:
 	# This runs the rq job handler

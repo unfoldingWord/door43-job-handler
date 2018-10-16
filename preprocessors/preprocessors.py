@@ -323,11 +323,11 @@ class TaPreprocessor(Preprocessor):
 
     def get_ref(self, project, link):
         if link in project.config():
-            return '#{0}'.format(link)
+            return f'#{link}'
         for p in self.rc.projects:
             if link in p.config():
-                return '{0}.html#{1}'.format(p.identifier, link)
-        return '#{0}'.format(link)
+                return f'{p.identifier}.html#{link}'
+        return f'#{link}'
 
     def get_question(self, project, slug):
         subtitle_file = os.path.join(self.source_dir, project.path, slug, 'sub-title.md')
@@ -351,7 +351,7 @@ class TaPreprocessor(Preprocessor):
         if 'link' in section:
             link = section['link']
         else:
-            link = 'section-container-{0}'.format(self.section_container_id)
+            link = f'section-container-{self.section_container_id}'
             self.section_container_id = self.section_container_id + 1
         markdown = '{0} <a id="{1}"/>{2}\n\n'.format('#' * level, link, self.get_title(project, link, section['title']))
         if 'link' in section:
@@ -359,7 +359,7 @@ class TaPreprocessor(Preprocessor):
             bottom_box = ""
             question = self.get_question(project, link)
             if question:
-                top_box += 'This page answers the question: *{0}*\n\n'.format(question)
+                top_box += f'This page answers the question: *{question}*\n\n'
             config = project.config()
             if link in config:
                 if 'dependencies' in config[link] and config[link]['dependencies']:
@@ -373,12 +373,12 @@ class TaPreprocessor(Preprocessor):
                         bottom_box += '  * *[{0}]({1})*\n'.\
                             format(self.get_title(project, recommended), self.get_ref(project, recommended))
             if top_box:
-                markdown += '<div class="top-box box" markdown="1">\n{0}\n</div>\n\n'.format(top_box)
+                markdown += f'<div class="top-box box" markdown="1">\n{top_box}\n</div>\n\n'
             content = self.get_content(project, link)
             if content:
-                markdown += '{0}\n\n'.format(content)
+                markdown += f'{content}\n\n'
             if bottom_box:
-                markdown += '<div class="bottom-box box" markdown="1">\n{0}\n</div>\n\n'.format(bottom_box)
+                markdown += f'<div class="bottom-box box" markdown="1">\n{bottom_box}\n</div>\n\n'
             markdown += '---\n\n'  # horizontal rule
         if 'sections' in section:
             for subsection in section['sections']:
@@ -392,12 +392,12 @@ class TaPreprocessor(Preprocessor):
             if project.identifier in self.manual_title_map:
                 title = self.manual_title_map[project.identifier]
             else:
-                title = '{0} Manual'.format(project.identifier.title())
-            markdown = '# {0}\n\n'.format(title)
+                title = f'{project.identifier.title()} Manual'
+            markdown = f'# {title}\n\n'
             for section in toc['sections']:
                 markdown += self.compile_section(project, section, 2)
             markdown = self.fix_links(markdown)
-            output_file = os.path.join(self.output_dir, '{0}-{1}.md'.format(str(idx+1).zfill(2), project.identifier))
+            output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
 
             # Copy the toc and config.yaml file to the output dir so they can be used to
@@ -450,16 +450,16 @@ class TqPreprocessor(Preprocessor):
             if project.identifier in BOOK_NAMES:
                 markdown = ''
                 book = project.identifier.lower()
-                html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
+                html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
                 index_json['book_codes'][html_file] = book
                 name = BOOK_NAMES[book]
                 index_json['titles'][html_file] = name
                 chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
-                markdown += '# <a id="tq-{0}"/> {1}\n\n'.format(book, name)
+                markdown += f'# <a id="tq-{book}"/> {name}\n\n'
                 index_json['chapters'][html_file] = []
                 for chapter_dir in chapter_dirs:
                     chapter = os.path.basename(chapter_dir)
-                    link = 'tq-chapter-{0}-{1}'.format(book, chapter.zfill(3))
+                    link = f'tq-chapter-{book}-{chapter.zfill(3)}'
                     index_json['chapters'][html_file].append(link)
                     markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
                     chunk_files = sorted(glob(os.path.join(chapter_dir, '*.md')))
