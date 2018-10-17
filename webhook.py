@@ -215,31 +215,35 @@ def remember_job(rj_job_dict, rj_redis_connection):
         so that we can match it when we get a callback
     """
     GlobalSettings.logger.debug(f"remember_job({rj_job_dict['job_id']})")
-    if debug_mode_flag:
-        GlobalSettings.logger.debug(f"{OUR_NAME} DEBUG_MODE: Emptying outstanding_jobs_dict!!!")
-        for this_key in rj_redis_connection.hkeys(REDIS_JOB_LIST):
-            print("  Deleting key:", this_key)
-            del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, this_key)
-            #print("  Got delete result:", del_result)
-            assert del_result == 1
+
+    #if debug_mode_flag:
+        #GlobalSettings.logger.debug(f"{OUR_NAME} DEBUG_MODE: Emptying outstanding_jobs_dict!!!")
+        #for this_key in rj_redis_connection.hkeys(REDIS_JOB_LIST):
+            #print("  Deleting key:", this_key)
+            #del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, this_key)
+            ##print("  Got delete result:", del_result)
+            #assert del_result == 1
+        #outstanding_jobs_dict = {}
+    #else: # not debug mode
+    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
+    if outstanding_jobs_dict is None:
+        GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    else: # not debug mode
-        outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
-        if outstanding_jobs_dict is None:
-            GlobalSettings.logger.info("Created new outstanding_jobs_dict")
-            outstanding_jobs_dict = {}
-        else:
-            GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
-                                        f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
-    GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
-                               f" outstanding job(s) in {REDIS_JOB_LIST!r}")
-    assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
+    else:
+        GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+                                    f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
+
+    if outstanding_jobs_dict:
+        GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
+                                   f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
+
+    # Add this job
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in {REDIS_JOB_LIST!r}")
     rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
 # end of remember_job
-
 
 
 def process_job(queued_json_payload, redis_connection):
@@ -329,7 +333,7 @@ def process_job(queued_json_payload, redis_connection):
     repo_name = queued_json_payload['repository']['name']
     #print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
-    commit_message = commit['message']
+    commit_message = commit['message'].strip() # Seems to always end with a newline
     #print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
 
     if 'pusher' in queued_json_payload:
@@ -338,6 +342,8 @@ def process_job(queued_json_payload, redis_connection):
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
     #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
+
+    GlobalSettings.logger.info(f"Processing job for {pusher_username} for {user_name}/{repo_name} for \"{commit_message}\"")
 
 
     # Download and unzip the repo files
@@ -383,7 +389,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Zip up the massaged files
-    GlobalSettings.logger.info("Zipping files...")
+    GlobalSettings.logger.info("Zipping preprocessed files...")
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
     GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
@@ -391,10 +397,10 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Upload zipped file to the S3 pre-convert bucket
-    GlobalSettings.logger.info("Uploading zip file...")
+    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket...")
     file_key = upload_zip_file(commit_id, zip_filepath)
 
-    GlobalSettings.logger.info("Webhook.process_job setting up job dict...")
+    GlobalSettings.logger.debug("Webhook.process_job setting up job dict...")
     pj_job_dict = {}
     pj_job_dict['job_id'] = get_unique_job_id()
     pj_job_dict['identifier'] = pj_job_dict['job_id']
@@ -454,7 +460,7 @@ def process_job(queued_json_payload, redis_connection):
         'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:
-        GlobalSettings.logger.info(f"Have options: {pj_job_dict['options']}!")
+        GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
         tx_payload['options'] = pj_job_dict['options']
 
     GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
