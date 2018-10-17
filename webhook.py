@@ -405,9 +405,18 @@ def process_job(queued_json_payload):
 
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
-    stats_client.set('repo_ids', queued_json_payload['repository']['id'])
-    stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
-    stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+    try:
+        stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+    except (KeyError, AttributeError, IndexError):
+        stats_client.set('repo_ids', 'No id')
+    try:
+        stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+    except (KeyError, AttributeError, IndexError):
+        stats_client.set('owner_ids', 'No id')
+    try:
+        stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+    except (KeyError, AttributeError, IndexError):
+        stats_client.set('pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
