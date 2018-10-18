@@ -2,10 +2,12 @@ import os
 import re
 from datetime import datetime
 from glob import glob
+from json.decoder import JSONDecodeError
 
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
 from general_tools.file_utils import load_json_object, load_yaml_object, read_file
+from global_settings.global_settings import GlobalSettings
 
 
 resource_map = {
@@ -94,7 +96,10 @@ class RC:
         manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
         if manifest:
             return manifest
-        manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
+        try:
+            manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
+        except JSONDecodeError:
+            GlobalSettings.logger.error("Badly formed 'manifest.json'")
         if manifest:
             return manifest
         manifest = load_json_object(os.path.join(self.path, 'package.json'))
