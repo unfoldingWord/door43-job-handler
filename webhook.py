@@ -24,8 +24,6 @@ from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
-#from models.job import TxJob
-#from models.module import TxModule
 from global_settings.global_settings import GlobalSettings
 
 
@@ -333,25 +331,26 @@ def process_job(queued_json_payload, redis_connection):
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
+    full_name = queued_json_payload['repository']['owner']['full_name']
+    if not full_name:
+        full_name = user_name
     repo_name = queued_json_payload['repository']['name']
-    #print("user_name", repr(user_name), "repo_name", repr(repo_name))
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message'].strip() # Seems to always end with a newline
-    #print("compare_url", repr(compare_url), "commit_message", repr(commit_message))
 
     if 'pusher' in queued_json_payload:
         pusher = queued_json_payload['pusher']
     else:
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
-    #print("pusher", repr(pusher), "pusher_username", repr(pusher_username))
 
-    GlobalSettings.logger.info(f"Processing job for {pusher_username} for {user_name}/{repo_name} for \"{commit_message}\"")
+    GlobalSettings.logger.info(f"Processing job for '{pusher_username}' for '{full_name}/{repo_name}' for \"{commit_message}\"")
+    stats_client.incr(f'users.invoked.{full_name}')
+    stats_client.incr(f'user-projects.invoked.{full_name}/{repo_name}')
 
 
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
-
 
     # Get the resource container
     rc = RC(repo_dir, repo_name)
@@ -368,9 +367,6 @@ def process_job(queued_json_payload, redis_connection):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    #print("client_webhook got manifest_data:", manifest_data)
-
-
     # First see if manifest already exists in DB and update it if it is
     #GlobalSettings.logger.info(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
