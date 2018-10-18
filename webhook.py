@@ -272,27 +272,21 @@ def process_job(queued_json_payload, redis_connection):
     The preprocessed files are zipped up in the temp folder
         and then uploaded to the pre-convert bucket in S3.
 
-    A TxJob is now setup and passed on to TxModule in order to
-            query the AWS Dynamo DB to
-            select a converter module, and
-            a linter module.
-        The converter and linter settings are then added to the job info
-            and the job is inserted into the DB table.
+    A job dict is now setup and remembered in REDIS
+        so that we can match it when we get a future callback.
 
     An S3 CDN folder is now named and emptied
         and a build log dictionary is created and uploaded to it.
 
     The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
 
-    Conversion and linting are now initiated by sending a request to each,
-        or by creating book_jobs and sending multiple requests to each.
-    (These requests are currently initiated by invoking AWS Lambda functions
-        which in turn call tX-manager functions.)
+    The job is now passed to the tX system by means of a
+        POST to the tX webhook (which should hopefully respond with a callback).
 
-    This code is "successful" once the conversion/linting jobs are submitted --
-        it currently has no way to determine if they actually get completed.
+    This code is "successful" once the job is submitted --
+        it currently has no way to determine if it actually gets completed.
 
-    The given payload will be appended to the 'failed' queue
+    The given payload will be automatically appended to the 'failed' queue
         if an exception is thrown in this module.
     """
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
@@ -300,9 +294,18 @@ def process_job(queued_json_payload, redis_connection):
 
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
-    stats_client.set('repo_ids', queued_json_payload['repository']['id'])
-    stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
-    stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+    try:
+        stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set('repo_ids', 'No id')
+    try:
+        stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set('owner_ids', 'No id')
+    try:
+        stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set('pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
@@ -374,11 +377,11 @@ def process_job(queued_json_payload, redis_connection):
     if tx_manifest:
         for key, value in manifest_data.items():
             setattr(tx_manifest, key, value)
-        GlobalSettings.logger.debug(f'Updating manifest in manifest table: {manifest_data}')
+        GlobalSettings.logger.debug(f"Updating manifest in manifest table: {manifest_data}")
         tx_manifest.update()
     else:
         tx_manifest = TxManifest(**manifest_data)
-        GlobalSettings.logger.debug(f'Inserting manifest into manifest table: {tx_manifest}')
+        GlobalSettings.logger.debug(f"Inserting manifest into manifest table: {tx_manifest}")
         tx_manifest.insert()
 
 
