@@ -410,6 +410,8 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         raise Exception(error)
     job_id = queued_json_payload['job_id']
     verify_result = verify_expected_job(queued_json_payload, redis_connection)
+    # NOTE: The above deletes the matched job entry,
+    #   so this means callback cannot be successfully retried if it fails below
     if not verify_result:
         error = f"No job found for {queued_json_payload}"
         GlobalSettings.logger.critical(error)
