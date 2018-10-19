@@ -144,10 +144,6 @@ class S3Handler(object):
         :param string path: file to upload
         :param string key: name of the object in the bucket
         """
-        #from global_settings.global_settings import GlobalSettings
-        #GlobalSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
-        assert 'http' not in key
-
         with open(path, 'rb') as f:
             binary = f.read()
         if content_type is None:
