@@ -394,9 +394,8 @@ class TaPreprocessor(Preprocessor):
             else:
                 title = f'{project.identifier.title()} Manual'
             markdown = f'# {title}\n\n'
-            if toc:
-                for section in toc['sections']:
-                    markdown += self.compile_section(project, section, 2)
+            for section in toc['sections']:
+                markdown += self.compile_section(project, section, 2)
             markdown = self.fix_links(markdown)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
