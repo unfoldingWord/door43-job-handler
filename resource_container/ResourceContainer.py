@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from glob import glob
 from json.decoder import JSONDecodeError
+from yaml.parser import ParserError
 
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
@@ -93,22 +94,34 @@ class RC:
     def get_manifest_from_dir(self):
         if not self.path or not os.path.isdir(self.path):
             return get_manifest_from_repo_name(self.repo_name)
-        manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
+        try:
+            manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
+        except ParserError as e:
+            GlobalSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
         if manifest:
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
-        except JSONDecodeError:
-            GlobalSettings.logger.error("Badly formed 'manifest.json'")
+        except JSONDecodeError as e:
+                GlobalSettings.logger.error(f"Badly formed 'manifest.json' in {self.repo_name}: {e}")
         if manifest:
             return manifest
-        manifest = load_json_object(os.path.join(self.path, 'package.json'))
+        try:
+            manifest = load_json_object(os.path.join(self.path, 'package.json'))
+        except JSONDecodeError as e:
+                GlobalSettings.logger.error(f"Badly formed 'package.json' in {self.repo_name}: {e}")
         if manifest:
             return manifest
-        manifest = load_json_object(os.path.join(self.path, 'project.json'))
+        try:
+            manifest = load_json_object(os.path.join(self.path, 'project.json'))
+        except JSONDecodeError as e:
+                GlobalSettings.logger.error(f"Badly formed 'project.json' in {self.repo_name}: {e}")
         if manifest:
             return manifest
-        manifest = load_json_object(os.path.join(self.path, 'meta.json'))
+        try:
+            manifest = load_json_object(os.path.join(self.path, 'meta.json'))
+        except JSONDecodeError as e:
+                GlobalSettings.logger.error(f"Badly formed 'meta.json' in {self.repo_name}: {e}")
         if manifest:
             return manifest
         return get_manifest_from_repo_name(self.repo_name)
@@ -300,7 +313,10 @@ class RC:
             return None
         if not p.config_yaml:
             file_path = os.path.join(self.path, p.path, 'config.yaml')
-            p.config_yaml = load_yaml_object(file_path)
+            try:
+                p.config_yaml = load_yaml_object(file_path)
+            except ParserError as e:
+                GlobalSettings.logger.error(f"Badly formed 'config.yaml' in {self.repo_name}: {e}")
         return p.config_yaml
 
     def toc(self, project_identifier=None):
@@ -309,7 +325,10 @@ class RC:
             return None
         if not p.toc_yaml:
             file_path = os.path.join(self.path, p.path, 'toc.yaml')
-            p.toc_yaml = load_yaml_object(file_path)
+            try:
+                p.toc_yaml = load_yaml_object(file_path)
+            except ParserError as e:
+                GlobalSettings.logger.error(f"Badly formed 'toc.yaml' in {self.repo_name}: {e}")
         return p.toc_yaml
 
 
