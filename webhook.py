@@ -412,7 +412,7 @@ def process_job(queued_json_payload, redis_connection):
     #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
     pj_job_dict['input_format'] = rc.resource.file_ext
     pj_job_dict['resource_type'] = rc.resource.identifier
-    pj_job_dict['source'] = source_url_base + "/" + file_key
+    pj_job_dict['source'] = source_url_base + '/' + file_key
     pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
     pj_job_dict['cdn_file'] = f"tx/job/{pj_job_dict['job_id']}.zip"
     pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"

@@ -6,11 +6,13 @@ from datetime import datetime
 from global_settings.global_settings import GlobalSettings
 from general_tools.file_utils import unzip, write_file, remove_tree, remove
 from general_tools.url_utils import download_file
-#from models.job import TxJob
 from client_linter_callback import ClientLinterCallback
 
 
 class DummyJob:
+    """
+    This is a temporary class to replace the basic functionality of TxJob
+    """
     def __init__(self, job_dict):
         self.job_dict = job_dict
         self.job_id = self.job_dict['job_id']
@@ -24,7 +26,7 @@ class DummyJob:
 
     def log_message(self, msg):
         self.log.append(msg)
-        GlobalSettings.logger.info(msg)
+        GlobalSettings.logger.debug(msg) # DEBUG coz we don't need all these displayed in production mode
 
     def warnings_message(self, msg):
         self.warnings.append(msg)
@@ -70,6 +72,7 @@ class ClientConverterCallback:
         #self.job = TxJob.get(job_id)
         assert job_id == self.job.job_id
 
+        # This is now checked elsewhere
         #if not self.job:
             #error = 'No job found for job_id = {0}, identifier = {0}'.format(job_id, self.identifier)
             #GlobalSettings.logger.error(error)
@@ -77,11 +80,11 @@ class ClientConverterCallback:
 
         if len(job_id_parts) == 4:
             part_count, part_id, book = job_id_parts[1:]
-            GlobalSettings.logger.debug('Multiple project, part {0} of {1}, converting book {2}'.
-                             format(part_id, part_count, book))
+            GlobalSettings.logger.debug(f"Multiple project, part {part_id}"
+                                        f" of {part_count}, converting book {book}")
             multiple_project = True
         else:
-            GlobalSettings.logger.debug('Single project')
+            GlobalSettings.logger.debug("Single project")
             part_id = None
             multiple_project = False
 
@@ -102,16 +105,16 @@ class ClientConverterCallback:
 
         if not self.success or len(self.job.errors):
             self.job.success = False
-            self.job.status = "failed"
+            self.job.status = 'failed'
             message = "Conversion failed"
             GlobalSettings.logger.debug(f"Conversion failed, success: {self.success}, errors: {self.job.errors}")
         elif len(self.job.warnings) > 0:
             self.job.success = True
-            self.job.status = "warnings"
+            self.job.status = 'warnings'
             message = "Conversion successful with warnings"
         else:
             self.job.success = True
-            self.job.status = "success"
+            self.job.status = 'success'
             message = "Conversion successful"
 
         self.job.message = message
@@ -222,7 +225,7 @@ class ClientConverterCallback:
         else:
             build_log_json['errors'] = []
         build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
-        GlobalSettings.logger.debug('Writing build log to ' + build_log_key)
+        GlobalSettings.logger.debug(f"Writing build log to {build_log_key}")
         # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
         self.cdn_upload_contents(build_log_json, build_log_key)
         return build_log_json
@@ -230,7 +233,7 @@ class ClientConverterCallback:
     def cdn_upload_contents(self, contents, key):
         file_name = os.path.join(self.temp_dir, 'contents.json')
         write_file(file_name, contents)
-        GlobalSettings.logger.debug('Writing file to ' + key)
+        GlobalSettings.logger.debug(f"Writing file to {key}")
         GlobalSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
     def get_build_log(self, s3_base_key, part=''):
