@@ -435,6 +435,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
 
+    # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter callback...")
     clc = ClientLinterCallback(this_job_dict, identifier,
