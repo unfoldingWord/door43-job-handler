@@ -142,9 +142,11 @@ class ClientConverterCallback:
                 remove_tree(self.temp_dir)  # cleanup
             if self.job.errors is None:
                 self.job.errors = []
-            if not self.job.errors or not self.job.errors[0].startswith("No converter found"):
+            message = f"Missing converted file: {converted_zip_url}"
+            GlobalSettings.logger.debug(message)
+            if not self.job.errors or not self.job.errors[0].startswith("No converter "):
                 # Missing file error is irrelevant if no conversion was attempted
-                self.job.errors.append(f"Missing converted file: {converted_zip_url}")
+                self.job.errors.append(message)
         finally:
             GlobalSettings.logger.debug(f"download finished, success={download_success}")
 
