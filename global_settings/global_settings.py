@@ -121,6 +121,7 @@ class GlobalSettings:
     logger = logging.getLogger()
     setup_logger(logger, logging.DEBUG if os.getenv('DEBUG_MODE', '') else logging.INFO)
 
+
     def __init__(self, **kwargs):
         """
         Using init to set the class variables with GlobalSettings(var=value)
@@ -150,7 +151,9 @@ class GlobalSettings:
         Prefixes any variables in GlobalSettings.prefixable_variables. This includes URLs
         :return:
         """
-        #print("GlobalSettings.prefix_vars with {!r}".format(prefix))
+        if prefix:
+            setup_logger(cls.logger, logging.DEBUG)
+        cls.logger.debug(f"GlobalSettings.prefix_vars with '{prefix}'")
         url_re = re.compile(r'^(https*://)')  # Current prefix in URLs
         for var in cls.prefixable_vars:
             value = getattr(GlobalSettings, var)
