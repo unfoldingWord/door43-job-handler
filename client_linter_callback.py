@@ -6,7 +6,6 @@ from datetime import datetime
 from global_settings.global_settings import GlobalSettings
 from general_tools import file_utils
 from general_tools.file_utils import unzip, write_file, remove_tree, remove
-#from models.job import TxJob
 
 
 class ClientLinterCallback:
@@ -171,32 +170,6 @@ class ClientLinterCallback:
         job_id = build_log['job_id']
         GlobalSettings.logger.debug('merging build_logs for job : ' + job_id)
         build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        #GlobalSettings.logger.critical("We didn't update TxJob -- does it make any difference here?")
-        #job = TxJob.get(job_id)
-        #if job:
-            #job.status = build_log['status']
-            #job.log = build_log['log']
-            #job.warnings = build_log['warnings']
-            #job.errors = build_log['errors']
-            #job.message = build_log['message']
-            #job.success = build_log['success']
-            #job.ended_at = build_log['ended_at']
-
-            ## set overall status
-            #if len(job.errors):
-                #job.status = 'errors'
-                #job.success = False
-            #elif len(job.warnings):
-                #job.status = 'warnings'
-
-            #job.update()
-        #else:
-            #job_data = {'manifests_id': 0}  # set a default if not present
-            #for key in build_log:
-                #if hasattr(TxJob, key):
-                    #job_data[key] = build_log[key]
-            #job = TxJob(**job_data)
-            #job.insert()
 
         # Flag this part as done
         ClientLinterCallback.upload_build_log(build_log, 'merged.json', output_dir, s3_results_key)
