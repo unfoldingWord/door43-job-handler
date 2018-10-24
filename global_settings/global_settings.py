@@ -257,11 +257,11 @@ class GlobalSettings:
             cls._db_session = sessionmaker(bind=cls.db_engine(echo), expire_on_commit=False)()
             from models.manifest import TxManifest
             TxManifest.__table__.name = cls.manifest_table_name
-            from models.job import TxJob
-            TxJob.__table__.name = cls.job_table_name
-            from models.module import TxModule
-            TxModule.__table__.name = cls.module_table_name
-            cls.db_create_tables([TxManifest.__table__, TxJob.__table__, TxModule.__table__])
+            #from models.job import TxJob
+            #TxJob.__table__.name = cls.job_table_name
+            #from models.module import TxModule
+            #TxModule.__table__.name = cls.module_table_name
+            cls.db_create_tables([TxManifest.__table__])
         return cls._db_session
 
     @classmethod
