@@ -81,7 +81,7 @@ class ClientLinterCallback:
             build_log['warnings'].append(msg)
             GlobalSettings.logger.error(msg)
         else:
-            GlobalSettings.logger.debug("Linter {0} {1} warnings:\n{1}".format(self.identifier, len(self.warnings),
+            GlobalSettings.logger.debug("Linter {0} {1} warnings:\n{2}".format(self.identifier, len(self.warnings),
                                                                     '\n'.join(self.warnings[:5])))
 
         has_warnings = len(build_log['warnings']) > 0
@@ -230,7 +230,7 @@ class ClientLinterCallback:
         key = f'{s3_results_key}/finished'
         try:
             convert_finished = GlobalSettings.cdn_s3_handler().key_exists(key)
-        except Exception as e:
+        except Exception:
             convert_finished = False
         return convert_finished
 

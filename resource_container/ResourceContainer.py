@@ -675,7 +675,7 @@ def get_manifest_from_repo_name(repo_name):
     parts = re.findall(r'[A-Za-z0-9]+', repo_name)
 
     language_set = False
-    for i, part in enumerate(parts):
+    for part in parts:
         if not language_set:
             if part == 'en':
                 # Speeds things up for English repos

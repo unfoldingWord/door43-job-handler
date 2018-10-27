@@ -290,7 +290,7 @@ class BiblePreprocessor(Preprocessor):
                                 translated_title = read_file(os.path.join(project_path, chapter, 'title.txt'))
                                 book_name = re.sub(r' \d+$', '', translated_title).strip()
                                 if book_name.lower() != title.lower():
-                                    usfm += f'\cl {translated_title}\n'
+                                    usfm += f'\\cl {translated_title}\n'
                             for chunk in chunks:
                                 if chunk in self.ignoreFiles:
                                     continue
@@ -469,7 +469,7 @@ class TqPreprocessor(Preprocessor):
             'book_codes': {}
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
-        for idx, project in enumerate(self.rc.projects):
+        for project in self.rc.projects:
             GlobalSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}'")
             if project.identifier in BOOK_NAMES:
                 markdown = ''
@@ -490,6 +490,7 @@ class TqPreprocessor(Preprocessor):
                     for chunk_idx, chunk_file in enumerate(chunk_files):
                         start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
                         if chunk_idx < len(chunk_files)-1:
+                            # TODO: Can throw a ValueError if chunk is not an integer, e.g., '5&8'
                             end_verse = str(int(os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0])-1)
                         else:
                             end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
@@ -527,7 +528,7 @@ class TwPreprocessor(Preprocessor):
         }
         title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
-        for idx, project in enumerate(self.rc.projects):
+        for project in self.rc.projects:
             GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}'")
             term_text = {}
             section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
@@ -627,7 +628,7 @@ class TnPreprocessor(Preprocessor):
             'book_codes': {}
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
-        for idx, project in enumerate(self.rc.projects):
+        for project in self.rc.projects:
             GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}'")
             if project.identifier in BOOK_NAMES:
                 markdown = ''
