@@ -9,8 +9,9 @@ import os
 import tempfile
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import time
+from ast import literal_eval
 
 # Library (PyPi) imports
 import requests
@@ -212,17 +213,8 @@ def remember_job(rj_job_dict, rj_redis_connection):
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
     """
-    GlobalSettings.logger.debug(f"remember_job({rj_job_dict['job_id']})")
+    GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
-    #if debug_mode_flag:
-        #GlobalSettings.logger.debug(f"{OUR_NAME} DEBUG_MODE: Emptying outstanding_jobs_dict!!!")
-        #for this_key in rj_redis_connection.hkeys(REDIS_JOB_LIST):
-            #print("  Deleting key:", this_key)
-            #del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, this_key)
-            ##print("  Got delete result:", del_result)
-            #assert del_result == 1
-        #outstanding_jobs_dict = {}
-    #else: # not debug mode
     outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
     if outstanding_jobs_dict is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
@@ -234,7 +226,22 @@ def remember_job(rj_job_dict, rj_redis_connection):
     if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in {REDIS_JOB_LIST!r}")
-        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
+        # Remove any outstanding jobs more than two weeks old
+        for outstanding_job_id_bytes in outstanding_jobs_dict.copy():
+            # print(f"\nLooking at outstanding job {outstanding_job_id_bytes}")
+            outstanding_job_dict_bytes = rj_redis_connection.hget(REDIS_JOB_LIST, outstanding_job_id_bytes)
+            outstanding_job_dict = literal_eval(outstanding_job_dict_bytes.decode()) # bytes -> str -> dict
+            # print(f"Got outstanding_job_dict: {outstanding_job_dict!r}")
+            outstanding_duration = datetime.utcnow() \
+                                - datetime.strptime(outstanding_job_dict['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+            if outstanding_duration >= timedelta(weeks=2):
+                GlobalSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
+                del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, outstanding_job_id_bytes) # Delete from Redis
+                # print("  Got delete result:", del_result)
+                assert del_result == 1
+                del outstanding_jobs_dict[outstanding_job_id_bytes] # Delete from our local copy also
+        # This new job shouldn't already be in the outstanding jobs dict
+        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict # bytes comparison
 
     # Add this job
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
@@ -346,7 +353,8 @@ def process_job(queued_json_payload, redis_connection):
 
     GlobalSettings.logger.info(f"Processing job for '{pusher_username}' for '{full_name}/{repo_name}' for \"{commit_message}\"")
     stats_client.incr(f'users.invoked.{full_name}')
-    stats_client.incr(f'user-projects.invoked.{full_name}/{repo_name}')
+    # Using a hyphen as seperator as forward slash gets changed to hyphen anyway
+    stats_client.incr(f'user-projects.invoked.{full_name}-{repo_name}')
 
 
     # Download and unzip the repo files
