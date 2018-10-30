@@ -81,8 +81,8 @@ class ClientLinterCallback:
             build_log['warnings'].append(msg)
             GlobalSettings.logger.error(msg)
         else:
-            GlobalSettings.logger.debug("Linter {0} {1} warnings:\n{2}".format(self.identifier, len(self.warnings),
-                                                                    '\n'.join(self.warnings[:5])))
+            GlobalSettings.logger.debug("Linter {0} had success with {1} warnings: {2}...".format(self.identifier, len(self.warnings),
+                                                                    ', '.join(self.warnings[:5])))
 
         has_warnings = len(build_log['warnings']) > 0
         if has_warnings:

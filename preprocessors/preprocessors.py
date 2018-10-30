@@ -259,30 +259,34 @@ class BiblePreprocessor(Preprocessor):
         # Then do line-by-line changes
         needs_new_line = needs_global_check = False
         adjusted_file_contents = ''
-        # C = V = ''
+        C = V = ''
         for line in preadjusted_file_contents.split('\n'):
             if not line: continue # Ignore blank lines
             # GlobalSettings.logger.debug(f"Processing line: {line!r}")
 
-            # # Get C,V for debug messages
-            # if line.startswith('\\c '):
-            #     C = line[3:]
-            # elif line.startswith('\\v '):
-            #     V = line[3:]
+            # Get C,V for debug messages
+            if line.startswith('\\c '):
+                C = line[3:]
+            elif line.startswith('\\v '):
+                V = line[3:]
 
             adjusted_line = line
             ixW = adjusted_line.find('\\w ')
             while ixW != -1:
-                ixEnd = adjusted_line.find('\\w*')
-                assert ixEnd != -1 # Fail if closing marker is missing from the line
-                field = adjusted_line[ixW+3:ixEnd]
-                # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
-                bits = field.split('|')
-                adjusted_field = bits[0]
-                # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
-                adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
-                # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
-                ixW = adjusted_line.find('\\w ') # Might be another one
+                ixEnd = adjusted_line.find('\\w*', ixW)
+                # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM
+                if ixEnd != -1:
+                    field = adjusted_line[ixW+3:ixEnd]
+                    # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
+                    bits = field.split('|')
+                    adjusted_field = bits[0]
+                    # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
+                    adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
+                    # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
+                else:
+                    GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                    self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
+                ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
             assert '\\w ' not in adjusted_line
             assert '\\w*' not in adjusted_line
             if '\\z' in adjusted_line: # Delete these user-defined fields

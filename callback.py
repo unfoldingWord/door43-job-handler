@@ -114,12 +114,12 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         # GlobalSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
         #                            f" remembered preprocessor_warnings: {matched_job_dict['preprocessor_warnings']}")
         # Prepend preprocessor results to linter warnings
-        total_warnings = len(matched_job_dict['preprocessor_warnings']) + len(queued_json_payload['linter_warnings'])
+        # total_warnings = len(matched_job_dict['preprocessor_warnings']) + len(queued_json_payload['linter_warnings'])
         queued_json_payload['linter_warnings'] = matched_job_dict['preprocessor_warnings'] \
                                                + queued_json_payload['linter_warnings']
-        GlobalSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
-                                    f" linter_warnings: {queued_json_payload['linter_warnings']}")
-        assert len(queued_json_payload['linter_warnings']) == total_warnings
+        # GlobalSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
+        #                             f" linter_warnings: {queued_json_payload['linter_warnings']}")
+        # assert len(queued_json_payload['linter_warnings']) == total_warnings
         del matched_job_dict['preprocessor_warnings'] # No longer required
 
     if 'identifier' in queued_json_payload:

@@ -219,9 +219,9 @@ def remember_job(rj_job_dict, rj_redis_connection):
     if outstanding_jobs_dict is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    else:
-        GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
-                                    f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
+    # else:
+    #    GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+    #                                f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
     if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
