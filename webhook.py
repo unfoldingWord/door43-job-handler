@@ -392,7 +392,10 @@ def process_job(queued_json_payload, redis_connection):
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files...")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    do_preprocess(rc, repo_dir, preprocess_dir)
+    preprocessor_result = do_preprocess(rc, repo_dir, preprocess_dir)
+    # preprocess_result is normally True, but can be a warning dict for the Bible preprocessor
+    preprocessor_warning_list = preprocessor_result if isinstance(preprocessor_result, list) else None
+    GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
 
     # Zip up the massaged files
@@ -431,6 +434,8 @@ def process_job(queued_json_payload, redis_connection):
         'rel': 'self',
         'method': 'GET'
     }
+    if preprocessor_warning_list:
+        pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
 

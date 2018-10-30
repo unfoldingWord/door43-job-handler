@@ -133,7 +133,8 @@ class ClientLinterCallback:
             build_log = ClientLinterCallback.merge_build_status_for_part(build_log, s3_results_key, output_dir)
         else:
             GlobalSettings.logger.debug('Multiple parts: Checking if all parts completed.')
-            job_id, part_count, part_id, book = id_parts[:4]
+            # job_id, part_count, part_id, book = id_parts[:4]
+            part_count = id_parts[1]
             for i in range(0, int(part_count)):
                 part_key = f'{s3_results_key}/{i}'
                 build_log = ClientLinterCallback.merge_build_status_for_part(build_log, part_key, output_dir)
@@ -164,8 +165,11 @@ class ClientLinterCallback:
         return build_log
 
     @staticmethod
-    def update_jobs_table(s3_results_key, build_log, output_dir):
-        GlobalSettings.logger.debug(f"update_jobs_table({s3_results_key}, {build_log}, {output_dir})")
+    def upload_logs(s3_results_key, build_log, output_dir):
+        """
+        Was update_jobs_table
+        """
+        GlobalSettings.logger.debug(f"upload_logs({s3_results_key}, {build_log}, {output_dir})")
 
         job_id = build_log['job_id']
         GlobalSettings.logger.debug('merging build_logs for job : ' + job_id)
@@ -212,7 +216,7 @@ class ClientLinterCallback:
                 if part_build_log_combined:
                     build_log = ClientLinterCallback.merge_results_logs(build_log, part_build_log_combined,
                                                                         linter_file=False)
-                    ClientLinterCallback.update_jobs_table(s3_results_key, part_build_log_combined, output_dir)
+                    ClientLinterCallback.upload_logs(s3_results_key, part_build_log_combined, output_dir)
                     return build_log
                 else:
                     GlobalSettings.logger.debug(f"Lint_log.json not found for {s3_results_key}")

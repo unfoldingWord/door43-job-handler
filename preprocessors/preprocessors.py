@@ -31,7 +31,7 @@ def do_preprocess(rc, repo_dir, output_dir):
     else:
         GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier}")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
-    return preprocessor.run(), preprocessor
+    return preprocessor.run()
 
 
 class Preprocessor:
@@ -99,7 +99,7 @@ class Preprocessor:
                         else:
                             filename = f'{str(idx+1).zfill(2)}-{project.identifier}.{self.rc.resource.file_ext}'
                         write_file(os.path.join(self.output_dir, filename), text)
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
     def mark_chapter(self, ident, chapter, text):
@@ -207,7 +207,7 @@ class ObsPreprocessor(Preprocessor):
                         f = os.path.join(project_path, chapter, 'intro.md')
                     if f:
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"Obs preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
 
@@ -215,6 +215,7 @@ class BiblePreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
         self.book_filenames = []
+        self.warnings = []
 
     def is_multiple_jobs(self):
         return len(self.book_filenames) > 1
@@ -223,10 +224,11 @@ class BiblePreprocessor(Preprocessor):
         self.book_filenames.sort()
         return self.book_filenames
 
-    @staticmethod
-    def write_clean_file(file_name, file_contents):
+    def write_clean_file(self, file_name, file_contents):
         """
         Cleans the USFM text as it writes it.
+
+        TODO: Check/Remove some of this code once tC export is fixed
         """
         # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('...' if len(file_contents)>500 else '')} )")
 
@@ -238,18 +240,26 @@ class BiblePreprocessor(Preprocessor):
         make_dir(os.path.dirname(file_name))
 
         # Clean the USFM
+        B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
         preadjusted_file_contents = file_contents
         # First do global fixes to bad tC USFM
-        preadjusted_file_contents = re.sub(r'\\(q[123]?)([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
-        preadjusted_file_contents = re.sub(r'\\p([^ ])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+        preadjusted_file_contents, n = re.subn(r'\\(q[123]?)([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
+        if n: self.warnings.append(f"{B} - {n:,} badly formed \\q markers")
+        preadjusted_file_contents, n = re.subn(r'\\p([^ ])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+        if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
         # Then do other global changes
+        zs_count = preadjusted_file_contents.count('\\zaln-s')
+        ze_count = preadjusted_file_contents.count('\\zaln-e')
+        close_count = preadjusted_file_contents.count('\\*')
+        if close_count < (zs_count + ze_count):
+            self.warnings.append(f"{B} - {zs_count+ze_count-close_count:,} unclosed \\zaln markers")
         preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing milestones
+
 
         # Then do line-by-line changes
         needs_new_line = needs_global_check = False
         adjusted_file_contents = ''
-        B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
-        C = V = ''
+        # C = V = ''
         for line in preadjusted_file_contents.split('\n'):
             if not line: continue # Ignore blank lines
             # GlobalSettings.logger.debug(f"Processing line: {line!r}")
@@ -306,6 +316,10 @@ class BiblePreprocessor(Preprocessor):
             adjusted_file_contents = re.sub(r'\n([,.])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
             adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
             adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
+            adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC punctuation mistake
 
         # Write the modified USFM
         # if 'EPH' in file_name:
@@ -315,10 +329,10 @@ class BiblePreprocessor(Preprocessor):
         assert '\\w' not in adjusted_file_contents
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
+    # end of write_clean_file function
 
 
-    @staticmethod
-    def clean_copy(source_pathname, destination_pathname):
+    def clean_copy(self, source_pathname, destination_pathname):
         """
         Cleans the USFM file as it copies it.
         """
@@ -330,7 +344,9 @@ class BiblePreprocessor(Preprocessor):
 
         with open(source_pathname, 'rt') as in_file:
             source_contents = in_file.read()
-        BiblePreprocessor.write_clean_file(destination_pathname, source_contents)
+        self.write_clean_file(destination_pathname, source_contents)
+    # end of clean_copy function
+
 
     def run(self):
         GlobalSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
@@ -346,7 +362,7 @@ class BiblePreprocessor(Preprocessor):
                 else:
                     filename = file_format.format(str(idx+1).zfill(2), project.identifier.upper())
                 # copy(project_path, os.path.join(self.output_dir, filename))
-                BiblePreprocessor.clean_copy(project_path, os.path.join(self.output_dir, filename))
+                self.clean_copy(project_path, os.path.join(self.output_dir, filename))
                 self.book_filenames.append(filename)
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
@@ -362,7 +378,7 @@ class BiblePreprocessor(Preprocessor):
                         output_file_path = os.path.join(self.output_dir, filename)
                         if os.path.isfile(usfm_path) and not os.path.exists(output_file_path):
                             # copy(usfm_path, output_file_path)
-                            BiblePreprocessor.clean_copy(usfm_path, output_file_path)
+                            self.clean_copy(usfm_path, output_file_path)
                         self.book_filenames.append(filename)
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
@@ -416,10 +432,11 @@ class BiblePreprocessor(Preprocessor):
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
                         # write_file(os.path.join(self.output_dir, filename), usfm)
-                        BiblePreprocessor.write_clean_file(os.path.join(self.output_dir, filename), usfm)
+                        self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
+        return self.warnings if self.warnings else True
 
 
 class TaPreprocessor(Preprocessor):
@@ -543,7 +560,7 @@ class TaPreprocessor(Preprocessor):
             if os.path.isfile(config_file):
                 copy(config_file, os.path.join(self.output_dir, '{0}-{1}-config.yaml'.format(str(idx+1).zfill(2),
                                                                                              project.identifier)))
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
     def fix_links(self, content):
@@ -620,7 +637,7 @@ class TqPreprocessor(Preprocessor):
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
 
@@ -681,7 +698,7 @@ class TwPreprocessor(Preprocessor):
                     copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
     def fix_links(self, content, section):
@@ -793,7 +810,7 @@ class TnPreprocessor(Preprocessor):
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
     def move_to_front(self, files, move_str):
