@@ -37,7 +37,7 @@ class TestTwPreprocessor(unittest.TestCase):
         self.out_dir = tempfile.mkdtemp(prefix='output_')
 
         # when
-        results, preproc = do_preprocess(rc, repo_dir, self.out_dir)
+        results = do_preprocess(rc, repo_dir, self.out_dir)
 
         # then
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
