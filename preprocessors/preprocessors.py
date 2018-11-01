@@ -243,17 +243,28 @@ class BiblePreprocessor(Preprocessor):
         B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
         preadjusted_file_contents = file_contents
         # First do global fixes to bad tC USFM
-        preadjusted_file_contents, n = re.subn(r'\\(q[123]?)([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
-        if n: self.warnings.append(f"{B} - {n:,} badly formed \\q markers")
-        preadjusted_file_contents, n = re.subn(r'\\p([^ ])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+        preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
+        preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
+        preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
+        if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
+        preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
+
+        preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
+        preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
         if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
-        # Then do other global changes
+        preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
+
+        # Then do other global clean-ups
+        ks_count = preadjusted_file_contents.count('\\k-s')
+        ke_count = preadjusted_file_contents.count('\\k-e')
         zs_count = preadjusted_file_contents.count('\\zaln-s')
         ze_count = preadjusted_file_contents.count('\\zaln-e')
         close_count = preadjusted_file_contents.count('\\*')
-        if close_count < (zs_count + ze_count):
-            self.warnings.append(f"{B} - {zs_count+ze_count-close_count:,} unclosed \\zaln markers")
-        preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing milestones
+        expected_close_count = ks_count + ke_count + zs_count + ze_count
+        if close_count < expected_close_count:
+            self.warnings.append(f"{B} - {expected_close_count-close_count:,} unclosed \\k or \\zaln milestone markers")
+        preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
+        preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing alignment milestones
 
 
         # Then do line-by-line changes
@@ -268,13 +279,24 @@ class BiblePreprocessor(Preprocessor):
             if line.startswith('\\c '):
                 C = line[3:]
             elif line.startswith('\\v '):
-                V = line[3:]
+                V = line[3:].split(' ')[0]
 
             adjusted_line = line
+            if '\\k' in adjusted_line: # Delete these fields
+                # TODO: These milestone fields in the source texts should be self-closing
+                # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                ix = adjusted_line.find('\\k-s')
+                if ix != -1:
+                    adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+            assert '\\k' not in adjusted_line
+            # HANDLE FAULTY USFM IN UGNT
+            if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
+                GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
+                adjusted_line += '*' # Try a change to a closing marker
             ixW = adjusted_line.find('\\w ')
             while ixW != -1:
                 ixEnd = adjusted_line.find('\\w*', ixW)
-                # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM
+                # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
                 if ixEnd != -1:
                     field = adjusted_line[ixW+3:ixEnd]
                     # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
@@ -286,10 +308,12 @@ class BiblePreprocessor(Preprocessor):
                 else:
                     GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
                     self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
+                    adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
                 ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
-            assert '\\w ' not in adjusted_line
-            assert '\\w*' not in adjusted_line
+            assert '\\w' not in adjusted_line
+            # assert '\\w*' not in adjusted_line
             if '\\z' in adjusted_line: # Delete these user-defined fields
+                # TODO: These milestone fields in the source texts should be self-closing
                 # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
                 ix = adjusted_line.find('\\zaln-s')
                 if ix != -1:
@@ -303,7 +327,7 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_file_contents += ' ' + adjusted_line
                 needs_new_line = True
                 continue
-            assert adjusted_line == line # No \w or \z fields encountered
+            assert adjusted_line == line # No \k \w or \z fields encountered
 
             if needs_new_line:
                 adjusted_file_contents += '\n'
@@ -311,7 +335,6 @@ class BiblePreprocessor(Preprocessor):
                 needs_global_check = True
 
             # Copy across unchanged lines
-            # GlobalSettings.logger.debug(f"Using line: {line}")
             adjusted_file_contents += line + '\n'
 
         if needs_global_check: # Do some file-wide clean-up
@@ -327,7 +350,7 @@ class BiblePreprocessor(Preprocessor):
 
         # Write the modified USFM
         # if 'EPH' in file_name:
-            # GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents[:1000]}...")
+            # GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents[:1000]} ...")
         if '\\w' in adjusted_file_contents:
             GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
         assert '\\w' not in adjusted_file_contents

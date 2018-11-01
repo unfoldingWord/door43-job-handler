@@ -103,6 +103,8 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         raise Exception(error)
     matched_job_dict = verify_result
     GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
+    job_descriptive_name = f"{queued_json_payload['resource_type']}({queued_json_payload['input_format']})"
+
 
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to tX
@@ -150,8 +152,8 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
                                   queued_json_payload['converter_errors'])
     ccc_build_log = ccc.process_callback()
     final_build_log = ccc_build_log
-    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() is finishing with {final_build_log}")
-    #return build_log_json
+    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
+    return job_descriptive_name
 #end of process_callback function
 
 
@@ -177,19 +179,21 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_callback(prefix, queued_json_payload, current_job.connection)
+    job_descriptive_name = process_callback(prefix, queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('callback.job.duration', elapsed_milliseconds)
-    GlobalSettings.logger.info(f"Door43 callback handling completed in {elapsed_milliseconds:,} milliseconds")
+    if elapsed_milliseconds < 2000:
+        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds")
+    else:
+        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds")
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \
                          datetime.strptime(queued_json_payload['door43_webhook_received_at'],
                                            '%Y-%m-%dT%H:%M:%SZ')
-    total_elapsed_milliseconds = round(total_elapsed_time.total_seconds() * 1000)
-    GlobalSettings.logger.info(f"Door43 total job completed in {total_elapsed_milliseconds:,} milliseconds")
-    stats_client.timing('total.job.duration', total_elapsed_milliseconds)
+    GlobalSettings.logger.info(f"Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds")
+    stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     stats_client.incr('callback.jobs.succeeded')
 # end of job function

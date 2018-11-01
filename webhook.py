@@ -150,7 +150,7 @@ def upload_zip_file(commit_id, zip_filepath):
     """
     """
     file_key = f'preconvert/{commit_id}.zip'
-    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key}...')
+    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} ...')
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
     except Exception as e:
@@ -185,7 +185,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
     try:
-        GlobalSettings.logger.debug(f'Downloading {repo_zip_url}...')
+        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} ...')
 
         # if the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -196,7 +196,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
         GlobalSettings.logger.debug('Downloading finished.')
 
     try:
-        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file}...')
+        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} ...')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
@@ -289,10 +289,11 @@ def process_job(queued_json_payload, redis_connection):
         POST to the tX webhook (which should hopefully respond with a callback).
 
     This code is "successful" once the job is submitted --
-        it currently has no way to determine if it actually gets completed.
+        it has no way to determine if it actually gets completed
+        other than if a callback is made.
 
     The given payload will be automatically appended to the 'failed' queue
-        if an exception is thrown in this module.
+        by rq if an exception is thrown in this module.
     """
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
@@ -362,6 +363,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Get the resource container
     rc = RC(repo_dir, repo_name)
+    job_descriptive_name = f'{rc.resource.type}({rc.resource.file_ext})'
 
 
     # Save manifest to manifest table
@@ -401,7 +403,7 @@ def process_job(queued_json_payload, redis_connection):
     # Zip up the massaged files
     GlobalSettings.logger.info("Zipping preprocessed files...")
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath} ...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
@@ -499,8 +501,8 @@ def process_job(queued_json_payload, redis_connection):
         #raise Exception(error_msg) # Is this the best thing to do here?
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() is finishing with {build_log_json}")
-    #return build_log_json
+    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    return job_descriptive_name
 #end of process_job function
 
 
@@ -530,11 +532,14 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_job(queued_json_payload, current_job.connection)
+    job_descriptive_name = process_job(queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
-    GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling completed in {elapsed_milliseconds:,} milliseconds")
+    if elapsed_milliseconds < 2000:
+        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds")
+    else:
+        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds")
 
     stats_client.incr('jobs.completed')
 # end of job function
