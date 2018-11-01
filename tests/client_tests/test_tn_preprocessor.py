@@ -36,11 +36,11 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        results, preproc = do_preprocess(rc, repo_dir, self.out_dir)
+        results = do_preprocess(rc, repo_dir, self.out_dir)
 
         # then
-        self.assertTrue(preproc.is_multiple_jobs())
-        self.assertEqual(len(preproc.get_book_list()), 66)
+        # self.assertTrue(preproc.is_multiple_jobs())
+        # self.assertEqual(len(preproc.get_book_list()), 66)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '01-GEN.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '67-REV.md')))
@@ -59,11 +59,11 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        results, preproc = do_preprocess(rc, repo_dir, self.out_dir)
+        results = do_preprocess(rc, repo_dir, self.out_dir)
 
         # then
-        self.assertTrue(preproc.is_multiple_jobs())
-        self.assertEqual(len(preproc.get_book_list()), 2)
+        # self.assertTrue(preproc.is_multiple_jobs())
+        # self.assertEqual(len(preproc.get_book_list()), 2)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
         self.assertFalse(os.path.isfile(os.path.join(self.out_dir, '01-GEN.md')))
         self.assertFalse(os.path.isfile(os.path.join(self.out_dir, '67-REV.md')))

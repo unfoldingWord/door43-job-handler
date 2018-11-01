@@ -6,8 +6,6 @@
 
 # Python imports
 import os
-import tempfile
-#import json
 from datetime import datetime
 from time import time
 from ast import literal_eval
@@ -18,8 +16,6 @@ from statsd import StatsClient # Graphite front-end
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST
-from general_tools.file_utils import unzip, write_file, remove_tree, remove
-from general_tools.url_utils import download_file
 from global_settings.global_settings import GlobalSettings
 from client_converter_callback import ClientConverterCallback
 from client_linter_callback import ClientLinterCallback
@@ -53,10 +49,10 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
     if not outstanding_jobs_list:
         GlobalSettings.logger.error("No expected jobs found")
         return False
-    GlobalSettings.logger.debug(f"Got outstanding_jobs_list:"
-                                f" ({len(outstanding_jobs_list)}) {outstanding_jobs_list}")
-    GlobalSettings.logger.debug(f"Currently have {len(outstanding_jobs_list)}"
-                                f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+    # GlobalSettings.logger.debug(f"Got outstanding_jobs_list:"
+    #                             f" ({len(outstanding_jobs_list)}) {outstanding_jobs_list}")
+    # GlobalSettings.logger.debug(f"Currently have {len(outstanding_jobs_list)}"
+    #                             f" outstanding job(s) in {REDIS_JOB_LIST!r}")
     job_id_bytes = vej_job_dict['job_id'].encode()
     if job_id_bytes not in outstanding_jobs_list:
         GlobalSettings.logger.error(f"Not expecting job with id of {vej_job_dict['job_id']}")
@@ -64,7 +60,7 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
     this_job_dict_bytes = vej_redis_connection.hget(REDIS_JOB_LIST, job_id_bytes)
 
     # We found a match -- delete that job from the outstanding list
-    GlobalSettings.logger.debug(f"Found match for {job_id_bytes}")
+    GlobalSettings.logger.debug(f"Found job match for {job_id_bytes}")
     if len(outstanding_jobs_list) > 1:
         GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_list)-1}"
                                     f" outstanding job(s) in {REDIS_JOB_LIST!r}")
@@ -105,8 +101,28 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         error = f"No job found for {queued_json_payload}"
         GlobalSettings.logger.critical(error)
         raise Exception(error)
-    matched_job_dict = verify_result # Do we need any of this info?
-    print("Got matched_job_dict:", matched_job_dict )
+    matched_job_dict = verify_result
+    GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
+    job_descriptive_name = f"{queued_json_payload['resource_type']}({queued_json_payload['input_format']})"
+
+
+    this_job_dict = queued_json_payload.copy()
+    # Get needed fields that we saved but didn't submit to tX
+    for fieldname in ('user_name', 'repo_name', 'commit_id',):
+        assert fieldname not in this_job_dict
+        this_job_dict[fieldname] = matched_job_dict[fieldname]
+
+    if 'preprocessor_warnings' in matched_job_dict:
+        # GlobalSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
+        #                            f" remembered preprocessor_warnings: {matched_job_dict['preprocessor_warnings']}")
+        # Prepend preprocessor results to linter warnings
+        # total_warnings = len(matched_job_dict['preprocessor_warnings']) + len(queued_json_payload['linter_warnings'])
+        queued_json_payload['linter_warnings'] = matched_job_dict['preprocessor_warnings'] \
+                                               + queued_json_payload['linter_warnings']
+        # GlobalSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
+        #                             f" linter_warnings: {queued_json_payload['linter_warnings']}")
+        # assert len(queued_json_payload['linter_warnings']) == total_warnings
+        del matched_job_dict['preprocessor_warnings'] # No longer required
 
     if 'identifier' in queued_json_payload:
         identifier = queued_json_payload['identifier']
@@ -117,12 +133,6 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     else:
         identifier = job_id
         GlobalSettings.logger.debug(f"Got identifier={identifier!r} from job_id")
-
-    this_job_dict = queued_json_payload.copy()
-    # Get needed fields that we saved but didn't submit to tX
-    for fieldname in ('user_name', 'repo_name', 'commit_id',):
-        assert fieldname not in this_job_dict
-        this_job_dict[fieldname] = matched_job_dict[fieldname]
 
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
@@ -142,8 +152,8 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
                                   queued_json_payload['converter_errors'])
     ccc_build_log = ccc.process_callback()
     final_build_log = ccc_build_log
-    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() is finishing with {final_build_log}")
-    #return build_log_json
+    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
+    return job_descriptive_name
 #end of process_callback function
 
 
@@ -169,19 +179,21 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_callback(prefix, queued_json_payload, current_job.connection)
+    job_descriptive_name = process_callback(prefix, queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('callback.job.duration', elapsed_milliseconds)
-    GlobalSettings.logger.info(f"Door43 callback handling completed in {elapsed_milliseconds:,} milliseconds")
+    if elapsed_milliseconds < 2000:
+        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds")
+    else:
+        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds")
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \
                          datetime.strptime(queued_json_payload['door43_webhook_received_at'],
                                            '%Y-%m-%dT%H:%M:%SZ')
-    total_elapsed_milliseconds = round(total_elapsed_time.total_seconds() * 1000)
-    GlobalSettings.logger.info(f"Door43 total job completed in {total_elapsed_milliseconds:,} milliseconds")
-    stats_client.timing('total.job.duration', total_elapsed_milliseconds)
+    GlobalSettings.logger.info(f"Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds")
+    stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     stats_client.incr('callback.jobs.succeeded')
 # end of job function

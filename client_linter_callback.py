@@ -4,8 +4,7 @@ import time
 from datetime import datetime
 
 from global_settings.global_settings import GlobalSettings
-from general_tools import file_utils
-from general_tools.file_utils import unzip, write_file, remove_tree, remove
+from general_tools.file_utils import write_file, remove_tree
 
 
 class ClientLinterCallback:
@@ -51,7 +50,7 @@ class ClientLinterCallback:
             raise Exception(error)
 
         if not self.s3_results_key:
-            error = 'No s3_results_key found for identifier = {0}'.format(self.identifier)
+            error = f"No s3_results_key found for identifier = {self.identifier}"
             GlobalSettings.logger.error(error)
             raise Exception(error)
 
@@ -81,15 +80,15 @@ class ClientLinterCallback:
             build_log['warnings'].append(msg)
             GlobalSettings.logger.error(msg)
         else:
-            GlobalSettings.logger.debug("Linter {0} {1} warnings:\n{1}".format(self.identifier, len(self.warnings),
-                                                                    '\n'.join(self.warnings[:5])))
+            GlobalSettings.logger.debug(f"Linter {self.identifier} had success with"
+                                        f" {len(self.warnings)} warnings: {', '.join(self.warnings[:5])} ...")
 
         has_warnings = len(build_log['warnings']) > 0
         if has_warnings:
-            msg = "Linter {0} has Warnings!".format(self.identifier)
+            msg = f"Linter {self.identifier} has Warnings!"
             build_log['log'].append(msg)
         else:
-            msg = "Linter {0} completed with no warnings".format(self.identifier)
+            msg = f"Linter {self.identifier} completed with no warnings"
             build_log['log'].append(msg)
 
         ClientLinterCallback.upload_build_log(build_log, 'lint_log.json', self.temp_dir, self.s3_results_key)
@@ -107,7 +106,7 @@ class ClientLinterCallback:
     def upload_build_log(build_log, file_name, output_dir, s3_results_key, cache_time=0):
         build_log_file = os.path.join(output_dir, file_name)
         write_file(build_log_file, build_log)
-        upload_key = '{0}/{1}'.format(s3_results_key, file_name)
+        upload_key = f'{s3_results_key}/{file_name}'
         GlobalSettings.logger.debug('Saving build log to ' + upload_key)
         GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=cache_time)
 
@@ -133,7 +132,8 @@ class ClientLinterCallback:
             build_log = ClientLinterCallback.merge_build_status_for_part(build_log, s3_results_key, output_dir)
         else:
             GlobalSettings.logger.debug('Multiple parts: Checking if all parts completed.')
-            job_id, part_count, part_id, book = id_parts[:4]
+            # job_id, part_count, part_id, book = id_parts[:4]
+            part_count = id_parts[1]
             for i in range(0, int(part_count)):
                 part_key = f'{s3_results_key}/{i}'
                 build_log = ClientLinterCallback.merge_build_status_for_part(build_log, part_key, output_dir)
@@ -160,12 +160,15 @@ class ClientLinterCallback:
             GlobalSettings.logger.debug('Not all parts completed')
             build_log = None
 
-        file_utils.remove_tree(output_dir)
+        remove_tree(output_dir)
         return build_log
 
     @staticmethod
-    def update_jobs_table(s3_results_key, build_log, output_dir):
-        GlobalSettings.logger.debug(f"update_jobs_table({s3_results_key}, {build_log}, {output_dir})")
+    def upload_logs(s3_results_key, build_log, output_dir):
+        """
+        Was update_jobs_table
+        """
+        GlobalSettings.logger.debug(f"upload_logs({s3_results_key}, {build_log}, {output_dir})")
 
         job_id = build_log['job_id']
         GlobalSettings.logger.debug('merging build_logs for job : ' + job_id)
@@ -212,7 +215,7 @@ class ClientLinterCallback:
                 if part_build_log_combined:
                     build_log = ClientLinterCallback.merge_results_logs(build_log, part_build_log_combined,
                                                                         linter_file=False)
-                    ClientLinterCallback.update_jobs_table(s3_results_key, part_build_log_combined, output_dir)
+                    ClientLinterCallback.upload_logs(s3_results_key, part_build_log_combined, output_dir)
                     return build_log
                 else:
                     GlobalSettings.logger.debug(f"Lint_log.json not found for {s3_results_key}")
@@ -230,19 +233,19 @@ class ClientLinterCallback:
         key = f'{s3_results_key}/finished'
         try:
             convert_finished = GlobalSettings.cdn_s3_handler().key_exists(key)
-        except Exception as e:
+        except Exception:
             convert_finished = False
         return convert_finished
 
     @staticmethod
     def get_results(s3_results_key, file_name):
-        key = "{0}/{1}".format(s3_results_key, file_name)
+        key = f'{s3_results_key}/{file_name}'
         file_results = GlobalSettings.cdn_s3_handler().get_json(key)
         return file_results
 
     @staticmethod
     def merge_build_status_for_file(build_log, s3_results_key, file_name, linter_file=False):
-        key = "{0}/{1}".format(s3_results_key, file_name)
+        key = f'{s3_results_key}/{file_name}'
         file_results = GlobalSettings.cdn_s3_handler().get_json(key)
         if file_results:
             build_log = ClientLinterCallback.merge_results_logs(build_log, file_results, linter_file)
@@ -276,11 +279,11 @@ class ClientLinterCallback:
         commit_id = build_log['commit_id']
         user_name = build_log['repo_owner']
         repo_name = build_log['repo_name']
-        project_json_key = 'u/{0}/{1}/project.json'.format(user_name, repo_name)
+        project_json_key = f'u/{user_name}/{repo_name}/project.json'
         project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
         project_json['user'] = user_name
         project_json['repo'] = repo_name
-        project_json['repo_url'] = 'https://{0}/{1}/{2}'.format(GlobalSettings.gogs_url, user_name, repo_name)
+        project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{user_name}/{repo_name}'
         commit = {
             'id': commit_id,
             'created_at': build_log['created_at'],

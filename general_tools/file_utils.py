@@ -1,4 +1,3 @@
-import codecs
 import json
 import os
 import sys
@@ -73,7 +72,7 @@ def make_dir(dir_name, linux_mode=0o755, error_if_not_writable=False):
         os.makedirs(dir_name, linux_mode)
     elif error_if_not_writable:
         if not os.access(dir_name, os.R_OK | os.W_OK | os.X_OK):
-            raise IOError('Directory {0} is not writable.'.format(dir_name))
+            raise IOError(f"Directory {dir_name} is not writable.")
 
 
 def load_json_object(file_name, default=None):
@@ -101,7 +100,7 @@ def load_yaml_object(file_name, default=None):
 
 
 def read_file(file_name, encoding='utf-8-sig'):
-    with codecs.open(file_name, 'r', encoding=encoding) as f:
+    with open(file_name, 'r', encoding=encoding) as f:
         content = f.read()
     # convert Windows line endings to Linux line endings
     content = content.replace('\r\n', '\n')
@@ -118,7 +117,7 @@ def write_file(file_name, file_contents, indent=None):
     :param str|unicode|object file_contents: The string to write or the object to serialize
     :param int indent: Specify a value if you want the output formatted to be more easily readable
     """
-    # make sure the directory exists
+    # Make sure the directory exists
     make_dir(os.path.dirname(file_name))
 
     if isinstance(file_contents, str):
@@ -129,7 +128,7 @@ def write_file(file_name, file_contents, indent=None):
         else:
             text_to_write = json.dumps(file_contents, sort_keys=True, indent=indent, default=json_serial)
 
-    with codecs.open(file_name, 'w', encoding='utf-8') as out_file:
+    with open(file_name, 'w', encoding='utf-8') as out_file:
         out_file.write(text_to_write)
 
 
@@ -138,7 +137,7 @@ def get_mime_type(path):
 
     mime_type = mime.guess_type(path)[0]
     if not mime_type:
-        mime_type = "text/{0}".format(os.path.splitext(path)[1])
+        mime_type = f'text/{os.path.splitext(path)[1]}'
     return mime_type
 
 

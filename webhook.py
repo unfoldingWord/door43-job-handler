@@ -9,8 +9,9 @@ import os
 import tempfile
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import time
+from ast import literal_eval
 
 # Library (PyPi) imports
 import requests
@@ -149,7 +150,7 @@ def upload_zip_file(commit_id, zip_filepath):
     """
     """
     file_key = f'preconvert/{commit_id}.zip'
-    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key}...')
+    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} ...')
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
     except Exception as e:
@@ -184,7 +185,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
     try:
-        GlobalSettings.logger.debug(f'Downloading {repo_zip_url}...')
+        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} ...')
 
         # if the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -195,7 +196,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
         GlobalSettings.logger.debug('Downloading finished.')
 
     try:
-        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file}...')
+        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} ...')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
@@ -212,29 +213,35 @@ def remember_job(rj_job_dict, rj_redis_connection):
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
     """
-    GlobalSettings.logger.debug(f"remember_job({rj_job_dict['job_id']})")
+    GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
-    #if debug_mode_flag:
-        #GlobalSettings.logger.debug(f"{OUR_NAME} DEBUG_MODE: Emptying outstanding_jobs_dict!!!")
-        #for this_key in rj_redis_connection.hkeys(REDIS_JOB_LIST):
-            #print("  Deleting key:", this_key)
-            #del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, this_key)
-            ##print("  Got delete result:", del_result)
-            #assert del_result == 1
-        #outstanding_jobs_dict = {}
-    #else: # not debug mode
     outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
     if outstanding_jobs_dict is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    else:
-        GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
-                                    f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
+    # else:
+    #    GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+    #                                f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
     if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in {REDIS_JOB_LIST!r}")
-        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict
+        # Remove any outstanding jobs more than two weeks old
+        for outstanding_job_id_bytes in outstanding_jobs_dict.copy():
+            # print(f"\nLooking at outstanding job {outstanding_job_id_bytes}")
+            outstanding_job_dict_bytes = rj_redis_connection.hget(REDIS_JOB_LIST, outstanding_job_id_bytes)
+            outstanding_job_dict = literal_eval(outstanding_job_dict_bytes.decode()) # bytes -> str -> dict
+            # print(f"Got outstanding_job_dict: {outstanding_job_dict!r}")
+            outstanding_duration = datetime.utcnow() \
+                                - datetime.strptime(outstanding_job_dict['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+            if outstanding_duration >= timedelta(weeks=2):
+                GlobalSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
+                del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, outstanding_job_id_bytes) # Delete from Redis
+                # print("  Got delete result:", del_result)
+                assert del_result == 1
+                del outstanding_jobs_dict[outstanding_job_id_bytes] # Delete from our local copy also
+        # This new job shouldn't already be in the outstanding jobs dict
+        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict # bytes comparison
 
     # Add this job
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
@@ -282,10 +289,11 @@ def process_job(queued_json_payload, redis_connection):
         POST to the tX webhook (which should hopefully respond with a callback).
 
     This code is "successful" once the job is submitted --
-        it currently has no way to determine if it actually gets completed.
+        it has no way to determine if it actually gets completed
+        other than if a callback is made.
 
     The given payload will be automatically appended to the 'failed' queue
-        if an exception is thrown in this module.
+        by rq if an exception is thrown in this module.
     """
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
@@ -346,7 +354,8 @@ def process_job(queued_json_payload, redis_connection):
 
     GlobalSettings.logger.info(f"Processing job for '{pusher_username}' for '{full_name}/{repo_name}' for \"{commit_message}\"")
     stats_client.incr(f'users.invoked.{full_name}')
-    stats_client.incr(f'user-projects.invoked.{full_name}/{repo_name}')
+    # Using a hyphen as seperator as forward slash gets changed to hyphen anyway
+    stats_client.incr(f'user-projects.invoked.{full_name}-{repo_name}')
 
 
     # Download and unzip the repo files
@@ -354,6 +363,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Get the resource container
     rc = RC(repo_dir, repo_name)
+    job_descriptive_name = f'{rc.resource.type}({rc.resource.file_ext})'
 
 
     # Save manifest to manifest table
@@ -384,13 +394,16 @@ def process_job(queued_json_payload, redis_connection):
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files...")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    do_preprocess(rc, repo_dir, preprocess_dir)
+    preprocessor_result = do_preprocess(rc, repo_dir, preprocess_dir)
+    # preprocess_result is normally True, but can be a warning dict for the Bible preprocessor
+    preprocessor_warning_list = preprocessor_result if isinstance(preprocessor_result, list) else None
+    GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
 
     # Zip up the massaged files
     GlobalSettings.logger.info("Zipping preprocessed files...")
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath}...')
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath} ...')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
@@ -423,6 +436,8 @@ def process_job(queued_json_payload, redis_connection):
         'rel': 'self',
         'method': 'GET'
     }
+    if preprocessor_warning_list:
+        pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
 
@@ -486,8 +501,8 @@ def process_job(queued_json_payload, redis_connection):
         #raise Exception(error_msg) # Is this the best thing to do here?
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() is finishing with {build_log_json}")
-    #return build_log_json
+    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    return job_descriptive_name
 #end of process_job function
 
 
@@ -517,11 +532,14 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    process_job(queued_json_payload, current_job.connection)
+    job_descriptive_name = process_job(queued_json_payload, current_job.connection)
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
-    GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling completed in {elapsed_milliseconds:,} milliseconds")
+    if elapsed_milliseconds < 2000:
+        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds")
+    else:
+        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds")
 
     stats_client.incr('jobs.completed')
 # end of job function

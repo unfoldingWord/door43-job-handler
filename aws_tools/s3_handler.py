@@ -7,7 +7,7 @@ from boto3.session import Session
 from general_tools.file_utils import get_mime_type
 
 
-class S3Handler(object):
+class S3Handler:
     def __init__(self, bucket_name=None, aws_access_key_id=None, aws_secret_access_key=None,
                  aws_region_name='us-west-2'):
         self.bucket_name = bucket_name
