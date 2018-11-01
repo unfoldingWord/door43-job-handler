@@ -241,6 +241,7 @@ class BiblePreprocessor(Preprocessor):
 
         # Clean the USFM
         B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
+        needs_global_check = False
         preadjusted_file_contents = file_contents
         # First do global fixes to bad tC USFM
         preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
@@ -265,10 +266,12 @@ class BiblePreprocessor(Preprocessor):
             self.warnings.append(f"{B} - {expected_close_count-close_count:,} unclosed \\k or \\zaln milestone markers")
         preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
         preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing alignment milestones
+        if preadjusted_file_contents != file_contents:
+            needs_global_check = True
 
 
         # Then do line-by-line changes
-        needs_new_line = needs_global_check = False
+        needs_new_line = False
         adjusted_file_contents = ''
         C = V = ''
         for line in preadjusted_file_contents.split('\n'):
@@ -342,7 +345,8 @@ class BiblePreprocessor(Preprocessor):
             adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
             adjusted_file_contents = re.sub(r'\n([,.])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
             adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
-            adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
+            while '\n\n' in adjusted_file_contents:
+                adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
             adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC punctuation mistake
             adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC punctuation mistake
             adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC punctuation mistake
