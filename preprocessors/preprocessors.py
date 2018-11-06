@@ -805,18 +805,23 @@ class TnPreprocessor(Preprocessor):
                     self.move_to_front(chapter_dirs, move_str)
                 for chapter_dir in chapter_dirs:
                     chapter = os.path.basename(chapter_dir)
+                    if chapter in self.ignoreFiles or chapter == 'manifest.json':
+                        # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
+                        continue
                     link = 'tn-chapter-{0}-{1}'.format(book, chapter.zfill(3))
                     index_json['chapters'][html_file].append(link)
                     markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
-                    chunk_files = sorted(glob(os.path.join(chapter_dir, '*.md')))
-                    if chunk_files:
+                    chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
+                    if chunk_filepaths: # We have .md files
                         # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_files)} md chunk files: {chunk_files}")
                         for move_str in ['front', 'intro']:
-                            self.move_to_front(chunk_files, move_str)
-                        for chunk_idx, chunk_file in enumerate(chunk_files):
-                            start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
-                            if chunk_idx < len(chunk_files)-1:
-                                base_file_name = os.path.splitext(os.path.basename(chunk_files[chunk_idx + 1]))[0]
+                            self.move_to_front(chunk_filepaths, move_str)
+                        for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
+                            if os.path.basename(chunk_filepath) in self.ignoreFiles:
+                                continue
+                            start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
+                            if chunk_idx < len(chunk_filepaths)-1:
+                                base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
                                 if base_file_name.isdigit():
                                     end_verse = str(int(base_file_name) - 1)
                                 else:
@@ -831,19 +836,22 @@ class TnPreprocessor(Preprocessor):
                             markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
                                 format(link, name, chapter.lstrip('0'), start_verse,
                                     '-'+end_verse if start_verse != end_verse else '')
-                            text = read_file(chunk_file) + '\n\n'
+                            text = read_file(chunk_filepath) + '\n\n'
                             text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
                             markdown += text
                     else: # See if there's .txt files (as no .md files found)
                         # NOTE: These seem to actually be json files (created by tS)
-                        chunk_files = sorted(glob(os.path.join(chapter_dir, '*.txt')))
-                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_files)} txt chunk files: {chunk_files}")
+                        chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
+                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
                         for move_str in ['front', 'intro']:
-                            self.move_to_front(chunk_files, move_str)
-                        for chunk_idx, chunk_file in enumerate(chunk_files):
-                            start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
-                            if chunk_idx < len(chunk_files)-1:
-                                base_file_name = os.path.splitext(os.path.basename(chunk_files[chunk_idx + 1]))[0]
+                            self.move_to_front(chunk_filepaths, move_str)
+                        for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
+                            if os.path.basename(chunk_filepath) in self.ignoreFiles:
+                                # GlobalSettings.logger.debug(f"tN preprocessor: ignored {chunk_filepath}")
+                                continue
+                            start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
+                            if chunk_idx < len(chunk_filepaths)-1:
+                                base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
                                 if base_file_name.isdigit():
                                     end_verse = str(int(base_file_name) - 1)
                                 else:
@@ -858,14 +866,14 @@ class TnPreprocessor(Preprocessor):
                             markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
                                 format(link, name, chapter.lstrip('0'), start_verse,
                                     '-'+end_verse if start_verse != end_verse else '')
-                            text = read_file(chunk_file)
+                            text = read_file(chunk_filepath)
                             json_data = json.loads(text)
                             for tn_unit in json_data:
                                 if 'title' in tn_unit and 'body' in tn_unit:
                                     markdown += f"### {tn_unit['title']}\n\n"
                                     markdown += f"{tn_unit['body']}\n\n"
                                 else:
-                                    self.warnings.append(f"Unexpected tN unit in {chunk_file}: {tn_unit}")
+                                    self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
                 markdown = self.fix_links(markdown)
                 book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
                 self.book_filenames.append(book_file_name)
