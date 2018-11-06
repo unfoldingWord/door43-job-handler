@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from glob import glob
 from shutil import copy
 
@@ -48,6 +49,7 @@ class Preprocessor:
         self.rc = rc
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
+        self.warnings = []
 
         # Write out the new manifest file based on the resource container
         write_file(os.path.join(self.output_dir, 'manifest.yaml'), self.rc.as_dict())
@@ -215,7 +217,6 @@ class BiblePreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
         self.book_filenames = []
-        self.warnings = []
 
     def is_multiple_jobs(self):
         return len(self.book_filenames) > 1
@@ -343,14 +344,14 @@ class BiblePreprocessor(Preprocessor):
         if needs_global_check: # Do some file-wide clean-up
             GlobalSettings.logger.debug(f"Doing global fixes for {B}")
             adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
-            adjusted_file_contents = re.sub(r'\n([,.])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
+            adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
             adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
             while '\n\n' in adjusted_file_contents:
                 adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
-            adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
 
         # Write the modified USFM
         # if 'EPH' in file_name:
@@ -808,33 +809,68 @@ class TnPreprocessor(Preprocessor):
                     index_json['chapters'][html_file].append(link)
                     markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
                     chunk_files = sorted(glob(os.path.join(chapter_dir, '*.md')))
-                    for move_str in ['front', 'intro']:
-                        self.move_to_front(chunk_files, move_str)
-                    for chunk_idx, chunk_file in enumerate(chunk_files):
-                        start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
-                        if chunk_idx < len(chunk_files)-1:
-                            base_file_name = os.path.splitext(os.path.basename(chunk_files[chunk_idx + 1]))[0]
-                            if base_file_name.isdigit():
-                                end_verse = str(int(base_file_name) - 1)
+                    if chunk_files:
+                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_files)} md chunk files: {chunk_files}")
+                        for move_str in ['front', 'intro']:
+                            self.move_to_front(chunk_files, move_str)
+                        for chunk_idx, chunk_file in enumerate(chunk_files):
+                            start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
+                            if chunk_idx < len(chunk_files)-1:
+                                base_file_name = os.path.splitext(os.path.basename(chunk_files[chunk_idx + 1]))[0]
+                                if base_file_name.isdigit():
+                                    end_verse = str(int(base_file_name) - 1)
+                                else:
+                                    end_verse = start_verse
                             else:
-                                end_verse = start_verse
-                        else:
-                            chapter_str = chapter.lstrip('0')
-                            chapter_verses = BOOK_CHAPTER_VERSES[book]
-                            end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
+                                chapter_str = chapter.lstrip('0')
+                                chapter_verses = BOOK_CHAPTER_VERSES[book]
+                                end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
 
-                        start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
-                        link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
-                        markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
-                            format(link, name, chapter.lstrip('0'), start_verse,
-                                   '-'+end_verse if start_verse != end_verse else '')
-                        text = read_file(chunk_file) + '\n\n'
-                        text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
-                        markdown += text
+                            start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
+                            link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                            markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
+                                format(link, name, chapter.lstrip('0'), start_verse,
+                                    '-'+end_verse if start_verse != end_verse else '')
+                            text = read_file(chunk_file) + '\n\n'
+                            text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
+                            markdown += text
+                    else: # See if there's .txt files (as no .md files found)
+                        # NOTE: These seem to actually be json files (created by tS)
+                        chunk_files = sorted(glob(os.path.join(chapter_dir, '*.txt')))
+                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_files)} txt chunk files: {chunk_files}")
+                        for move_str in ['front', 'intro']:
+                            self.move_to_front(chunk_files, move_str)
+                        for chunk_idx, chunk_file in enumerate(chunk_files):
+                            start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
+                            if chunk_idx < len(chunk_files)-1:
+                                base_file_name = os.path.splitext(os.path.basename(chunk_files[chunk_idx + 1]))[0]
+                                if base_file_name.isdigit():
+                                    end_verse = str(int(base_file_name) - 1)
+                                else:
+                                    end_verse = start_verse
+                            else:
+                                chapter_str = chapter.lstrip('0')
+                                chapter_verses = BOOK_CHAPTER_VERSES[book]
+                                end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
+
+                            start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
+                            link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                            markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
+                                format(link, name, chapter.lstrip('0'), start_verse,
+                                    '-'+end_verse if start_verse != end_verse else '')
+                            text = read_file(chunk_file)
+                            json_data = json.loads(text)
+                            for tn_unit in json_data:
+                                if 'title' in tn_unit and 'body' in tn_unit:
+                                    markdown += f"### {tn_unit['title']}\n\n"
+                                    markdown += f"{tn_unit['body']}\n\n"
+                                else:
+                                    self.warnings.append(f"Unexpected tN unit in {chunk_file}: {tn_unit}")
                 markdown = self.fix_links(markdown)
                 book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
                 self.book_filenames.append(book_file_name)
                 file_path = os.path.join(self.output_dir, book_file_name)
+                # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
                 write_file(file_path, markdown)
             else:
                 GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
@@ -842,7 +878,7 @@ class TnPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.warnings if self.warnings else True
 
     def move_to_front(self, files, move_str):
         if files:
