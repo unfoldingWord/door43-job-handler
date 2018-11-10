@@ -137,13 +137,15 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter callback…")
+    url_part2 = f"u/{this_job_dict['user_name']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
     clc = ClientLinterCallback(this_job_dict, identifier,
                                queued_json_payload['linter_success'],
                                queued_json_payload['linter_info'] if 'linter_info' in queued_json_payload else None,
                                queued_json_payload['linter_warnings'],
                                queued_json_payload['linter_errors'] if 'linter_errors' in queued_json_payload else None,
-                               s3_results_key= f"u/{this_job_dict['user_name']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}")
-    clc_build_log = clc.process_callback()
+                               s3_results_key=url_part2)
+    # clc_build_log = clc.process_callback() # We don't use the result
+    clc.process_callback()
     GlobalSettings.logger.info("Running converter callback…")
     ccc = ClientConverterCallback(this_job_dict, identifier,
                                   queued_json_payload['converter_success'],
@@ -153,6 +155,8 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     ccc_build_log = ccc.process_callback()
     final_build_log = ccc_build_log
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
+    GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
+                               f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
     return job_descriptive_name
 #end of process_callback function
 

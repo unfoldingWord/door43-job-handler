@@ -229,7 +229,7 @@ class ClientConverterCallback:
         else:
             build_log_json['errors'] = []
         build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
-        GlobalSettings.logger.debug(f"Writing build log to {build_log_key}")
+        GlobalSettings.logger.debug(f"Uploading build log to {build_log_key}")
         # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
         self.cdn_upload_contents(build_log_json, build_log_key)
         return build_log_json
@@ -237,7 +237,7 @@ class ClientConverterCallback:
     def cdn_upload_contents(self, contents, key):
         file_name = os.path.join(self.temp_dir, 'contents.json')
         write_file(file_name, contents)
-        GlobalSettings.logger.debug(f"Writing file to {key}")
+        GlobalSettings.logger.debug(f"Uploading file to {key}")
         GlobalSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
     def get_build_log(self, s3_base_key, part=''):
