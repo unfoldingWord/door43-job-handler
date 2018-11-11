@@ -81,7 +81,7 @@ class ClientLinterCallback:
             GlobalSettings.logger.error(msg)
         else:
             GlobalSettings.logger.debug(f"Linter {self.identifier} had success with"
-                                        f" {len(self.warnings)} warnings: {', '.join(self.warnings[:5])} ...")
+                                        f" {len(self.warnings)} warnings: {', '.join(self.warnings[:5])} …")
 
         has_warnings = len(build_log['warnings']) > 0
         if has_warnings:
@@ -107,7 +107,7 @@ class ClientLinterCallback:
         build_log_file = os.path.join(output_dir, file_name)
         write_file(build_log_file, build_log)
         upload_key = f'{s3_results_key}/{file_name}'
-        GlobalSettings.logger.debug('Saving build log to ' + upload_key)
+        GlobalSettings.logger.debug('Uploading build log to ' + upload_key)
         GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=cache_time)
 
     @staticmethod

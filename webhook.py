@@ -150,7 +150,7 @@ def upload_zip_file(commit_id, zip_filepath):
     """
     """
     file_key = f'preconvert/{commit_id}.zip'
-    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} ...')
+    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} …')
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
     except Exception as e:
@@ -185,7 +185,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
     try:
-        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} ...')
+        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
 
         # if the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -196,7 +196,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
         GlobalSettings.logger.debug('Downloading finished.')
 
     try:
-        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} ...')
+        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
@@ -392,7 +392,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Preprocess the files
-    GlobalSettings.logger.info("Preprocessing files...")
+    GlobalSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     preprocessor_result = do_preprocess(rc, repo_dir, preprocess_dir)
     # preprocess_result is normally True, but can be a warning dict for the Bible preprocessor
@@ -401,18 +401,18 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Zip up the massaged files
-    GlobalSettings.logger.info("Zipping preprocessed files...")
+    GlobalSettings.logger.info("Zipping preprocessed files…")
     zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath} ...')
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath} …')
     add_contents_to_zip(zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
 
     # Upload zipped file to the S3 pre-convert bucket
-    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket...")
+    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     file_key = upload_zip_file(commit_id, zip_filepath)
 
-    GlobalSettings.logger.debug("Webhook.process_job setting up job dict...")
+    GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
     pj_job_dict['job_id'] = get_unique_job_id()
     pj_job_dict['identifier'] = pj_job_dict['job_id']
@@ -460,7 +460,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Pass the work request onto the tX system
-    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} ...")
+    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': pj_job_dict['job_id'],
         'resource_type': rc.resource.identifier,

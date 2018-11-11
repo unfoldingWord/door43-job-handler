@@ -231,7 +231,7 @@ class BiblePreprocessor(Preprocessor):
 
         TODO: Check/Remove some of this code once tC export is fixed
         """
-        # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('...' if len(file_contents)>500 else '')} )")
+        # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')} )")
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -355,7 +355,7 @@ class BiblePreprocessor(Preprocessor):
 
         # Write the modified USFM
         # if 'EPH' in file_name:
-            # GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents[:1000]} ...")
+            # GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents[:1000]} …")
         if '\\w' in adjusted_file_contents:
             GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
         assert '\\w' not in adjusted_file_contents
@@ -792,94 +792,110 @@ class TnPreprocessor(Preprocessor):
         for project in self.rc.projects:
             GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}'")
             if project.identifier in BOOK_NAMES:
-                markdown = ''
                 book = project.identifier.lower()
                 html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
                 index_json['book_codes'][html_file] = book
                 name = BOOK_NAMES[book]
                 index_json['titles'][html_file] = name
-                chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
-                markdown += '# <a id="tn-{0}"/> {1}\n\n'.format(book, name)
-                index_json['chapters'][html_file] = []
-                for move_str in ['front', 'intro']:
-                    self.move_to_front(chapter_dirs, move_str)
-                for chapter_dir in chapter_dirs:
-                    chapter = os.path.basename(chapter_dir)
-                    if chapter in self.ignoreFiles or chapter == 'manifest.json':
-                        # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
-                        continue
-                    link = 'tn-chapter-{0}-{1}'.format(book, chapter.zfill(3))
-                    index_json['chapters'][html_file].append(link)
-                    markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
-                    chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
-                    if chunk_filepaths: # We have .md files
-                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_files)} md chunk files: {chunk_files}")
-                        for move_str in ['front', 'intro']:
-                            self.move_to_front(chunk_filepaths, move_str)
-                        for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
-                            if os.path.basename(chunk_filepath) in self.ignoreFiles:
-                                continue
-                            start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
-                            if chunk_idx < len(chunk_filepaths)-1:
-                                base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
-                                if base_file_name.isdigit():
-                                    end_verse = str(int(base_file_name) - 1)
+                # If there's a TSV file, copy it directly across
+                found_tsv = False
+                tsv_filename_end = '{0}-{1}.tsv'.format(BOOK_NUMBERS[book], book.upper())
+                for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
+                    if this_filepath.endswith(tsv_filename_end): # We have the tsv file
+                        found_tsv = True
+                        GlobalSettings.logger.debug(f"tN preprocessor got {this_filepath}")
+                        copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        break
+                # NOTE: This code will create an .md file if there is a missing TSV file
+                if not found_tsv: # Look for markdown or json .txt
+                    markdown = ''
+                    chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
+                    markdown += '# <a id="tn-{0}"/> {1}\n\n'.format(book, name)
+                    index_json['chapters'][html_file] = []
+                    for move_str in ['front', 'intro']:
+                        self.move_to_front(chapter_dirs, move_str)
+                    found_something = False
+                    for chapter_dir in chapter_dirs:
+                        chapter = os.path.basename(chapter_dir)
+                        if chapter in self.ignoreFiles or chapter == 'manifest.json':
+                            # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
+                            continue
+                        link = 'tn-chapter-{0}-{1}'.format(book, chapter.zfill(3))
+                        index_json['chapters'][html_file].append(link)
+                        markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
+                        chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
+                        if chunk_filepaths: # We have .md files
+                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
+                            found_something = True
+                            for move_str in ['front', 'intro']:
+                                self.move_to_front(chunk_filepaths, move_str)
+                            for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
+                                if os.path.basename(chunk_filepath) in self.ignoreFiles:
+                                    continue
+                                start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
+                                if chunk_idx < len(chunk_filepaths)-1:
+                                    base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
+                                    if base_file_name.isdigit():
+                                        end_verse = str(int(base_file_name) - 1)
+                                    else:
+                                        end_verse = start_verse
                                 else:
-                                    end_verse = start_verse
-                            else:
-                                chapter_str = chapter.lstrip('0')
-                                chapter_verses = BOOK_CHAPTER_VERSES[book]
-                                end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
+                                    chapter_str = chapter.lstrip('0')
+                                    chapter_verses = BOOK_CHAPTER_VERSES[book]
+                                    end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
 
-                            start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
-                            link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
-                            markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
-                                format(link, name, chapter.lstrip('0'), start_verse,
-                                    '-'+end_verse if start_verse != end_verse else '')
-                            text = read_file(chunk_filepath) + '\n\n'
-                            text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
-                            markdown += text
-                    else: # See if there's .txt files (as no .md files found)
-                        # NOTE: These seem to actually be json files (created by tS)
-                        chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
-                        # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
-                        for move_str in ['front', 'intro']:
-                            self.move_to_front(chunk_filepaths, move_str)
-                        for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
-                            if os.path.basename(chunk_filepath) in self.ignoreFiles:
-                                # GlobalSettings.logger.debug(f"tN preprocessor: ignored {chunk_filepath}")
-                                continue
-                            start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
-                            if chunk_idx < len(chunk_filepaths)-1:
-                                base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
-                                if base_file_name.isdigit():
-                                    end_verse = str(int(base_file_name) - 1)
+                                start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
+                                link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                                markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
+                                    format(link, name, chapter.lstrip('0'), start_verse,
+                                        '-'+end_verse if start_verse != end_verse else '')
+                                text = read_file(chunk_filepath) + '\n\n'
+                                text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
+                                markdown += text
+                        else: # See if there's .txt files (as no .md files found)
+                            # NOTE: These seem to actually be json files (created by tS)
+                            chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
+                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
+                            if chunk_filepaths: found_something = True
+                            for move_str in ['front', 'intro']:
+                                self.move_to_front(chunk_filepaths, move_str)
+                            for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
+                                if os.path.basename(chunk_filepath) in self.ignoreFiles:
+                                    # GlobalSettings.logger.debug(f"tN preprocessor: ignored {chunk_filepath}")
+                                    continue
+                                start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
+                                if chunk_idx < len(chunk_filepaths)-1:
+                                    base_file_name = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx + 1]))[0]
+                                    if base_file_name.isdigit():
+                                        end_verse = str(int(base_file_name) - 1)
+                                    else:
+                                        end_verse = start_verse
                                 else:
-                                    end_verse = start_verse
-                            else:
-                                chapter_str = chapter.lstrip('0')
-                                chapter_verses = BOOK_CHAPTER_VERSES[book]
-                                end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
+                                    chapter_str = chapter.lstrip('0')
+                                    chapter_verses = BOOK_CHAPTER_VERSES[book]
+                                    end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
 
-                            start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
-                            link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
-                            markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
-                                format(link, name, chapter.lstrip('0'), start_verse,
-                                    '-'+end_verse if start_verse != end_verse else '')
-                            text = read_file(chunk_filepath)
-                            json_data = json.loads(text)
-                            for tn_unit in json_data:
-                                if 'title' in tn_unit and 'body' in tn_unit:
-                                    markdown += f"### {tn_unit['title']}\n\n"
-                                    markdown += f"{tn_unit['body']}\n\n"
-                                else:
-                                    self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
-                markdown = self.fix_links(markdown)
-                book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
-                self.book_filenames.append(book_file_name)
-                file_path = os.path.join(self.output_dir, book_file_name)
-                # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
-                write_file(file_path, markdown)
+                                start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
+                                link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                                markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
+                                    format(link, name, chapter.lstrip('0'), start_verse,
+                                        '-'+end_verse if start_verse != end_verse else '')
+                                text = read_file(chunk_filepath)
+                                json_data = json.loads(text)
+                                for tn_unit in json_data:
+                                    if 'title' in tn_unit and 'body' in tn_unit:
+                                        markdown += f"### {tn_unit['title']}\n\n"
+                                        markdown += f"{tn_unit['body']}\n\n"
+                                    else:
+                                        self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
+                    if not found_something:
+                        self.warnings.append(f"tN Preprocessor didn't find any valid source files for {book}")
+                    markdown = self.fix_links(markdown)
+                    book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
+                    self.book_filenames.append(book_file_name)
+                    file_path = os.path.join(self.output_dir, book_file_name)
+                    GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
+                    write_file(file_path, markdown)
             else:
                 GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
         # Write out index.json

@@ -126,14 +126,14 @@ class ClientConverterCallback:
         if multiple_project:
             upload_key += '/' + part_id
 
-        GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key} ...")
+        GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key} …")
 
         # Download the ZIP file of the converted files
         converted_zip_url = self.job.output
         converted_zip_file = os.path.join(self.temp_dir, converted_zip_url.rpartition('/')[2])
         remove(converted_zip_file)  # make sure old file not present
         download_success = True
-        GlobalSettings.logger.debug(f"Downloading converted zip file from {converted_zip_url} ...")
+        GlobalSettings.logger.debug(f"Downloading converted zip file from {converted_zip_url} …")
         try:
             download_file(converted_zip_url, converted_zip_file)
         except:
@@ -183,7 +183,7 @@ class ClientConverterCallback:
     def unzip_converted_files(self, converted_zip_file):
         unzip_dir = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
         try:
-            GlobalSettings.logger.debug(f"Unzipping {converted_zip_file} ...")
+            GlobalSettings.logger.debug(f"Unzipping {converted_zip_file} …")
             unzip(converted_zip_file, unzip_dir)
         finally:
             GlobalSettings.logger.debug("finished.")
@@ -229,7 +229,7 @@ class ClientConverterCallback:
         else:
             build_log_json['errors'] = []
         build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
-        GlobalSettings.logger.debug(f"Writing build log to {build_log_key}")
+        GlobalSettings.logger.debug(f"Uploading build log to {build_log_key}")
         # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
         self.cdn_upload_contents(build_log_json, build_log_key)
         return build_log_json
@@ -237,7 +237,7 @@ class ClientConverterCallback:
     def cdn_upload_contents(self, contents, key):
         file_name = os.path.join(self.temp_dir, 'contents.json')
         write_file(file_name, contents)
-        GlobalSettings.logger.debug(f"Writing file to {key}")
+        GlobalSettings.logger.debug(f"Uploading file to {key}")
         GlobalSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
     def get_build_log(self, s3_base_key, part=''):

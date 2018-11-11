@@ -370,7 +370,8 @@ class Resource:
             'text/usx': 'usx',
             'text/usfm': 'usfm',
             'text/usfm3': 'usfm',
-            'text/markdown': 'md'
+            'text/markdown': 'md',
+            'text/tsv': 'tsv',
         }.get(self.format, 'txt')
 
     @property
