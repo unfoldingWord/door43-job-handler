@@ -503,10 +503,12 @@ class TaPreprocessor(Preprocessor):
             return link.replace('-', ' ').title()
 
     def get_ref(self, project, link):
-        if link in project.config():
+        project_config = project.config()
+        if project_config and link in project_config:
             return f'#{link}'
         for p in self.rc.projects:
-            if link in p.config():
+            p_config = p.config()
+            if p_config and link in p_config:
                 return f'{p.identifier}.html#{link}'
         return f'#{link}'
 
