@@ -485,11 +485,13 @@ class TaPreprocessor(Preprocessor):
 
     def get_title(self, project, link, alt_title=None):
         proj = None
-        if link in project.config():
+        project_config = project.config()
+        if project_config and link in project_config:
             proj = project
         else:
             for p in self.rc.projects:
-                if link in p.config():
+                p_config = p.config()
+                if p_config and link in p_config:
                     proj = p
         if proj:
             title_file = os.path.join(self.source_dir, proj.path, link, 'title.md')
