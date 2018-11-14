@@ -92,6 +92,7 @@ class RC:
         return self._manifest
 
     def get_manifest_from_dir(self):
+        manifest = None
         if not self.path or not os.path.isdir(self.path):
             return get_manifest_from_repo_name(self.repo_name)
         try:
