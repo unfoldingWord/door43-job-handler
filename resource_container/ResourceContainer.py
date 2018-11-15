@@ -11,9 +11,40 @@ from general_tools.file_utils import load_json_object, load_yaml_object, read_fi
 from global_settings.global_settings import GlobalSettings
 
 
-resource_map = {
+# TODO: Sometimes this is searched in a case sensitive way, but mostly it's case sensitive "in"
+resource_map = { # see https://git.door43.org/unfoldingWord/registry#Resources
+    'ult': {
+        'title': 'unfoldingWord Literal Text',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+    'ust': {
+        'title': 'unfoldingWord Simplified Text',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+
+    # TODO: Should these be UPPERCASE UGNT UHB??? (Or should the search be case insensitive?)
+    'ugnt': {
+        'title': 'unfoldingWord Greek New Testament',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+    'uhb': {
+        'title': 'unfoldingWord Hebrew Bible',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+
+    # TODO: What about ugl ugg ugc uhg uag uhal ubn ubc ubm ???
+
     'udb': {
         'title': 'Unlocked Dynamic Bible',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+    'ueb': {
+        'title': 'Unlocked English Bible',
         'type': 'book',
         'format': 'text/usfm'
     },
@@ -22,16 +53,7 @@ resource_map = {
         'type': 'book',
         'format': 'text/usfm'
     },
-    'reg': {
-        'title': 'Regular',
-        'type': 'book',
-        'format': 'text/usfm'
-    },
-    'bible': {
-        'title': 'Unlocked Bible',
-        'type': 'book',
-        'format': 'text/usfm'
-    },
+
     'obs': {
         'title': 'Open Bible Stories',
         'type': 'book',
@@ -47,6 +69,7 @@ resource_map = {
         'type': 'help',
         'format': 'text/markdown'
     },
+
     'tn': {
         'title': 'translationNotes',
         'type': 'help',
@@ -66,7 +89,19 @@ resource_map = {
         'title': 'translationAcademy',
         'type': 'man',
         'format': 'text/markdown'
-    }
+    },
+
+    # TODO: I don't see these in the spec -- can/should they be removed?
+    'reg': {
+        'title': 'Regular',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
+    'bible': {
+        'title': 'Unlocked Bible',
+        'type': 'book',
+        'format': 'text/usfm'
+    },
 }
 
 
@@ -354,7 +389,7 @@ class Resource:
         if 'format' in self.resource and self.resource['format']:
             old_format = self.resource['format']
             if '/' not in old_format:
-                return 'text/{0}'.format(old_format.lower())
+                return f'text/{old_format.lower()}'
             return old_format
         elif 'content_mime_type' in self.resource and self.resource['content_mime_type']:
             return self.resource['content_mime_type']
@@ -377,10 +412,10 @@ class Resource:
 
     @property
     def type(self):
-        if 'type' in self.resource and isinstance(self.resource['type'], (str,bytes)):
+        if 'type' in self.resource and isinstance(self.resource['type'], str):
             return self.resource['type'].lower()
         elif self.file_ext == 'usfm':
-            if len(self.rc.usfm_files()):
+            if self.rc.usfm_files():
                 return 'bundle'
             else:
                 return 'book'

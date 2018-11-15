@@ -107,7 +107,7 @@ class ClientLinterCallback:
         build_log_file = os.path.join(output_dir, file_name)
         write_file(build_log_file, build_log)
         upload_key = f'{s3_results_key}/{file_name}'
-        GlobalSettings.logger.debug('Uploading build log to ' + upload_key)
+        GlobalSettings.logger.debug(f"Uploading build log to {upload_key} …")
         GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=cache_time)
 
     @staticmethod
@@ -128,10 +128,10 @@ class ClientLinterCallback:
         all_parts_completed = True
 
         if not multiple_project:
-            GlobalSettings.logger.debug('Single job: checking if convert and lint have completed.')
+            GlobalSettings.logger.debug('Single job: checking if both convert and lint have completed_')
             build_log = ClientLinterCallback.merge_build_status_for_part(build_log, s3_results_key, output_dir)
         else:
-            GlobalSettings.logger.debug('Multiple parts: Checking if all parts completed.')
+            GlobalSettings.logger.debug('Multiple parts: Checking if all parts completed_')
             # job_id, part_count, part_id, book = id_parts[:4]
             part_count = id_parts[1]
             for i in range(0, int(part_count)):
