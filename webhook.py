@@ -129,8 +129,9 @@ def clear_commit_directory_in_cdn(s3_commit_key):
     """
     Clear out the commit directory in the cdn bucket for this project revision.
     """
+    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' …")
     for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-        GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key}")
+        # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
         GlobalSettings.cdn_s3_handler().delete_file(obj.key)
 # end of clear_commit_directory_in_cdn function
 
@@ -540,9 +541,9 @@ def job(queued_json_payload):
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        GlobalSettings.logger.info(f"{prefix}{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{prefix}{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
 # end of job function

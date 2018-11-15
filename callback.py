@@ -190,15 +190,15 @@ def job(queued_json_payload):
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('callback.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"Door43 callback handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \
                          datetime.strptime(queued_json_payload['door43_webhook_received_at'],
                                            '%Y-%m-%dT%H:%M:%SZ')
-    GlobalSettings.logger.info(f"Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
+    GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
     stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     stats_client.incr('callback.jobs.succeeded')

@@ -191,11 +191,12 @@ class ClientConverterCallback:
 
     @staticmethod
     def upload_converted_files(s3_commit_key, unzip_dir):
+        GlobalSettings.logger.debug(f"Uploading converted files from {unzip_dir} to {s3_commit_key} …")
         for root, dirs, files in os.walk(unzip_dir):
             for f in sorted(files):
                 path = os.path.join(root, f)
                 key = s3_commit_key + path.replace(unzip_dir, '')
-                GlobalSettings.logger.debug(f"Uploading {f} to {key} …")
+                # GlobalSettings.logger.debug(f"Uploading {f} to {key} …")
                 GlobalSettings.cdn_s3_handler().upload_file(path, key, cache_time=0)
 
     def update_convert_log(self, s3_base_key, part=''):
