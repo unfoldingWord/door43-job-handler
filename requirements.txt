@@ -1,4 +1,5 @@
 # rq and statsd/Graphite is used by the job handler
+redis==2.10.6
 rq==0.12.0
 statsd==3.3.0
 requests==2.19.1
