@@ -22,8 +22,6 @@ from client_linter_callback import ClientLinterCallback
 
 
 
-#OUR_NAME = 'Door43_callback_handler'
-
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")

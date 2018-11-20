@@ -35,9 +35,10 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
+our_prefixed_name = prefix + OUR_NAME
 
 
-TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
+# TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
@@ -505,7 +506,7 @@ def process_job(queued_json_payload, redis_connection):
         #raise Exception(error_msg) # Is this the best thing to do here?
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
     return job_descriptive_name
 #end of process_job function
 
@@ -541,9 +542,9 @@ def job(queued_json_payload):
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{prefix}{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{prefix}{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
 # end of job function
