@@ -12,25 +12,25 @@ from resource_container.ResourceContainer import RC
 
 def do_preprocess(rc, repo_dir, output_dir):
     if rc.resource.identifier == 'obs':
-        GlobalSettings.logger.debug("do_preprocess: using ObsPreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using ObsPreprocessor…")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.file_ext == 'usfm':
-        GlobalSettings.logger.debug("do_preprocess: using BiblePreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using BiblePreprocessor…")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'ta':
-        GlobalSettings.logger.debug("do_preprocess: using TaPreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using TaPreprocessor…")
         preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tq':
-        GlobalSettings.logger.debug("do_preprocess: using TqPreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using TqPreprocessor…")
         preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tw':
-        GlobalSettings.logger.debug("do_preprocess: using TwPreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using TwPreprocessor…")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tn':
-        GlobalSettings.logger.debug("do_preprocess: using TnPreprocessor")
+        GlobalSettings.logger.debug("do_preprocess: using TnPreprocessor…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier}")
+        GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
 
@@ -62,13 +62,13 @@ class Preprocessor:
         Case #2: It's a directory of files, so we copy them over to the output directory
         Case #3: The project path is multiple chapters, so we piece them together
         """
-        GlobalSettings.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
 
             if os.path.isfile(project_path):
                 # Case #1: Project path is a file, then we copy the file over to the output dir
-                GlobalSettings.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}'")
+                GlobalSettings.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}' …")
                 if project.identifier.lower() in BOOK_NUMBERS:
                     filename = f'{BOOK_NUMBERS[project.identifier.lower()]}-{project.identifier.upper()}.{self.rc.resource.file_ext}'
                 else:
@@ -76,7 +76,7 @@ class Preprocessor:
                 copy(project_path, os.path.join(self.output_dir, filename))
             else:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
-                GlobalSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}'")
+                GlobalSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
                 files = glob(os.path.join(project_path, f'*.{self.rc.resource.file_ext}'))
                 if len(files):
                     for file_path in files:
@@ -86,9 +86,9 @@ class Preprocessor:
                             copy(file_path, output_file_path)
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
-                    GlobalSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}'")
+                    GlobalSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier}'")
+                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier}' …")
                     if chapters:
                         text = ''
                         for chapter in chapters:
@@ -181,7 +181,7 @@ class ObsPreprocessor(Preprocessor):
         return False
 
     def run(self):
-        GlobalSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             GlobalSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}'")
             project_path = os.path.join(self.source_dir, project.path)
@@ -342,7 +342,7 @@ class BiblePreprocessor(Preprocessor):
             adjusted_file_contents += line + '\n'
 
         if needs_global_check: # Do some file-wide clean-up
-            GlobalSettings.logger.debug(f"Doing global fixes for {B}")
+            # GlobalSettings.logger.debug(f"Doing global fixes for {B} …")
             adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
             adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
             adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
@@ -381,13 +381,13 @@ class BiblePreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
             file_format = '{0}-{1}.usfm'
 
             # Case #1: The project path is a file, and thus is one book of the Bible, copy to standard filename
-            GlobalSettings.logger.debug(f"Bible preprocessor case #1: Copying single Bible file for '{project.identifier}'")
+            # GlobalSettings.logger.debug(f"Bible preprocessor case #1: Copying single Bible file for '{project.identifier}' …")
             if os.path.isfile(project_path):
                 if project.identifier.lower() in BOOK_NUMBERS:
                     filename = file_format.format(BOOK_NUMBERS[project.identifier.lower()], project.identifier.upper())
@@ -398,7 +398,7 @@ class BiblePreprocessor(Preprocessor):
                 self.book_filenames.append(filename)
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
-                GlobalSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}'")
+                GlobalSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
                 usfm_files = glob(os.path.join(project_path, '*.usfm'))
                 if len(usfm_files):
                     for usfm_path in usfm_files:
@@ -414,7 +414,7 @@ class BiblePreprocessor(Preprocessor):
                         self.book_filenames.append(filename)
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
-                    GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}'")
+                    GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
                     if len(chapters):
                         #          Piece the USFM file together
@@ -467,7 +467,7 @@ class BiblePreprocessor(Preprocessor):
                         self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
         GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
+        # GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.warnings if self.warnings else True
 
 
@@ -569,9 +569,9 @@ class TaPreprocessor(Preprocessor):
         return markdown
 
     def run(self):
-        GlobalSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
-            GlobalSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}'")
+            GlobalSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
             self.section_container_id = 1
             toc = self.rc.toc(project.identifier)
             if project.identifier in self.manual_title_map:
@@ -627,7 +627,7 @@ class TaPreprocessor(Preprocessor):
 class TqPreprocessor(Preprocessor):
 
     def run(self):
-        GlobalSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -635,7 +635,7 @@ class TqPreprocessor(Preprocessor):
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}'")
+            GlobalSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 markdown = ''
                 book = project.identifier.lower()
@@ -685,7 +685,7 @@ class TwPreprocessor(Preprocessor):
     }
 
     def run(self):
-        GlobalSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -694,7 +694,7 @@ class TwPreprocessor(Preprocessor):
         title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}'")
+            GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}' …")
             term_text = {}
             section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
             for section_dir in section_dirs:
@@ -786,7 +786,7 @@ class TnPreprocessor(Preprocessor):
         return self.book_filenames
 
     def run(self):
-        GlobalSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)}")
+        GlobalSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -794,7 +794,7 @@ class TnPreprocessor(Preprocessor):
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}'")
+            GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
                 html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())

@@ -35,9 +35,10 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
+our_prefixed_name = prefix + OUR_NAME
 
 
-TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
+# TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
@@ -129,8 +130,9 @@ def clear_commit_directory_in_cdn(s3_commit_key):
     """
     Clear out the commit directory in the cdn bucket for this project revision.
     """
+    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' …")
     for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-        GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key}")
+        # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
         GlobalSettings.cdn_s3_handler().delete_file(obj.key)
 # end of clear_commit_directory_in_cdn function
 
@@ -157,7 +159,7 @@ def upload_zip_file(commit_id, zip_filepath):
         GlobalSettings.logger.error('Failed to upload zipped repo up to server')
         GlobalSettings.logger.exception(e)
     finally:
-        GlobalSettings.logger.debug('finished.')
+        GlobalSettings.logger.debug('Upload finished.')
     return file_key
 # end of upload_zip_file function
 
@@ -213,7 +215,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
     """
-    GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
+    # GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
     outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
     if outstanding_jobs_dict is None:
@@ -225,7 +227,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
 
     if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
-                                   f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+                                   f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
         # Remove any outstanding jobs more than two weeks old
         for outstanding_job_id_bytes in outstanding_jobs_dict.copy():
             # print(f"\nLooking at outstanding job {outstanding_job_id_bytes}")
@@ -246,7 +248,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
     # Add this job
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
-                               f" outstanding job(s) in {REDIS_JOB_LIST!r}")
+                               f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
     rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
 # end of remember_job
 
@@ -352,9 +354,10 @@ def process_job(queued_json_payload, redis_connection):
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
 
-    GlobalSettings.logger.info(f"Processing job for '{pusher_username}' for '{full_name}/{repo_name}' for \"{commit_message}\"")
+    our_identifier = f"'{pusher_username}' pushing '{full_name}/{repo_name}'"
+    GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     stats_client.incr(f'users.invoked.{full_name}')
-    # Using a hyphen as seperator as forward slash gets changed to hyphen anyway
+    # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     stats_client.incr(f'user-projects.invoked.{full_name}-{repo_name}')
 
 
@@ -363,7 +366,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Get the resource container
     rc = RC(repo_dir, repo_name)
-    job_descriptive_name = f'{rc.resource.type}({rc.resource.file_ext})'
+    job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
     # Save manifest to manifest table
@@ -397,7 +400,8 @@ def process_job(queued_json_payload, redis_connection):
     preprocessor_result = do_preprocess(rc, repo_dir, preprocess_dir)
     # preprocess_result is normally True, but can be a warning dict for the Bible preprocessor
     preprocessor_warning_list = preprocessor_result if isinstance(preprocessor_result, list) else None
-    GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
+    if preprocessor_warning_list:
+        GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
 
     # Zip up the massaged files
@@ -415,7 +419,7 @@ def process_job(queued_json_payload, redis_connection):
     GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
     pj_job_dict['job_id'] = get_unique_job_id()
-    pj_job_dict['identifier'] = pj_job_dict['job_id']
+    pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
     pj_job_dict['user_name'] = user_name
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
@@ -463,6 +467,7 @@ def process_job(queued_json_payload, redis_connection):
     GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': pj_job_dict['job_id'],
+        'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
         'resource_type': rc.resource.identifier,
         'input_format': rc.resource.file_ext,
         'output_format': 'html',
@@ -501,7 +506,7 @@ def process_job(queued_json_payload, redis_connection):
         #raise Exception(error_msg) # Is this the best thing to do here?
 
     remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefix}{OUR_NAME} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
     return job_descriptive_name
 #end of process_job function
 
@@ -537,9 +542,9 @@ def job(queued_json_payload):
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds")
+        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{OUR_NAME} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds")
+        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
 # end of job function
