@@ -189,7 +189,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     try:
         GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
 
-        # if the file already exists, remove it, we want a fresh copy
+        # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
 
@@ -204,9 +204,10 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     finally:
         GlobalSettings.logger.debug('Unzipping finished.')
 
-    # clean up the downloaded zip file
-    if os.path.isfile(repo_zip_file):
-        os.remove(repo_zip_file)
+    # Remove the downloaded zip file (now unzipped)
+    if not prefix: # For dev- save this file longer
+        if os.path.isfile(repo_zip_file):
+            os.remove(repo_zip_file)
 #end of download_repo function
 
 
@@ -245,12 +246,72 @@ def remember_job(rj_job_dict, rj_redis_connection):
         # This new job shouldn't already be in the outstanding jobs dict
         assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict # bytes comparison
 
-    # Add this job
+    # Add this job to Redis
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
     rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
 # end of remember_job
+
+
+def upload_to_BDB(job_name, BDB_zip_filepath):
+    """
+    Upload a Bible job (usfm) to the Bible Drop Box.
+
+    Included here temporarily as a way to compare handling of USFM files
+        and for a comparison of warnings/errors that are detected/displayed.
+        (Would have to be manually compared -- nothing is done here with the BDB results.)
+    """
+    GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
+    BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
+    files_data = {
+        'nameLine': (None, our_prefixed_name),
+        'emailLine': (None, 'noone@nowhere.org'),
+        'projectLine': (None, job_name),
+            'doChecks': (None, 'Yes'),
+                'NTfinished': (None, 'No'),
+                'OTfinished': (None, 'No'),
+                'DCfinished': (None, 'No'),
+                'ALLfinished': (None, 'No'),
+            'doExports': (None, 'Yes'),
+                'photoBible': (None, 'No'),
+                'odfs': (None, 'No'),
+                'pdfs': (None, 'No'),
+        'goalLine': (None, 'test'),
+            'permission': (None, 'Yes'),
+        'uploadedZipFile': (os.path.basename(BDB_zip_filepath), open(BDB_zip_filepath, 'rb'), 'application/zip'),
+        'uploadedMetadataFile': ('',b''),
+        'submit': (None, 'Submit'),
+        }
+    GlobalSettings.logger.debug(f"Posting data to {BDB_url} …")
+    try:
+        response = requests.post(BDB_url, files=files_data)
+    except requests.exceptions.ConnectionError as e:
+        GlobalSettings.logger.critical(f"BDB connection error: {e}")
+        response = None
+
+    if response:
+        GlobalSettings.logger.info(f"BDB response.status_code = {response.status_code}, response.reason = {response.reason}")
+        GlobalSettings.logger.debug(f"BDB response.headers = {response.headers}")
+        # GlobalSettings.logger.debug(f"BDB response.text = {response.text}")
+        if response.status_code == 200:
+            if "Your project has been submitted" in response.text:
+                ix = response.text.find('eventually be available <a href="')
+                if ix != -1:
+                    ixStart = ix + 33
+                    ixEnd = response.text.find('">here</a>')
+                    job_url = response.text[ixStart:ixEnd]
+                    GlobalSettings.logger.info(f"BDB results will be available at http://Freely-Given.org/Software/BibleDropBox/{job_url}")
+            else:
+                GlobalSettings.logger.error(f"BDB didn't accept job: {response.text}")
+        else:
+            GlobalSettings.logger.error(f"Failed to submit job to BDB:"
+                                           f" {response.status_code}={response.reason}")
+    else: # no response
+        error_msg = "Submission of job to BDB got no response"
+        GlobalSettings.logger.error(error_msg)
+        #raise Exception(error_msg) # Is this the best thing to do here?
+# end of upload_to_BDB
 
 
 def process_job(queued_json_payload, redis_connection):
@@ -319,7 +380,9 @@ def process_job(queued_json_payload, redis_connection):
     # Setup a temp folder to use
     source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
     # Move everything down one directory level for simple delete
-    intermediate_dir_name = OUR_NAME
+    # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
+    # TODO: This might not be enough 6-digit fractions of a second could collide???
+    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("%Y-%m-%d_%H:%M:%S.%f")
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
     try:
         os.makedirs(base_temp_dir_name)
@@ -364,12 +427,15 @@ def process_job(queued_json_payload, redis_connection):
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
 
+
     # Get the resource container
+    # GlobalSettings.logger.debug(f'Getting Resource Container…')
     rc = RC(repo_dir, repo_name)
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
     # Save manifest to manifest table
+    # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
     manifest_data = {
         'repo_name': repo_name,
         'user_name': user_name,
@@ -380,8 +446,8 @@ def process_job(queued_json_payload, redis_connection):
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }
-    # First see if manifest already exists in DB and update it if it is
-    #GlobalSettings.logger.info(f"client_webhook getting manifest for {repo_name!r} with user {user_name!r}")
+    # First see if manifest already exists in DB (can be slowish) and update it if it is
+    GlobalSettings.logger.debug(f"Getting manifest from DB for {repo_name!r} with user {user_name!r} …")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
     if tx_manifest:
         for key, value in manifest_data.items():
@@ -406,16 +472,17 @@ def process_job(queued_json_payload, redis_connection):
 
     # Zip up the massaged files
     GlobalSettings.logger.info("Zipping preprocessed files…")
-    zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, suffix='.zip')
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {zip_filepath} …')
-    add_contents_to_zip(zip_filepath, preprocess_dir)
+    preprocessed_zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip')
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_filepath} …')
+    add_contents_to_zip(preprocessed_zip_filepath, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
-
 
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-    file_key = upload_zip_file(commit_id, zip_filepath)
+    file_key = upload_zip_file(commit_id, preprocessed_zip_filepath)
 
+
+    # We no longer use txJob class but just create our own Python dict
     GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
     pj_job_dict['job_id'] = get_unique_job_id()
@@ -504,6 +571,16 @@ def process_job(queued_json_payload, redis_connection):
         error_msg = "Submission of job to tX system got no response"
         GlobalSettings.logger.critical(error_msg)
         #raise Exception(error_msg) # Is this the best thing to do here?
+
+
+    if rc.resource.file_ext in ('usfm','usfm3'): # Upload source files to BDB
+        if prefix: # Only for dev- chain
+            GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+            original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+            upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)
+            # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+            # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_filepath)
+
 
     remove_tree(base_temp_dir_name)  # cleanup
     GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
