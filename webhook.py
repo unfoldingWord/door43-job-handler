@@ -472,14 +472,14 @@ def process_job(queued_json_payload, redis_connection):
 
     # Zip up the massaged files
     GlobalSettings.logger.info("Zipping preprocessed files…")
-    preprocessed_zip_filepath = tempfile.mktemp(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip')
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_filepath} …')
-    add_contents_to_zip(preprocessed_zip_filepath, preprocess_dir)
+    preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
+    add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-    file_key = upload_zip_file(commit_id, preprocessed_zip_filepath)
+    file_key = upload_zip_file(commit_id, preprocessed_zip_file.name)
 
 
     # We no longer use txJob class but just create our own Python dict
@@ -578,8 +578,9 @@ def process_job(queued_json_payload, redis_connection):
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
             upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)
+            # Not using the preprocessed files (only the originals above)
             # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-            # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_filepath)
+            # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     remove_tree(base_temp_dir_name)  # cleanup

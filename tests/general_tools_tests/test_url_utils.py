@@ -60,11 +60,11 @@ class UrlUtilsTests(unittest.TestCase):
     ## Don't know why this locks up??? RJH
     #def test_download_file(self):
         #print("here1")
-        #self.tmp_file = tempfile.mktemp()
+        #self.tmp_file = tempfile.NamedTemporaryFile(delete=False).name
         #print("here2")
-        #url_utils._download_file("world", self.tmp_file, Mock_urlopen)
+        #url_utils._download_file("world", self.tmp_file.name, Mock_urlopen)
         #print("here3")
-        #with open(self.tmp_file, "r") as tmpf:
+        #with open(self.tmp_file, 'r') as tmpf:
             #self.assertEqual(tmpf.read(), "hello world")
         #print("here4")
 
