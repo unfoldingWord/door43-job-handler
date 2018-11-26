@@ -420,10 +420,13 @@ def process_job(queued_json_payload, redis_connection):
     our_identifier = f"'{pusher_username}' pushing '{full_name}/{repo_name}'"
     GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
-    ascii_full_name = full_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    stats_client.incr(f'users.invoked.{ascii_full_name}')
+    ascii_full_name_bytes = full_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    adjusted_full_name = ascii_full_name_bytes.decode('utf-8') # Recode as a str
+    ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
+    stats_client.incr(f'users.invoked.{adjusted_full_name}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    stats_client.incr(f"user-projects.invoked.{ascii_full_name}-{repo_name.encode('ascii', 'replace')}")
+    stats_client.incr(f'user-projects.invoked.{adjusted_full_name}-{adjusted_repo_name }')
 
 
     # Download and unzip the repo files
