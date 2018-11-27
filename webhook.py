@@ -280,7 +280,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
         'goalLine': (None, 'test'),
             'permission': (None, 'Yes'),
         'uploadedZipFile': (os.path.basename(BDB_zip_filepath), open(BDB_zip_filepath, 'rb'), 'application/zip'),
-        'uploadedMetadataFile': ('',b''),
+        'uploadedMetadataFile': ('', b''),
         'submit': (None, 'Submit'),
         }
     GlobalSettings.logger.debug(f"Posting data to {BDB_url} …")
@@ -578,7 +578,7 @@ def process_job(queued_json_payload, redis_connection):
         #raise Exception(error_msg) # Is this the best thing to do here?
 
 
-    if rc.resource.file_ext in ('usfm','usfm3'): # Upload source files to BDB
+    if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
         if prefix: # Only for dev- chain
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
