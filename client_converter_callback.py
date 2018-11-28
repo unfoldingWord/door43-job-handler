@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 from datetime import datetime
@@ -96,19 +95,19 @@ class ClientConverterCallback:
             self.job.warnings_message(message)
         for message in self.errors:
             self.job.error_message(message)
-        if len(self.errors):
+        if self.errors:
             self.job.log_message(f"{self.job.convert_module} function returned with errors.")
-        elif len(self.warnings):
+        elif self.warnings:
             self.job.log_message(f"{self.job.convert_module} function returned with warnings.")
         else:
             self.job.log_message(f"{self.job.convert_module} function returned successfully.")
 
-        if not self.success or len(self.job.errors):
+        if not self.success or self.job.errors:
             self.job.success = False
             self.job.status = 'failed'
             message = "Conversion failed"
             GlobalSettings.logger.debug(f"Conversion failed, success: {self.success}, errors: {self.job.errors}")
-        elif len(self.job.warnings) > 0:
+        elif self.job.warnings:
             self.job.success = True
             self.job.status = 'warnings'
             message = "Conversion successful with warnings."
@@ -193,11 +192,11 @@ class ClientConverterCallback:
     def upload_converted_files(s3_commit_key, unzip_dir):
         GlobalSettings.logger.debug(f"Uploading converted files from {unzip_dir} to {s3_commit_key} …")
         for root, dirs, files in os.walk(unzip_dir):
-            for f in sorted(files):
-                path = os.path.join(root, f)
-                key = s3_commit_key + path.replace(unzip_dir, '')
-                # GlobalSettings.logger.debug(f"Uploading {f} to {key} …")
-                GlobalSettings.cdn_s3_handler().upload_file(path, key, cache_time=0)
+            for filename in sorted(files):
+                filepath = os.path.join(root, filename)
+                key = s3_commit_key + filepath.replace(unzip_dir, '')
+                # GlobalSettings.logger.debug(f"Uploading {filename} to {key} …")
+                GlobalSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
 
     def update_convert_log(self, s3_base_key, part=''):
         build_log_json = self.get_build_log(s3_base_key, part)

@@ -9,9 +9,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from aws_tools.s3_handler import S3Handler
-from aws_tools.dynamodb_handler import DynamoDBHandler
-from aws_tools.lambda_handler import LambdaHandler
-from gogs_tools.gogs_handler import GogsHandler
+# from aws_tools.dynamodb_handler import DynamoDBHandler
+# from aws_tools.lambda_handler import LambdaHandler
+# from gogs_tools.gogs_handler import GogsHandler
 
 
 # TODO: Investigate if this GlobalSettings (was tx-Manager App) class still needs to be resetable now
@@ -112,9 +112,9 @@ class GlobalSettings:
     _cdn_s3_handler = None
     _door43_s3_handler = None
     _pre_convert_s3_handler = None
-    _language_stats_db_handler = None
-    _lambda_handler = None
-    _gogs_handler = None
+    # _language_stats_db_handler = None
+    # _lambda_handler = None
+    # _gogs_handler = None
 
     # Logger
     logger = logging.getLogger()
@@ -204,30 +204,30 @@ class GlobalSettings:
                                                     aws_region_name=cls.aws_region_name)
         return cls._pre_convert_s3_handler
 
-    @classmethod
-    def language_stats_db_handler(cls):
-        #print("GlobalSettings.language_stats_db_handler()…")
-        if not cls._language_stats_db_handler:
-            cls._language_stats_db_handler = DynamoDBHandler(table_name=cls.language_stats_table_name,
-                                                             aws_access_key_id=cls.aws_access_key_id,
-                                                             aws_secret_access_key=cls.aws_secret_access_key,
-                                                             aws_region_name=cls.aws_region_name)
-        return cls._language_stats_db_handler
+    # @classmethod
+    # def language_stats_db_handler(cls):
+    #     #print("GlobalSettings.language_stats_db_handler()…")
+    #     if not cls._language_stats_db_handler:
+    #         cls._language_stats_db_handler = DynamoDBHandler(table_name=cls.language_stats_table_name,
+    #                                                          aws_access_key_id=cls.aws_access_key_id,
+    #                                                          aws_secret_access_key=cls.aws_secret_access_key,
+    #                                                          aws_region_name=cls.aws_region_name)
+    #     return cls._language_stats_db_handler
 
-    @classmethod
-    def lambda_handler(cls):
-        if not cls._lambda_handler:
-            cls._lambda_handler = LambdaHandler(aws_access_key_id=cls.aws_access_key_id,
-                                                aws_secret_access_key=cls.aws_secret_access_key,
-                                                aws_region_name=cls.aws_region_name)
-        return cls._lambda_handler
+    # @classmethod
+    # def lambda_handler(cls):
+    #     if not cls._lambda_handler:
+    #         cls._lambda_handler = LambdaHandler(aws_access_key_id=cls.aws_access_key_id,
+    #                                             aws_secret_access_key=cls.aws_secret_access_key,
+    #                                             aws_region_name=cls.aws_region_name)
+    #     return cls._lambda_handler
 
-    @classmethod
-    def gogs_handler(cls):
-        #print("GlobalSettings.gogs_handler()…")
-        if not cls._gogs_handler:
-            cls._gogs_handler = GogsHandler(gogs_url=cls.gogs_url)
-        return cls._gogs_handler
+    # @classmethod
+    # def gogs_handler(cls):
+    #     #print("GlobalSettings.gogs_handler()…")
+    #     if not cls._gogs_handler:
+    #         cls._gogs_handler = GogsHandler(gogs_url=cls.gogs_url)
+    #     return cls._gogs_handler
 
     @classmethod
     def db_engine(cls, echo=None):

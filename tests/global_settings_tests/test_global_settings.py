@@ -56,9 +56,9 @@ class TestGlobalSettings(unittest.TestCase):
     def test_s3_handler(self):
         self.assertIsNotNone(GlobalSettings.cdn_s3_handler())
 
-    @mock_dynamodb2
-    def test_dynamodb_handler(self):
-        self.assertIsNotNone(GlobalSettings.language_stats_db_handler())
+    # @mock_dynamodb2
+    # def test_dynamodb_handler(self):
+    #     self.assertIsNotNone(GlobalSettings.language_stats_db_handler())
 
     def test_prefix_vars(self):
         GlobalSettings(prefix='')
