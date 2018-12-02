@@ -469,6 +469,8 @@ class BiblePreprocessor(Preprocessor):
         GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.warnings if self.warnings else True
+    # end of BiblePreprocessor run()
+# end of class BiblePreprocessor
 
 
 class TaPreprocessor(Preprocessor):
@@ -655,10 +657,23 @@ class TqPreprocessor(Preprocessor):
                     for chunk_idx, chunk_file in enumerate(chunk_files):
                         start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
                         if chunk_idx < len(chunk_files)-1:
-                            # TODO: Can throw a ValueError if chunk is not an integer, e.g., '5&8'
-                            end_verse = str(int(os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0])-1)
+                            try:
+                                end_verse = str(int(os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0])-1)
+                            except ValueError:
+                                # Can throw a ValueError if chunk is not an integer, e.g., '5&8' or contains \u00268 (ɨ)
+                                initial_string = os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0]
+                                GlobalSettings.logger.critical(f"{book} {chapter} had a problem handling '{initial_string}'")
+                                self.warnings.append(f"{book} {chapter} had a problem handling '{initial_string}'")
+                                # TODO: The following is probably not the best/right thing to do???
+                                end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
                         else:
-                            end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
+                            try:
+                                end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
+                            except KeyError:
+                                GlobalSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
+                                self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
+                                # TODO: The following is probably not the best/right thing to do???
+                                end_verse = '199'
                         link = 'tq-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), str(start_verse).zfill(3))
                         markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
                             format(link, name, chapter.lstrip('0'), start_verse,
@@ -674,7 +689,9 @@ class TqPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         GlobalSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.warnings if self.warnings else True
+    # end of TqPreprocessor run()
+# end of class TqPreprocessor
 
 
 class TwPreprocessor(Preprocessor):
