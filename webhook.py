@@ -588,7 +588,10 @@ def process_job(queued_json_payload, redis_connection):
             # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
-    remove_tree(base_temp_dir_name)  # cleanup
+    if prefix and debug_mode_flag:
+        GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+    else:
+        remove_tree(base_temp_dir_name)  # cleanup
     GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
     return job_descriptive_name
 #end of process_job function
@@ -630,6 +633,7 @@ def job(queued_json_payload):
         GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
+    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of webhook.py for door43_enqueue_job

@@ -200,6 +200,7 @@ def job(queued_json_payload):
     stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     stats_client.incr('callback.jobs.succeeded')
+    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of callback.py for door43_enqueue_job

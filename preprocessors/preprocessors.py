@@ -4,6 +4,7 @@ import json
 from glob import glob
 from shutil import copy
 
+from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir
@@ -524,7 +525,7 @@ class TaPreprocessor(Preprocessor):
         if os.path.isfile(content_file):
             return read_file(content_file)
 
-    def compile_section(self, project, section, level):
+    def compile_ta_section(self, project, section, level):
         """
         Recursive section markdown creator
 
@@ -533,6 +534,8 @@ class TaPreprocessor(Preprocessor):
         :param int level:
         :return:
         """
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -544,6 +547,7 @@ class TaPreprocessor(Preprocessor):
             bottom_box = ""
             question = self.get_question(project, link)
             if question:
+                # TODO: Shouldn't text like this be translated ???
                 top_box += f'This page answers the question: *{question}*\n\n'
             config = project.config()
             if link in config:
@@ -567,7 +571,7 @@ class TaPreprocessor(Preprocessor):
             markdown += '---\n\n'  # horizontal rule
         if 'sections' in section:
             for subsection in section['sections']:
-                markdown += self.compile_section(project, subsection, level + 1)
+                markdown += self.compile_ta_section(project, subsection, level + 1)
         return markdown
 
     def run(self):
@@ -583,7 +587,7 @@ class TaPreprocessor(Preprocessor):
             markdown = f'# {title}\n\n'
             if toc:
                 for section in toc['sections']:
-                    markdown += self.compile_section(project, section, 2)
+                    markdown += self.compile_ta_section(project, section, 2)
             markdown = self.fix_links(markdown)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
@@ -624,6 +628,8 @@ class TaPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
+    # end of TaPreprocessor run()
+# end of class TaPreprocessor
 
 
 class TqPreprocessor(Preprocessor):

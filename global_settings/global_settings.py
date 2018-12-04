@@ -9,9 +9,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from aws_tools.s3_handler import S3Handler
-# from aws_tools.dynamodb_handler import DynamoDBHandler
-# from aws_tools.lambda_handler import LambdaHandler
-# from gogs_tools.gogs_handler import GogsHandler
+from boto3 import Session
+from watchtower import CloudWatchLogHandler
+
+from rq_settings import debug_mode_flag
 
 
 # TODO: Investigate if this GlobalSettings (was tx-Manager App) class still needs to be resetable now
@@ -36,7 +37,7 @@ def reset_class(cls):
     cls.dirty = False
 
 
-def setup_logger(logger, level):
+def setup_logger(logger, watchtower_log_handler, level):
     """
     Logging for the app, and turn off boto logging.
     Set here so automatically ready for any logging calls
@@ -49,6 +50,7 @@ def setup_logger(logger, level):
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
     logger.addHandler(sh)
+    logger.addHandler(watchtower_log_handler)
     logger.setLevel(level)
     # Change these loggers to only report errors:
     logging.getLogger('boto3').setLevel(logging.ERROR)
@@ -61,7 +63,7 @@ class GlobalSettings:
     For all things used for by this app, from DB connection to global handlers
     """
     _resetable_cache_ = {}
-    name = 'job-handler'
+    name = 'door43-job-handler' # Only used for logging and for testing GlobalSettings resets
     dirty = False
 
     # Stage Variables, defaults
@@ -117,8 +119,15 @@ class GlobalSettings:
     # _gogs_handler = None
 
     # Logger
-    logger = logging.getLogger()
-    setup_logger(logger, logging.DEBUG if os.getenv('DEBUG_MODE', '') else logging.INFO)
+    logger = logging.getLogger(name)
+    boto3_session = Session(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                        region_name='us-west-2')
+    watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                    # use_queues=False, # Because this forked process is quite transient
+                    log_group=f"{name}{'_TEST' if debug_mode_flag else ''}")
+    setup_logger(logger, watchtower_log_handler,
+                        logging.DEBUG if debug_mode_flag else logging.INFO)
 
 
     def __init__(self, **kwargs):
@@ -151,7 +160,7 @@ class GlobalSettings:
         :return:
         """
         if prefix:
-            setup_logger(cls.logger, logging.DEBUG)
+            setup_logger(cls.logger, cls.watchtower_log_handler, logging.DEBUG)
         cls.logger.debug(f"GlobalSettings.prefix_vars with '{prefix}'")
         url_re = re.compile(r'^(https*://)')  # Current prefix in URLs
         for var in cls.prefixable_vars:
@@ -204,30 +213,6 @@ class GlobalSettings:
                                                     aws_region_name=cls.aws_region_name)
         return cls._pre_convert_s3_handler
 
-    # @classmethod
-    # def language_stats_db_handler(cls):
-    #     #print("GlobalSettings.language_stats_db_handler()…")
-    #     if not cls._language_stats_db_handler:
-    #         cls._language_stats_db_handler = DynamoDBHandler(table_name=cls.language_stats_table_name,
-    #                                                          aws_access_key_id=cls.aws_access_key_id,
-    #                                                          aws_secret_access_key=cls.aws_secret_access_key,
-    #                                                          aws_region_name=cls.aws_region_name)
-    #     return cls._language_stats_db_handler
-
-    # @classmethod
-    # def lambda_handler(cls):
-    #     if not cls._lambda_handler:
-    #         cls._lambda_handler = LambdaHandler(aws_access_key_id=cls.aws_access_key_id,
-    #                                             aws_secret_access_key=cls.aws_secret_access_key,
-    #                                             aws_region_name=cls.aws_region_name)
-    #     return cls._lambda_handler
-
-    # @classmethod
-    # def gogs_handler(cls):
-    #     #print("GlobalSettings.gogs_handler()…")
-    #     if not cls._gogs_handler:
-    #         cls._gogs_handler = GogsHandler(gogs_url=cls.gogs_url)
-    #     return cls._gogs_handler
 
     @classmethod
     def db_engine(cls, echo=None):
@@ -246,6 +231,7 @@ class GlobalSettings:
                 cls._db_engine = create_engine(cls.db_connection_string, echo=echo)
         return cls._db_engine
 
+
     @classmethod
     def db(cls, echo=None):
         """
@@ -263,6 +249,7 @@ class GlobalSettings:
             cls.db_create_tables([TxManifest.__table__])
         return cls._db_session
 
+
     @classmethod
     def db_close(cls):
         #print("GlobalSettings.db_close()…")
@@ -273,10 +260,12 @@ class GlobalSettings:
             cls._db_engine.dispose()
             cls._db_engine = None
 
+
     @classmethod
     def db_create_tables(cls, tables=None):
         #print("GlobalSettings.db_create_tables()…")
         cls.Base.metadata.create_all(cls.db_engine(), tables=tables)
+
 
     @classmethod
     def construct_connection_string(cls):
@@ -298,3 +287,9 @@ class GlobalSettings:
             db_connection_string += '?'+cls.db_connection_string_params
         #print( "  Returning", db_connection_string )
         return db_connection_string
+
+
+    @classmethod
+    def close_logger(cls):
+        # Flushes queued log entries to AWS
+        cls.watchtower_log_handler.close()
