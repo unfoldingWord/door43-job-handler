@@ -12,6 +12,7 @@ import hashlib
 from datetime import datetime, timedelta
 from time import time
 from ast import literal_eval
+import traceback
 
 # Library (PyPi) imports
 import requests
@@ -623,7 +624,32 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+    try:
+        job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+    except Exception as e:
+        # Catch most exceptions here so we can log them to CloudWatch
+        GlobalSettings.logger.critical(f"{our_prefixed_name} threw an exception while processing: {queued_json_payload}")
+        GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+        GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+        # Now attempt to log it to an additional, separate FAILED log
+        import logging
+        from boto3 import Session
+        from watchtower import CloudWatchLogHandler
+        logger2 = logging.getLogger(our_prefixed_name)
+        log_group_name = f"FAILED_{our_prefixed_name}{'_TEST' if debug_mode_flag else ''}" \
+                        f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
+        boto3_session = Session(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                            region_name='us-west-2')
+        watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                    use_queues=False,
+                                                    log_group=log_group_name)
+        logger2.addHandler(watchtower_log_handler)
+        logger2.setLevel(logging.DEBUG)
+        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}'.")
+        logger2.critical(f"{our_prefixed_name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{e}: {traceback.format_exc()}")
+        raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)

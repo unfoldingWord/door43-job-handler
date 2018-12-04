@@ -72,10 +72,10 @@ run:
 	# TODO: Can the AWS redis url go in here (i.e., is it public)?
 	REDIS_URL="dadada" rq worker --config rq_settings --name D43_JobHandler
 
-imageDev: checkEnvVariables
+imageDev:
 	docker build --file Dockerfile-developBranch --tag unfoldingword/door43_job_handler:develop .
 
-imageMaster: checkEnvVariables
+imageMaster:
 	docker build --file Dockerfile-masterBranch --tag unfoldingword/door43_job_handler:master .
 
 pushDevImage:
