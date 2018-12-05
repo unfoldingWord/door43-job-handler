@@ -36,7 +36,7 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
-our_prefixed_name = prefix + OUR_NAME
+prefixed_our_name = prefix + OUR_NAME
 
 
 # TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
@@ -266,7 +266,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
     GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
     files_data = {
-        'nameLine': (None, our_prefixed_name),
+        'nameLine': (None, prefixed_our_name),
         'emailLine': (None, 'noone@nowhere.org'),
         'projectLine': (None, job_name),
             'doChecks': (None, 'Yes'),
@@ -593,7 +593,7 @@ def process_job(queued_json_payload, redis_connection):
         GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
     return job_descriptive_name
 #end of process_job function
 
@@ -628,15 +628,15 @@ def job(queued_json_payload):
         job_descriptive_name = process_job(queued_json_payload, current_job.connection)
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
-        GlobalSettings.logger.critical(f"{our_prefixed_name} threw an exception while processing: {queued_json_payload}")
+        GlobalSettings.logger.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
         GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
         GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
         # Now attempt to log it to an additional, separate FAILED log
         import logging
         from boto3 import Session
         from watchtower import CloudWatchLogHandler
-        logger2 = logging.getLogger(our_prefixed_name)
-        log_group_name = f"FAILED_{our_prefixed_name}{'_DEBUG' if debug_mode_flag else ''}" \
+        logger2 = logging.getLogger(prefixed_our_name)
+        log_group_name = f"FAILED_{prefix}tX{'_DEBUG' if debug_mode_flag else ''}" \
                          f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
                          f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
@@ -645,20 +645,21 @@ def job(queued_json_payload):
                             region_name='us-west-2')
         watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     use_queues=False,
-                                                    log_group=log_group_name)
+                                                    log_group=log_group_name,
+                                                    stream_name=prefixed_our_name)
         logger2.addHandler(watchtower_log_handler)
         logger2.setLevel(logging.DEBUG)
         logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
-        logger2.critical(f"{our_prefixed_name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch

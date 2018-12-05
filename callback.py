@@ -188,16 +188,16 @@ def job(queued_json_payload):
         job_descriptive_name = process_callback(prefix, queued_json_payload, current_job.connection)
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
-        name = f"{prefix}Door43_Callback"
-        GlobalSettings.logger.critical(f"{name} threw an exception while processing: {queued_json_payload}")
+        prefixed_name = f"{prefix}Door43_Callback"
+        GlobalSettings.logger.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
         GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
         GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
         # Now attempt to log it to an additional, separate FAILED log
         import logging
         from boto3 import Session
         from watchtower import CloudWatchLogHandler
-        logger2 = logging.getLogger(name)
-        log_group_name = f"FAILED_{name}{'_DEBUG' if debug_mode_flag else ''}" \
+        logger2 = logging.getLogger(prefixed_name)
+        log_group_name = f"FAILED_{prefix}tX{'_DEBUG' if debug_mode_flag else ''}" \
                          f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
                          f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
@@ -206,11 +206,12 @@ def job(queued_json_payload):
                             region_name='us-west-2')
         watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     use_queues=False,
-                                                    log_group=log_group_name)
+                                                    log_group=log_group_name,
+                                                    stream_name=prefixed_name)
         logger2.addHandler(watchtower_log_handler)
         logger2.setLevel(logging.DEBUG)
         logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
-        logger2.critical(f"{name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         raise e # We raise the exception again so it goes into the failed queue
 

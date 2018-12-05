@@ -63,7 +63,7 @@ class GlobalSettings:
     For all things used for by this app, from DB connection to global handlers
     """
     _resetable_cache_ = {}
-    name = 'door43-job-handler' # Only used for logging and for testing GlobalSettings resets
+    name = 'Door43-Job-Handler' # Only used for logging and for testing GlobalSettings resets
     dirty = False
 
     # Stage Variables, defaults
@@ -92,7 +92,7 @@ class GlobalSettings:
 
     # Prefixing vars
     # All variables that we change based on production, development and testing environments.
-    prefixable_vars = ['api_url', 'pre_convert_bucket_name', 'cdn_bucket_name', 'door43_bucket_name', 'language_stats_table_name',
+    prefixable_vars = ['name', 'api_url', 'pre_convert_bucket_name', 'cdn_bucket_name', 'door43_bucket_name', 'language_stats_table_name',
                        'linter_messaging_name', 'db_name', 'db_user']
 
     # DB related
@@ -120,20 +120,7 @@ class GlobalSettings:
 
     # Logger
     logger = logging.getLogger(name)
-    log_group_name = f"{name}{'_DEBUG' if debug_mode_flag else ''}" \
-                     f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
-                     f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
-    boto3_session = Session(aws_access_key_id=aws_access_key_id,
-                        aws_secret_access_key=aws_secret_access_key,
-                        region_name=aws_region_name)
-    # NOTE: We have this code here coz we need to keep a reference to watchtower_log_handler
-    #           (for closing it later)
-    watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
-                                                # use_queues=False, # Because this forked process is quite transient
-                                                log_group=log_group_name)
-    setup_logger(logger, watchtower_log_handler,
-                        logging.DEBUG if debug_mode_flag else logging.INFO)
-    logger.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
+    # Delay the rest of the logger setup until we get our prefix
 
 
     def __init__(self, **kwargs):
@@ -158,6 +145,20 @@ class GlobalSettings:
         if 'prefix' in kwargs and kwargs['prefix'] != cls.prefix:
             cls.__prefix_vars(kwargs['prefix'])
         cls.set_vars(**kwargs)
+        log_group_name = f"{cls.prefix}tX{'_DEBUG' if debug_mode_flag else ''}" \
+                        f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
+                        f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
+        boto3_session = Session(aws_access_key_id=cls.aws_access_key_id,
+                            aws_secret_access_key=cls.aws_secret_access_key,
+                            region_name=cls.aws_region_name)
+        cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                    # use_queues=False, # Because this forked process is quite transient
+                                                    log_group=log_group_name,
+                                                    stream_name=cls.name)
+        setup_logger(cls.logger, cls.watchtower_log_handler,
+                            logging.DEBUG if debug_mode_flag else logging.INFO)
+        cls.logger.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
+
 
     @classmethod
     def __prefix_vars(cls, prefix):
@@ -165,9 +166,7 @@ class GlobalSettings:
         Prefixes any variables in GlobalSettings.prefixable_variables. This includes URLs
         :return:
         """
-        if prefix:
-            setup_logger(cls.logger, cls.watchtower_log_handler, logging.DEBUG)
-        cls.logger.debug(f"GlobalSettings.prefix_vars with '{prefix}'")
+        # cls.logger.debug(f"GlobalSettings.prefix_vars with '{prefix}'")
         url_re = re.compile(r'^(https*://)')  # Current prefix in URLs
         for var in cls.prefixable_vars:
             value = getattr(GlobalSettings, var)
