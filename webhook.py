@@ -636,8 +636,10 @@ def job(queued_json_payload):
         from boto3 import Session
         from watchtower import CloudWatchLogHandler
         logger2 = logging.getLogger(prefixed_our_name)
-        log_group_name = f"FAILED_{prefix}tX{'_DEBUG' if debug_mode_flag else ''}" \
-                         f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
+        test_mode_flag = os.getenv('TEST_MODE', '')
+        log_group_name = f"FAILED_{'' if test_mode_flag else prefix}tX" \
+                         f"{'_DEBUG' if debug_mode_flag else ''}" \
+                         f"{'_TEST' if test_mode_flag else ''}" \
                          f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
         boto3_session = Session(aws_access_key_id=aws_access_key_id,
