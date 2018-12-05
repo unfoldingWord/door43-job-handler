@@ -636,9 +636,11 @@ def job(queued_json_payload):
         from boto3 import Session
         from watchtower import CloudWatchLogHandler
         logger2 = logging.getLogger(our_prefixed_name)
-        log_group_name = f"FAILED_{our_prefixed_name}{'_TEST' if debug_mode_flag else ''}" \
-                        f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
-        boto3_session = Session(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        log_group_name = f"FAILED_{our_prefixed_name}{'_DEBUG' if debug_mode_flag else ''}" \
+                         f"{'_TEST' if os.getenv('TEST_MODE', '') else ''}" \
+                         f"{'_TravisCI' if os.getenv('TRAVIS_BRANCH', '') else ''}"
+        aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+        boto3_session = Session(aws_access_key_id=aws_access_key_id,
                             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                             region_name='us-west-2')
         watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
@@ -646,7 +648,7 @@ def job(queued_json_payload):
                                                     log_group=log_group_name)
         logger2.addHandler(watchtower_log_handler)
         logger2.setLevel(logging.DEBUG)
-        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}'.")
+        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
         logger2.critical(f"{our_prefixed_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         raise e # We raise the exception again so it goes into the failed queue
