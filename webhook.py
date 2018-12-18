@@ -580,7 +580,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-        if prefix: # Only for dev- chain
+        if prefix and not debug_mode_flag: # Only for dev- chain
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
             upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)

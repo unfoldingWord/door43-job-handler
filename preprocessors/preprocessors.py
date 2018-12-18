@@ -534,8 +534,8 @@ class TaPreprocessor(Preprocessor):
         :param int level:
         :return:
         """
-        if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -852,7 +852,7 @@ class TnPreprocessor(Preprocessor):
                         markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths: # We have .md files
-                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
+                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
                             found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
@@ -882,7 +882,7 @@ class TnPreprocessor(Preprocessor):
                         else: # See if there's .txt files (as no .md files found)
                             # NOTE: These seem to actually be json files (created by tS)
                             chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
-                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
+                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
                             if chunk_filepaths: found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
@@ -921,14 +921,14 @@ class TnPreprocessor(Preprocessor):
                     book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
-                    GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
+                    # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
                     write_file(file_path, markdown)
             else:
                 GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        # GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.warnings if self.warnings else True
 
     def move_to_front(self, files, move_str):
