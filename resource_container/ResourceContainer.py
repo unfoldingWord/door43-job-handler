@@ -11,100 +11,6 @@ from general_tools.file_utils import load_json_object, load_yaml_object, read_fi
 from global_settings.global_settings import GlobalSettings
 
 
-# TODO: Sometimes this is searched in a case sensitive way, but mostly it's case sensitive "in"
-# resource_map = { # see https://git.door43.org/unfoldingWord/registry#Resources
-    # 'ult': {
-    #     'title': 'unfoldingWord Literal Text',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-    # 'ust': {
-    #     'title': 'unfoldingWord Simplified Text',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-
-    # # TODO: Should these be UPPERCASE UGNT UHB??? (Or should the search be case insensitive?)
-    # 'ugnt': {
-    #     'title': 'unfoldingWord Greek New Testament',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-    # 'uhb': {
-    #     'title': 'unfoldingWord Hebrew Bible',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-
-    # # TODO: What about ugl ugg ugc uhg uag uhal ubn ubc ubm ???
-
-    # 'udb': {
-    #     'title': 'Unlocked Dynamic Bible',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-    # 'ueb': {
-    #     'title': 'Unlocked English Bible',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-    # 'ulb': {
-    #     'title': 'Unlocked Literal Bible',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-
-    # 'obs': {
-    #     'title': 'Open Bible Stories',
-    #     'type': 'book',
-    #     'format': 'text/markdown'
-    # },
-    # 'obs-tn': {
-    #     'title': 'OBS translationNotes',
-    #     'type': 'help',
-    #     'format': 'text/markdown'
-    # },
-    # 'obs-tq': {
-    #     'title': 'OBS translationQuestions',
-    #     'type': 'help',
-    #     'format': 'text/markdown'
-    # },
-
-    # 'tn': {
-    #     'title': 'translationNotes',
-    #     'type': 'help',
-    #     'format': 'text/markdown'
-    # },
-    # 'tw': {
-    #     'title': 'translationWords',
-    #     'type': 'dict',
-    #     'format': 'text/markdown'
-    # },
-    # 'tq': {
-    #     'title': 'translationQuestions',
-    #     'type': 'help',
-    #     'format': 'text/markdown'
-    # },
-    # 'ta': {
-    #     'title': 'translationAcademy',
-    #     'type': 'man',
-    #     'format': 'text/markdown'
-    # },
-
-    # # TODO: I don't see these in the spec -- can/should they be removed?
-    # 'reg': {
-    #     'title': 'Regular',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-    # 'bible': {
-    #     'title': 'Unlocked Bible',
-    #     'type': 'book',
-    #     'format': 'text/usfm'
-    # },
-# }
-
-
 class RC:
     current_version = '0.2'
 
@@ -380,6 +286,7 @@ class Resource:
         self.resource = resource
         if not isinstance(self.resource, dict):
             raise Exception('Missing dict parameter: resource')
+        # GlobalSettings.logger.debug(f"Created new RC Resource with: {resource}")
         self._language = None
 
 
@@ -390,7 +297,7 @@ class Resource:
 
     @property
     def format(self):
-        GlobalSettings.logger.debug("Resource.format()…")
+        # GlobalSettings.logger.debug("Resource.format()…")
         if 'format' in self.resource and self.resource['format']:
             old_format = self.resource['format']
             if '/' not in old_format:
@@ -403,13 +310,7 @@ class Resource:
             return self.rc.manifest['content_mime_type']
         elif self.rc.usfm_files(): # e.g., a plain USFM bundle (with no manifest, etc.)
             return 'text/usfm'
-        if self.identifier:
-            GlobalSettings.logger.critical(f"Returning format=None for {self.identifier}.")
-        # else:
-        #     GlobalSettings.logger.critical(f"Checking for {self.identifier} format in resource_map…")
-        #     if self.identifier in resource_map:
-        #         GlobalSettings.logger.critical(f"Found {self.identifier} format = '{resource_map[self.identifier]['format']}' in resource_map.")
-        #         return resource_map[self.identifier]['format']
+        GlobalSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
 
 
     @property
@@ -418,7 +319,7 @@ class Resource:
         File extension of this type of resource, such as md or usfm
         :return string:
         """
-        GlobalSettings.logger.debug("RC.file_ext()…")
+        # GlobalSettings.logger.debug("RC.file_ext()…")
         result = {
                 'text/usx': 'usx',
                 'text/usfm': 'usfm',
@@ -426,13 +327,16 @@ class Resource:
                 'text/markdown': 'md',
                 'text/tsv': 'tsv',
             }.get(self.format, 'txt')
-        GlobalSettings.logger.debug(f"RC.file_ext() returning '{result}'.")
+        if not self.format and self.identifier=='bible':
+            GlobalSettings.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
+            result = 'usfm'
+        GlobalSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
         return result
 
 
     @property
     def type(self):
-        GlobalSettings.logger.debug("Resource.type()…")
+        # GlobalSettings.logger.debug("Resource.type()…")
         # print(f"Getting resource type for {self.resource}…")
         # print(f"file_ext = {self.file_ext}")
         # GlobalSettings.logger.critical(f"Type is in RC: {'type' in self.resource}")
@@ -456,33 +360,22 @@ class Resource:
     @property
     def identifier(self):
         if 'identifier' in self.resource and self.resource['identifier']:
+            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['identifier'].lower()}' from self.resource['identifier']")
             return self.resource['identifier'].lower()
         elif 'id' in self.resource and self.resource['id']:
+            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['id'].lower()}' from self.resource['id']")
             return self.resource['id'].lower()
         elif 'type' in self.resource and 'id' in self.resource['type'] and self.resource['type']['id']:
+            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['type']['id']}' from self.resource['type']['id']")
             return self.resource['type']['id']
         elif 'slug' in self.resource and self.resource['slug']:
+            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['slug'].lower()}' from self.resource['slug']")
             return self.resource['slug'].lower()
-        #     if 'ulb' in slug:
-        #         return 'ulb'
-        #     elif 'udb' in slug:
-        #         return 'udb'
-        #     elif 'obs' in slug:
-        #         return 'obs'
-        #     else:
-        #         return slug
-        # elif 'ulb' in self.rc.repo_name.lower():
-        #     return 'ulb'
-        # elif 'udb' in self.rc.repo_name.lower():
-        #     return 'udb'
-        # elif 'obs' in self.rc.repo_name.lower():
-        #     return 'obs'
-        else:
-            return None
+        GlobalSettings.logger.critical(f"Returning Resource identifier=None.")
 
     @property
     def title(self):
-        GlobalSettings.logger.debug("Resource.title()…")
+        # GlobalSettings.logger.debug("Resource.title()…")
         if 'title' in self.resource and self.resource['title']:
             #print(f"RESOURCE.title returning1 resource title {self.resource['title']!r}")
             return self.resource['title']
@@ -734,17 +627,18 @@ class Project:
 
 
 def get_manifest_from_repo_name(repo_name):
+    """
+    If no manifest file was given, try dissecting the repo name.
+    """
     GlobalSettings.logger.debug(f"get_manifest_from_repo_name({repo_name})…")
     manifest = {
         'dublin_core': {},
     }
-
     if not repo_name:
         return manifest
 
-    parts = re.findall(r'[A-Za-z0-9]+', repo_name)
-
     language_set = False
+    parts = re.findall(r'[A-Za-z0-9]+', repo_name)
     for part in parts:
         if not language_set:
             if part == 'en':

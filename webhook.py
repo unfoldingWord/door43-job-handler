@@ -548,7 +548,7 @@ def process_job(queued_json_payload, redis_connection):
         'callback': 'http://127.0.0.1:8080/tx-callback/' \
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
-        'user_token': gogs_user_token,
+        'user_token': gogs_user_token, # Checked by tX enqueue job
         'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:

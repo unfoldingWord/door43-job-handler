@@ -118,6 +118,7 @@ class Preprocessor:
         return None
 
 
+
 class ObsPreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(ObsPreprocessor, self).__init__(*args, **kwargs)
@@ -212,6 +213,7 @@ class ObsPreprocessor(Preprocessor):
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
         GlobalSettings.logger.debug(f"Obs preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
+# end of class ObsPreprocessor
 
 
 class BiblePreprocessor(Preprocessor):
@@ -231,6 +233,7 @@ class BiblePreprocessor(Preprocessor):
         Cleans the USFM text as it writes it.
 
         TODO: Check/Remove some of this code once tC export is fixed
+        TODO: Remove most of this once tX Job Handler handles full USFM3
         """
         # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')} )")
 
