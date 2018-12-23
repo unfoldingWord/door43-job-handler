@@ -440,6 +440,24 @@ def process_job(queued_json_payload, redis_connection):
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
+    # Use the subject to set the resource type more intelligently
+    GlobalSettings.logger.debug(f"rc.resource.identifier={rc.resource.identifier}")
+    GlobalSettings.logger.debug(f"rc.resource.file_ext={rc.resource.file_ext}")
+    GlobalSettings.logger.debug(f"rc.resource.type={rc.resource.type}")
+    GlobalSettings.logger.debug(f"rc.resource.subject={rc.resource.subject}")
+    adjusted_subject = rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
+    resource_type = None
+    if adjusted_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
+                'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
+                'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
+                ): # from https://api.door43.org/v3/subjects
+        resource_type = adjusted_subject
+    if not resource_type: resource_type = rc.resource.identifier # e.g., tq, tn, ta
+    if not resource_type: resource_type = rc.resource.type # e.g., help, man
+    input_format = rc.resource.file_ext
+    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}.")
+
+
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
     manifest_data = {
@@ -447,7 +465,7 @@ def process_job(queued_json_payload, redis_connection):
         'user_name': user_name,
         'lang_code': rc.resource.language.identifier,
         'resource_id': rc.resource.identifier,
-        'resource_type': rc.resource.type,
+        'resource_type': resource_type, # This used to be rc.resource.type
         'title': rc.resource.title,
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
@@ -483,6 +501,7 @@ def process_job(queued_json_payload, redis_connection):
     add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
+
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     file_key = upload_zip_file(commit_id, preprocessed_zip_file.name)
@@ -500,8 +519,8 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     # Seems never used (RJH)
     #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
-    pj_job_dict['input_format'] = rc.resource.file_ext
-    pj_job_dict['resource_type'] = rc.resource.identifier
+    pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
+    pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = source_url_base + '/' + file_key
     pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
     pj_job_dict['cdn_file'] = f"tx/job/{pj_job_dict['job_id']}.zip"
@@ -536,13 +555,14 @@ def process_job(queued_json_payload, redis_connection):
     update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
 
 
+
     # Pass the work request onto the tX system
     GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': pj_job_dict['job_id'],
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-        'resource_type': rc.resource.identifier,
-        'input_format': rc.resource.file_ext,
+        'resource_type': resource_type, # This used to be rc.resource.identifier
+        'input_format': input_format,
         'output_format': 'html',
         'source': source_url_base + '/' + file_key,
         'callback': 'http://127.0.0.1:8080/tx-callback/' \
@@ -576,7 +596,7 @@ def process_job(queued_json_payload, redis_connection):
     else: # no response
         error_msg = "Submission of job to tX system got no response"
         GlobalSettings.logger.critical(error_msg)
-        #raise Exception(error_msg) # Is this the best thing to do here?
+        raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
     if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB

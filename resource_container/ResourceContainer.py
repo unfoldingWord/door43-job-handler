@@ -330,7 +330,7 @@ class Resource:
         if not self.format and self.identifier=='bible':
             GlobalSettings.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
             result = 'usfm'
-        GlobalSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
+        # GlobalSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
         return result
 
 
