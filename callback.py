@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from time import time
 from ast import literal_eval
+import traceback
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -183,7 +184,40 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    job_descriptive_name = process_callback(prefix, queued_json_payload, current_job.connection)
+    try:
+        job_descriptive_name = process_callback(prefix, queued_json_payload, current_job.connection)
+    except Exception as e:
+        # Catch most exceptions here so we can log them to CloudWatch
+        prefixed_name = f"{prefix}Door43_Callback"
+        GlobalSettings.logger.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
+        GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+        GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+        # Now attempt to log it to an additional, separate FAILED log
+        import logging
+        from boto3 import Session
+        from watchtower import CloudWatchLogHandler
+        logger2 = logging.getLogger(prefixed_name)
+        test_mode_flag = os.getenv('TEST_MODE', '')
+        travis_flag = os.getenv('TRAVIS_BRANCH', '')
+        log_group_name = f"FAILED_{'' if test_mode_flag or travis_flag else prefix}tX" \
+                         f"{'_DEBUG' if debug_mode_flag else ''}" \
+                         f"{'_TEST' if test_mode_flag else ''}" \
+                         f"{'_TravisCI' if travis_flag else ''}"
+        aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+        boto3_session = Session(aws_access_key_id=aws_access_key_id,
+                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                            region_name='us-west-2')
+        watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                    use_queues=False,
+                                                    log_group=log_group_name,
+                                                    stream_name=prefixed_name)
+        logger2.addHandler(watchtower_log_handler)
+        logger2.setLevel(logging.DEBUG)
+        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
+        logger2.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{e}: {traceback.format_exc()}")
+        watchtower_log_handler.close()
+        raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('callback.job.duration', elapsed_milliseconds)
@@ -200,6 +234,7 @@ def job(queued_json_payload):
     stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     stats_client.incr('callback.jobs.succeeded')
+    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of callback.py for door43_enqueue_job

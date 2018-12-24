@@ -7,6 +7,7 @@ from global_settings.global_settings import GlobalSettings
 from general_tools.file_utils import write_file, remove_tree
 
 
+
 class ClientLinterCallback:
 
     def __init__(self, job_dict, identifier, success, info, warnings, errors, s3_results_key):
@@ -102,13 +103,15 @@ class ClientLinterCallback:
         GlobalSettings.db_close()
         return build_log
 
+
     @staticmethod
     def upload_build_log(build_log, file_name, output_dir, s3_results_key, cache_time=0):
         build_log_file = os.path.join(output_dir, file_name)
         write_file(build_log_file, build_log)
         upload_key = f'{s3_results_key}/{file_name}'
-        GlobalSettings.logger.debug(f"Uploading build log to {upload_key} …")
+        GlobalSettings.logger.debug(f"Uploading build log to …/{upload_key} …")
         GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=cache_time)
+
 
     @staticmethod
     def deploy_if_conversion_finished(s3_results_key, identifier):
@@ -138,7 +141,7 @@ class ClientLinterCallback:
                 part_key = f'{s3_results_key}/{i}'
                 build_log = ClientLinterCallback.merge_build_status_for_part(build_log, part_key, output_dir)
                 if build_log is None:
-                    GlobalSettings.logger.debug(f"Part {part_key} not complete")
+                    GlobalSettings.logger.debug(f"Part {part_key} not complete.")
                     all_parts_completed = False
 
         if all_parts_completed and build_log is not None:  # if all parts found, save build log and kick off deploy
@@ -155,20 +158,22 @@ class ClientLinterCallback:
             if not multiple_project:
                 ClientLinterCallback.upload_build_log(build_log, "build_log.json", output_dir, s3_results_key)
             ClientLinterCallback.update_project_file(build_log, output_dir)
-            GlobalSettings.logger.debug('All parts completed')
+            GlobalSettings.logger.debug("All parts completed.")
         else:
-            GlobalSettings.logger.debug('Not all parts completed')
+            GlobalSettings.logger.debug("Not all parts completed.")
             build_log = None
 
         remove_tree(output_dir)
         return build_log
+
 
     @staticmethod
     def upload_logs(s3_results_key, build_log, output_dir):
         """
         Was update_jobs_table
         """
-        GlobalSettings.logger.debug(f"upload_logs({s3_results_key}, {build_log}, {output_dir})")
+        # GlobalSettings.logger.debug(f"upload_logs({s3_results_key}, {build_log}, {output_dir})")
+        GlobalSettings.logger.info(f"Uploading final logs to …/{s3_results_key} _")
 
         job_id = build_log['job_id']
         GlobalSettings.logger.debug('merging build_logs for job : ' + job_id)
@@ -178,7 +183,9 @@ class ClientLinterCallback:
         ClientLinterCallback.upload_build_log(build_log, 'merged.json', output_dir, s3_results_key)
         # Update build_log to start deploy of this part
         ClientLinterCallback.upload_build_log(build_log, 'build_log.json', output_dir, s3_results_key, cache_time=600)
+        GlobalSettings.logger.info("Deployment on AWS should automatically begin now_")
         return
+
 
     @staticmethod
     def merge_build_status_for_part(build_log, s3_results_key, output_dir):
@@ -195,7 +202,7 @@ class ClientLinterCallback:
         if not part_build_log:
             convert_finished = ClientLinterCallback.is_convert_finished(s3_results_key)
             if not convert_finished:
-                GlobalSettings.logger.debug(f"Convert not finished for {s3_results_key}")
+                GlobalSettings.logger.debug(f"Convert not yet finished for {s3_results_key}")
                 return None
 
             part_build_log = ClientLinterCallback.get_results(s3_results_key, "convert_log.json")
@@ -228,6 +235,7 @@ class ClientLinterCallback:
             build_log = ClientLinterCallback.merge_results_logs(build_log, part_build_log, linter_file=False)
             return build_log
 
+
     @staticmethod
     def is_convert_finished(s3_results_key):
         key = f'{s3_results_key}/finished'
@@ -237,11 +245,13 @@ class ClientLinterCallback:
             convert_finished = False
         return convert_finished
 
+
     @staticmethod
     def get_results(s3_results_key, file_name):
         key = f'{s3_results_key}/{file_name}'
         file_results = GlobalSettings.cdn_s3_handler().get_json(key)
         return file_results
+
 
     @staticmethod
     def merge_build_status_for_file(build_log, s3_results_key, file_name, linter_file=False):

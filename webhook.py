@@ -12,6 +12,7 @@ import hashlib
 from datetime import datetime, timedelta
 from time import time
 from ast import literal_eval
+import traceback
 
 # Library (PyPi) imports
 import requests
@@ -35,7 +36,7 @@ GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
-our_prefixed_name = prefix + OUR_NAME
+prefixed_our_name = prefix + OUR_NAME
 
 
 # TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
@@ -265,7 +266,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
     GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
     files_data = {
-        'nameLine': (None, our_prefixed_name),
+        'nameLine': (None, prefixed_our_name),
         'emailLine': (None, 'noone@nowhere.org'),
         'projectLine': (None, job_name),
             'doChecks': (None, 'Yes'),
@@ -439,6 +440,24 @@ def process_job(queued_json_payload, redis_connection):
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
+    # Use the subject to set the resource type more intelligently
+    GlobalSettings.logger.debug(f"rc.resource.identifier={rc.resource.identifier}")
+    GlobalSettings.logger.debug(f"rc.resource.file_ext={rc.resource.file_ext}")
+    GlobalSettings.logger.debug(f"rc.resource.type={rc.resource.type}")
+    GlobalSettings.logger.debug(f"rc.resource.subject={rc.resource.subject}")
+    adjusted_subject = rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
+    resource_type = None
+    if adjusted_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
+                'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
+                'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
+                ): # from https://api.door43.org/v3/subjects
+        resource_type = adjusted_subject
+    if not resource_type: resource_type = rc.resource.identifier # e.g., tq, tn, ta
+    if not resource_type: resource_type = rc.resource.type # e.g., help, man
+    input_format = rc.resource.file_ext
+    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}.")
+
+
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
     manifest_data = {
@@ -446,7 +465,7 @@ def process_job(queued_json_payload, redis_connection):
         'user_name': user_name,
         'lang_code': rc.resource.language.identifier,
         'resource_id': rc.resource.identifier,
-        'resource_type': rc.resource.type,
+        'resource_type': resource_type, # This used to be rc.resource.type
         'title': rc.resource.title,
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
@@ -482,6 +501,7 @@ def process_job(queued_json_payload, redis_connection):
     add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
     GlobalSettings.logger.debug('Zipping finished.')
 
+
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     file_key = upload_zip_file(commit_id, preprocessed_zip_file.name)
@@ -499,8 +519,8 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     # Seems never used (RJH)
     #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
-    pj_job_dict['input_format'] = rc.resource.file_ext
-    pj_job_dict['resource_type'] = rc.resource.identifier
+    pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
+    pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = source_url_base + '/' + file_key
     pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
     pj_job_dict['cdn_file'] = f"tx/job/{pj_job_dict['job_id']}.zip"
@@ -535,19 +555,20 @@ def process_job(queued_json_payload, redis_connection):
     update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
 
 
+
     # Pass the work request onto the tX system
     GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': pj_job_dict['job_id'],
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-        'resource_type': rc.resource.identifier,
-        'input_format': rc.resource.file_ext,
+        'resource_type': resource_type, # This used to be rc.resource.identifier
+        'input_format': input_format,
         'output_format': 'html',
         'source': source_url_base + '/' + file_key,
         'callback': 'http://127.0.0.1:8080/tx-callback/' \
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
-        'user_token': gogs_user_token,
+        'user_token': gogs_user_token, # Checked by tX enqueue job
         'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:
@@ -575,11 +596,11 @@ def process_job(queued_json_payload, redis_connection):
     else: # no response
         error_msg = "Submission of job to tX system got no response"
         GlobalSettings.logger.critical(error_msg)
-        #raise Exception(error_msg) # Is this the best thing to do here?
+        raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
     if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-        if prefix: # Only for dev- chain
+        if prefix and not debug_mode_flag: # Only for dev- chain
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
             upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)
@@ -588,8 +609,11 @@ def process_job(queued_json_payload, redis_connection):
             # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
-    remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{our_prefixed_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    if prefix and debug_mode_flag:
+        GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+    else:
+        remove_tree(base_temp_dir_name)  # cleanup
+    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
     return job_descriptive_name
 #end of process_job function
 
@@ -620,16 +644,49 @@ def job(queued_json_payload):
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
-    job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+    try:
+        job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+    except Exception as e:
+        # Catch most exceptions here so we can log them to CloudWatch
+        GlobalSettings.logger.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
+        GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+        GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+        # Now attempt to log it to an additional, separate FAILED log
+        import logging
+        from boto3 import Session
+        from watchtower import CloudWatchLogHandler
+        logger2 = logging.getLogger(prefixed_our_name)
+        test_mode_flag = os.getenv('TEST_MODE', '')
+        travis_flag = os.getenv('TRAVIS_BRANCH', '')
+        log_group_name = f"FAILED_{'' if test_mode_flag or travis_flag else prefix}tX" \
+                         f"{'_DEBUG' if debug_mode_flag else ''}" \
+                         f"{'_TEST' if test_mode_flag else ''}" \
+                         f"{'_TravisCI' if travis_flag else ''}"
+        aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+        boto3_session = Session(aws_access_key_id=aws_access_key_id,
+                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                            region_name='us-west-2')
+        watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                    use_queues=False,
+                                                    log_group=log_group_name,
+                                                    stream_name=prefixed_our_name)
+        logger2.addHandler(watchtower_log_handler)
+        logger2.setLevel(logging.DEBUG)
+        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
+        logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{e}: {traceback.format_exc()}")
+        watchtower_log_handler.close()
+        raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing('job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{our_prefixed_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr('jobs.completed')
+    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of webhook.py for door43_enqueue_job

@@ -8,6 +8,7 @@ from general_tools.url_utils import download_file
 from client_linter_callback import ClientLinterCallback
 
 
+
 class LocalJob:
     """
     This is a temporary class to replace the basic functionality of TxJob
@@ -35,8 +36,6 @@ class LocalJob:
         self.errors.append(msg)
         GlobalSettings.logger.error(msg)
 
-    # def update(self):
-    #     pass # Nowhere to save anything
 
 
 class ClientConverterCallback:

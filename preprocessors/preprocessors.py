@@ -4,6 +4,7 @@ import json
 from glob import glob
 from shutil import copy
 
+from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir
@@ -117,6 +118,7 @@ class Preprocessor:
         return None
 
 
+
 class ObsPreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(ObsPreprocessor, self).__init__(*args, **kwargs)
@@ -211,6 +213,7 @@ class ObsPreprocessor(Preprocessor):
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
         GlobalSettings.logger.debug(f"Obs preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
+# end of class ObsPreprocessor
 
 
 class BiblePreprocessor(Preprocessor):
@@ -230,6 +233,7 @@ class BiblePreprocessor(Preprocessor):
         Cleans the USFM text as it writes it.
 
         TODO: Check/Remove some of this code once tC export is fixed
+        TODO: Remove most of this once tX Job Handler handles full USFM3
         """
         # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')} )")
 
@@ -524,7 +528,7 @@ class TaPreprocessor(Preprocessor):
         if os.path.isfile(content_file):
             return read_file(content_file)
 
-    def compile_section(self, project, section, level):
+    def compile_ta_section(self, project, section, level):
         """
         Recursive section markdown creator
 
@@ -533,6 +537,8 @@ class TaPreprocessor(Preprocessor):
         :param int level:
         :return:
         """
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -544,6 +550,7 @@ class TaPreprocessor(Preprocessor):
             bottom_box = ""
             question = self.get_question(project, link)
             if question:
+                # TODO: Shouldn't text like this be translated ???
                 top_box += f'This page answers the question: *{question}*\n\n'
             config = project.config()
             if link in config:
@@ -567,7 +574,7 @@ class TaPreprocessor(Preprocessor):
             markdown += '---\n\n'  # horizontal rule
         if 'sections' in section:
             for subsection in section['sections']:
-                markdown += self.compile_section(project, subsection, level + 1)
+                markdown += self.compile_ta_section(project, subsection, level + 1)
         return markdown
 
     def run(self):
@@ -583,7 +590,7 @@ class TaPreprocessor(Preprocessor):
             markdown = f'# {title}\n\n'
             if toc:
                 for section in toc['sections']:
-                    markdown += self.compile_section(project, section, 2)
+                    markdown += self.compile_ta_section(project, section, 2)
             markdown = self.fix_links(markdown)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
@@ -624,6 +631,8 @@ class TaPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
+    # end of TaPreprocessor run()
+# end of class TaPreprocessor
 
 
 class TqPreprocessor(Preprocessor):
@@ -846,7 +855,7 @@ class TnPreprocessor(Preprocessor):
                         markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths: # We have .md files
-                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
+                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
                             found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
@@ -876,7 +885,7 @@ class TnPreprocessor(Preprocessor):
                         else: # See if there's .txt files (as no .md files found)
                             # NOTE: These seem to actually be json files (created by tS)
                             chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
-                            GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
+                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
                             if chunk_filepaths: found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
@@ -915,14 +924,14 @@ class TnPreprocessor(Preprocessor):
                     book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
-                    GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
+                    # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
                     write_file(file_path, markdown)
             else:
                 GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        # GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.warnings if self.warnings else True
 
     def move_to_front(self, files, move_str):
