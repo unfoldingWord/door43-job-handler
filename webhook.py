@@ -149,10 +149,10 @@ def get_unique_job_id():
 # end of get_unique_job_id()
 
 
-def upload_zip_file(commit_id, zip_filepath):
+def upload_zip_file(job_id, zip_filepath):
     """
     """
-    file_key = f'preconvert/{commit_id}.zip'
+    file_key = f'preconvert/{job_id}.zip'
     GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} …')
     try:
         GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
@@ -504,13 +504,14 @@ def process_job(queued_json_payload, redis_connection):
 
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-    file_key = upload_zip_file(commit_id, preprocessed_zip_file.name)
+    our_job_id = get_unique_job_id()
+    file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
 
 
     # We no longer use txJob class but just create our own Python dict
     GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
-    pj_job_dict['job_id'] = get_unique_job_id()
+    pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
     pj_job_dict['user_name'] = user_name
     pj_job_dict['repo_name'] = repo_name
@@ -523,12 +524,12 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = source_url_base + '/' + file_key
     pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
-    pj_job_dict['cdn_file'] = f"tx/job/{pj_job_dict['job_id']}.zip"
+    pj_job_dict['cdn_file'] = f"tx/job/{our_job_id}.zip"
     pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
     pj_job_dict['callback'] = GlobalSettings.api_url + '/client/callback'
     pj_job_dict['output_format'] = 'html'
     pj_job_dict['links'] = {
-        'href': f"{GlobalSettings.api_url}/tx/job/{pj_job_dict['job_id']}",
+        'href': f"{GlobalSettings.api_url}/tx/job/{our_job_id}",
         'rel': 'self',
         'method': 'GET'
     }
@@ -559,7 +560,7 @@ def process_job(queued_json_payload, redis_connection):
     # Pass the work request onto the tX system
     GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
-        'job_id': pj_job_dict['job_id'],
+        'job_id': our_job_id,
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
         'resource_type': resource_type, # This used to be rc.resource.identifier
         'input_format': input_format,
