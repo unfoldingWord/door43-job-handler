@@ -405,9 +405,11 @@ def process_job(queued_json_payload, redis_connection):
 
     # Gather other details from the commit that we will note for the job(s)
     user_name = queued_json_payload['repository']['owner']['username']
-    full_name = queued_json_payload['repository']['owner']['full_name']
-    if not full_name:
-        full_name = user_name
+    # TODO: The full_name needs to be properly removed -- this is just a quick hack
+    # full_name = queued_json_payload['repository']['owner']['full_name']
+    # if not full_name:
+        # full_name = user_name
+    full_name = user_name
     repo_name = queued_json_payload['repository']['name']
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message'].strip() # Seems to always end with a newline
