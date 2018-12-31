@@ -404,12 +404,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Gather other details from the commit that we will note for the job(s)
-    user_name = queued_json_payload['repository']['owner']['username']
-    # TODO: The full_name needs to be properly removed -- this is just a quick hack
-    # full_name = queued_json_payload['repository']['owner']['full_name']
-    # if not full_name:
-        # full_name = user_name
-    full_name = user_name
+    repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message'].strip() # Seems to always end with a newline
@@ -420,16 +415,16 @@ def process_job(queued_json_payload, redis_connection):
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
 
-    our_identifier = f"'{pusher_username}' pushing '{full_name}/{repo_name}'"
+    our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
     GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
-    ascii_full_name_bytes = full_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    adjusted_full_name = ascii_full_name_bytes.decode('utf-8') # Recode as a str
+    ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
     ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'users.invoked.{adjusted_full_name}')
+    stats_client.incr(f'users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    stats_client.incr(f'user-projects.invoked.{adjusted_full_name}-{adjusted_repo_name }')
+    stats_client.incr(f'user-projects.invoked.{adjusted_repo_owner_username}-{adjusted_repo_name }')
 
 
     # Download and unzip the repo files
@@ -464,7 +459,7 @@ def process_job(queued_json_payload, redis_connection):
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
     manifest_data = {
         'repo_name': repo_name,
-        'user_name': user_name,
+        'user_name': repo_owner_username,
         'lang_code': rc.resource.language.identifier,
         'resource_id': rc.resource.identifier,
         'resource_type': resource_type, # This used to be rc.resource.type
@@ -474,7 +469,7 @@ def process_job(queued_json_payload, redis_connection):
     }
     # First see if manifest already exists in DB (can be slowish) and update it if it is
     GlobalSettings.logger.debug(f"Getting manifest from DB for {repo_name!r} with user {user_name!r} …")
-    tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
+    tx_manifest = TxManifest.get(repo_name=repo_name, user_name=repo_owner_username)
     if tx_manifest:
         for key, value in manifest_data.items():
             setattr(tx_manifest, key, value)
@@ -515,7 +510,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict = {}
     pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-    pj_job_dict['user_name'] = user_name
+    pj_job_dict['user_name'] = repo_owner_username
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
@@ -550,12 +545,12 @@ def process_job(queued_json_payload, redis_connection):
 
     # Create a build log
     build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-                                      pusher_username, repo_name, user_name)
+                                      pusher_username, repo_name, repo_owner_username)
     # Upload an initial build_log
     upload_build_log_to_s3(base_temp_dir_name, build_log_json, s3_commit_key)
 
     # Update the project.json file
-    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
+    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
 
 
 
@@ -606,10 +601,10 @@ def process_job(queued_json_payload, redis_connection):
         if prefix and not debug_mode_flag: # Only for dev- chain
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-            upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)
+            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
             # Not using the preprocessed files (only the originals above)
             # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-            # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
