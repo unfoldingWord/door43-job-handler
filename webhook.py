@@ -34,7 +34,7 @@ OUR_NAME = 'Door43_job_handler'
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+    GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
 prefixed_our_name = prefix + OUR_NAME
 
@@ -468,7 +468,7 @@ def process_job(queued_json_payload, redis_connection):
         'last_updated': datetime.utcnow()
     }
     # First see if manifest already exists in DB (can be slowish) and update it if it is
-    GlobalSettings.logger.debug(f"Getting manifest from DB for {repo_name!r} with user {user_name!r} …")
+    GlobalSettings.logger.debug(f"Getting manifest from DB for '{repo_name}' with user '{repo_owner_username}' …")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=repo_owner_username)
     if tx_manifest:
         for key, value in manifest_data.items():
