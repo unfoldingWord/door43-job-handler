@@ -31,7 +31,7 @@ stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
@@ -74,6 +74,7 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 # end of verify_expected_job
 
 
+user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_callback(pc_prefix, queued_json_payload, redis_connection):
     """
     The job info is retrieved from REDIS and matched/checked
@@ -85,6 +86,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
+    global user_projects_invoked_string
     GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {queued_json_payload}")
 
     # Check that this is an expected callback job
@@ -128,12 +130,15 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         identifier = queued_json_payload['identifier']
         GlobalSettings.logger.debug(f"Got identifier from queued_json_payload: {identifier}.")
         job_descriptive_name = f'{identifier} {job_descriptive_name}'
-    if 'identifier' in matched_job_dict:
+    if 'identifier' in matched_job_dict: # overrides
         identifier = matched_job_dict['identifier']
         GlobalSettings.logger.debug(f"Got identifier from matched_job_dict: {identifier}.")
     else:
         identifier = job_id
         GlobalSettings.logger.debug(f"Got identifier from job_id: {identifier}.")
+    user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
+                        if 'user_projects_invoked_string' in matched_job_dict \
+                        else f'??{identifier}??'
 
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
@@ -172,7 +177,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('callback.jobs.attempted')
+    stats_client.incr(f'{stats_prefix}.callback.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -217,10 +222,11 @@ def job(queued_json_payload):
         logger2.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
+        stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('callback.job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{stats_prefix}.callback.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
@@ -231,9 +237,10 @@ def job(queued_json_payload):
                          datetime.strptime(queued_json_payload['door43_webhook_received_at'],
                                            '%Y-%m-%dT%H:%M:%SZ')
     GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
-    stats_client.timing('total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
+    stats_client.timing(f'{stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
-    stats_client.incr('callback.jobs.succeeded')
+    stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
+    stats_client.incr(f'{stats_prefix}.callback.jobs.succeeded')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 

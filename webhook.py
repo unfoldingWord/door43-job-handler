@@ -35,7 +35,8 @@ OUR_NAME = 'Door43_job_handler'
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
+general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
+stats_prefix = f'{general_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
@@ -48,7 +49,7 @@ ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
@@ -315,6 +316,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
 # end of upload_to_BDB
 
 
+user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
@@ -359,23 +361,24 @@ def process_job(queued_json_payload, redis_connection):
     The given payload will be automatically appended to the 'failed' queue
         by rq if an exception is thrown in this module.
     """
+    global user_projects_invoked_string
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
     try:
-        stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+        stats_client.set(f'{stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('repo_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.repo_ids', 'No id')
     try:
-        stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+        stats_client.set(f'{stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('owner_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.owner_ids', 'No id')
     try:
-        stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+        stats_client.set(f'{stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('pusher_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
@@ -422,9 +425,10 @@ def process_job(queued_json_payload, redis_connection):
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
     ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'users.invoked.{adjusted_repo_owner_username}')
+    stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    stats_client.incr(f'user-projects.invoked.{adjusted_repo_owner_username}-{adjusted_repo_name }')
+    user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
+    # stats_client.gauge(user_projects_invoked_string, -1) # Mark as 'in-process'
 
 
     # Download and unzip the repo files
@@ -525,6 +529,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
     pj_job_dict['callback'] = GlobalSettings.api_url + '/client/callback'
     pj_job_dict['output_format'] = 'html'
+    pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pj_job_dict['links'] = {
         'href': f"{GlobalSettings.api_url}/tx/job/{our_job_id}",
         'rel': 'self',
@@ -626,7 +631,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('jobs.attempted')
+    stats_client.incr(f'{stats_prefix}.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -674,16 +679,17 @@ def job(queued_json_payload):
         logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
+        stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
         GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
-    stats_client.incr('jobs.completed')
+    stats_client.incr(f'{stats_prefix}.jobs.completed')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
