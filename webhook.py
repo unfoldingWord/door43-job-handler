@@ -431,6 +431,11 @@ def process_job(queued_json_payload, redis_connection):
     # stats_client.gauge(user_projects_invoked_string, -1) # Mark as 'in-process'
 
 
+    # Here's our programmed failure (for remotely testing failures)
+    if pusher_username=='Failure' and 'full_name' in pusher and pusher['full_name']=='Push Test':
+        deliberateFailureForTesting
+
+
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
 
