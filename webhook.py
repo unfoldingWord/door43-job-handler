@@ -34,8 +34,9 @@ OUR_NAME = 'Door43_job_handler'
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler.webhook"
+    GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
+general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
+stats_prefix = f'{general_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
@@ -48,7 +49,7 @@ ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
-stats_client = StatsClient(host=graphite_url, port=8125, prefix=stats_prefix)
+stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
@@ -142,9 +143,9 @@ def get_unique_job_id():
     """
     :return string:
     """
-    job_id = hashlib.sha256(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f").encode('utf-8')).hexdigest()
+    job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
     #while TxJob.get(job_id):
-        #job_id = hashlib.sha256(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f").encode('utf-8')).hexdigest()
+        #job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
     return job_id
 # end of get_unique_job_id()
 
@@ -315,6 +316,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
 # end of upload_to_BDB
 
 
+user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
@@ -359,23 +361,24 @@ def process_job(queued_json_payload, redis_connection):
     The given payload will be automatically appended to the 'failed' queue
         by rq if an exception is thrown in this module.
     """
+    global user_projects_invoked_string
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
     try:
-        stats_client.set('repo_ids', queued_json_payload['repository']['id'])
+        stats_client.set(f'{stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('repo_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.repo_ids', 'No id')
     try:
-        stats_client.set('owner_ids', queued_json_payload['repository']['owner']['id'])
+        stats_client.set(f'{stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('owner_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.owner_ids', 'No id')
     try:
-        stats_client.set('pusher_ids', queued_json_payload['pusher']['id'])
+        stats_client.set(f'{stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set('pusher_ids', 'No id')
+        stats_client.set(f'{stats_prefix}.pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
@@ -383,7 +386,7 @@ def process_job(queued_json_payload, redis_connection):
     # Move everything down one directory level for simple delete
     # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
     # TODO: This might not be enough 6-digit fractions of a second could collide???
-    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("%Y-%m-%d_%H:%M:%S.%f")
+    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("_%Y-%m-%d_%H:%M:%S.%f")
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
     try:
         os.makedirs(base_temp_dir_name)
@@ -404,12 +407,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Gather other details from the commit that we will note for the job(s)
-    user_name = queued_json_payload['repository']['owner']['username']
-    # TODO: The full_name needs to be properly removed -- this is just a quick hack
-    # full_name = queued_json_payload['repository']['owner']['full_name']
-    # if not full_name:
-        # full_name = user_name
-    full_name = user_name
+    repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
     compare_url = queued_json_payload['compare_url']
     commit_message = commit['message'].strip() # Seems to always end with a newline
@@ -420,16 +418,22 @@ def process_job(queued_json_payload, redis_connection):
         pusher = {'username': commit['author']['username']}
     pusher_username = pusher['username']
 
-    our_identifier = f"'{pusher_username}' pushing '{full_name}/{repo_name}'"
+    our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
     GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
-    ascii_full_name_bytes = full_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    adjusted_full_name = ascii_full_name_bytes.decode('utf-8') # Recode as a str
+    ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
     ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'users.invoked.{adjusted_full_name}')
+    stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    stats_client.incr(f'user-projects.invoked.{adjusted_full_name}-{adjusted_repo_name }')
+    user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
+    # stats_client.gauge(user_projects_invoked_string, -1) # Mark as 'in-process'
+
+
+    # Here's our programmed failure (for remotely testing failures)
+    if pusher_username=='Failure' and 'full_name' in pusher and pusher['full_name']=='Push Test':
+        deliberateFailureForTesting
 
 
     # Download and unzip the repo files
@@ -464,7 +468,7 @@ def process_job(queued_json_payload, redis_connection):
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
     manifest_data = {
         'repo_name': repo_name,
-        'user_name': user_name,
+        'user_name': repo_owner_username,
         'lang_code': rc.resource.language.identifier,
         'resource_id': rc.resource.identifier,
         'resource_type': resource_type, # This used to be rc.resource.type
@@ -473,8 +477,8 @@ def process_job(queued_json_payload, redis_connection):
         'last_updated': datetime.utcnow()
     }
     # First see if manifest already exists in DB (can be slowish) and update it if it is
-    GlobalSettings.logger.debug(f"Getting manifest from DB for {repo_name!r} with user {user_name!r} …")
-    tx_manifest = TxManifest.get(repo_name=repo_name, user_name=user_name)
+    GlobalSettings.logger.debug(f"Getting manifest from DB for '{repo_name}' with user '{repo_owner_username}' …")
+    tx_manifest = TxManifest.get(repo_name=repo_name, user_name=repo_owner_username)
     if tx_manifest:
         for key, value in manifest_data.items():
             setattr(tx_manifest, key, value)
@@ -515,7 +519,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict = {}
     pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-    pj_job_dict['user_name'] = user_name
+    pj_job_dict['user_name'] = repo_owner_username
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
@@ -530,6 +534,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
     pj_job_dict['callback'] = GlobalSettings.api_url + '/client/callback'
     pj_job_dict['output_format'] = 'html'
+    pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pj_job_dict['links'] = {
         'href': f"{GlobalSettings.api_url}/tx/job/{our_job_id}",
         'rel': 'self',
@@ -550,12 +555,12 @@ def process_job(queued_json_payload, redis_connection):
 
     # Create a build log
     build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-                                      pusher_username, repo_name, user_name)
+                                      pusher_username, repo_name, repo_owner_username)
     # Upload an initial build_log
     upload_build_log_to_s3(base_temp_dir_name, build_log_json, s3_commit_key)
 
     # Update the project.json file
-    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, user_name)
+    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
 
 
 
@@ -606,10 +611,10 @@ def process_job(queued_json_payload, redis_connection):
         if prefix and not debug_mode_flag: # Only for dev- chain
             GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
             original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-            upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", original_zip_filepath)
+            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
             # Not using the preprocessed files (only the originals above)
             # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-            # upload_to_BDB(f"{full_name}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
@@ -631,7 +636,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr('jobs.attempted')
+    stats_client.incr(f'{stats_prefix}.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -679,16 +684,17 @@ def job(queued_json_payload):
         logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
+        stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing('job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
         GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
-    stats_client.incr('jobs.completed')
+    stats_client.incr(f'{stats_prefix}.jobs.completed')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
