@@ -11,6 +11,7 @@ from general_tools.file_utils import write_file, read_file, make_dir
 from resource_container.ResourceContainer import RC
 
 
+
 def do_preprocess(rc, repo_dir, output_dir):
     if rc.resource.identifier == 'obs':
         GlobalSettings.logger.debug("do_preprocess: using ObsPreprocessor…")
@@ -34,6 +35,7 @@ def do_preprocess(rc, repo_dir, output_dir):
         GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
+
 
 
 class Preprocessor:
@@ -296,7 +298,8 @@ class BiblePreprocessor(Preprocessor):
                 ix = adjusted_line.find('\\k-s')
                 if ix != -1:
                     adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
-            assert '\\k' not in adjusted_line
+            assert '\\k-s' not in adjusted_line
+            assert '\\k-e' not in adjusted_line
             # HANDLE FAULTY USFM IN UGNT
             if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
                 GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
@@ -719,6 +722,7 @@ class TwPreprocessor(Preprocessor):
         }
         title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
+        num_files_written = 0
         for project in self.rc.projects:
             GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}' …")
             term_text = {}
@@ -755,13 +759,20 @@ class TwPreprocessor(Preprocessor):
                 markdown = self.fix_links(markdown, section)
                 output_file = os.path.join(self.output_dir, '{0}.md'.format(section))
                 write_file(output_file, markdown)
+                num_files_written += 1
                 config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
                 if os.path.isfile(config_file):
                     copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
+        if num_files_written == 0:
+            GlobalSettings.logger.error(f"tW preprocessor didn't write any markdown files")
+            self.warnings.append("No tW source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"tW preprocessor wrote {num_files_written} markdown files")
         GlobalSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.warnings if self.warnings else True
+
 
     def fix_links(self, content, section):
         # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/Door43/en_ta/translate/figs-euphemism/01.md
@@ -792,6 +803,8 @@ class TwPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
+# end of class TwPreprocessor
+
 
 
 class TnPreprocessor(Preprocessor):
@@ -960,3 +973,4 @@ class TnPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
+# end of class TnPreprocessor
