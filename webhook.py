@@ -143,9 +143,9 @@ def get_unique_job_id():
     """
     :return string:
     """
-    job_id = hashlib.sha256(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f").encode('utf-8')).hexdigest()
+    job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
     #while TxJob.get(job_id):
-        #job_id = hashlib.sha256(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f").encode('utf-8')).hexdigest()
+        #job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
     return job_id
 # end of get_unique_job_id()
 
@@ -386,7 +386,7 @@ def process_job(queued_json_payload, redis_connection):
     # Move everything down one directory level for simple delete
     # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
     # TODO: This might not be enough 6-digit fractions of a second could collide???
-    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("%Y-%m-%d_%H:%M:%S.%f")
+    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("_%Y-%m-%d_%H:%M:%S.%f")
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
     try:
         os.makedirs(base_temp_dir_name)

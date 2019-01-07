@@ -3,6 +3,7 @@ import tempfile
 import time
 from datetime import datetime
 
+from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
 from general_tools.file_utils import write_file, remove_tree
 
@@ -40,7 +41,8 @@ class ClientLinterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        self.temp_dir = tempfile.mkdtemp(suffix="", prefix="client_callback_")
+        self.temp_dir = tempfile.mkdtemp(suffix='',
+                            prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
         self.s3_results_key = s3_results_key
         self.job = None
 
@@ -99,7 +101,10 @@ class ClientLinterCallback:
             self.all_parts_completed = True
             build_log = results
 
-        remove_tree(self.temp_dir)  # cleanup
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        else:
+            remove_tree(self.temp_dir)  # cleanup
         GlobalSettings.db_close()
         return build_log
 
@@ -109,7 +114,7 @@ class ClientLinterCallback:
         build_log_file = os.path.join(output_dir, file_name)
         write_file(build_log_file, build_log)
         upload_key = f'{s3_results_key}/{file_name}'
-        GlobalSettings.logger.debug(f"Uploading build log to …/{upload_key} …")
+        GlobalSettings.logger.debug(f"Uploading build log to {GlobalSettings.cdn_bucket_name}/{upload_key} …")
         GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=cache_time)
 
 
@@ -124,7 +129,8 @@ class ClientLinterCallback:
                     job_id if single job
         :return:
         """
-        output_dir = tempfile.mkdtemp(suffix="", prefix="client_callback_deploy_")
+        output_dir = tempfile.mkdtemp(suffix='',
+                        prefix='Door43_callback_deploy_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
         build_log = None
         id_parts = identifier.split('/')
         multiple_project = len(id_parts) > 3
@@ -154,16 +160,20 @@ class ClientLinterCallback:
             if multiple_project:
                 build_log['multiple'] = True
 
-            ClientLinterCallback.upload_build_log(build_log, "final_build_log.json", output_dir, s3_results_key)
+            ClientLinterCallback.upload_build_log(build_log, 'final_build_log.json', output_dir, s3_results_key)
             if not multiple_project:
-                ClientLinterCallback.upload_build_log(build_log, "build_log.json", output_dir, s3_results_key)
+                ClientLinterCallback.upload_build_log(build_log, 'build_log.json', output_dir, s3_results_key)
             ClientLinterCallback.update_project_file(build_log, output_dir)
             GlobalSettings.logger.debug("All parts completed.")
         else:
             GlobalSettings.logger.debug("Not all parts completed.")
+            remove_tree(output_dir)
             build_log = None
 
-        remove_tree(output_dir)
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
+        else:
+            remove_tree(output_dir)
         return build_log
 
 
@@ -173,7 +183,7 @@ class ClientLinterCallback:
         Was update_jobs_table
         """
         # GlobalSettings.logger.debug(f"upload_logs({s3_results_key}, {build_log}, {output_dir})")
-        GlobalSettings.logger.info(f"Uploading final logs to …/{s3_results_key} _")
+        GlobalSettings.logger.info(f"Uploading final logs to S3:…/{s3_results_key} _")
 
         job_id = build_log['job_id']
         GlobalSettings.logger.debug('merging build_logs for job : ' + job_id)

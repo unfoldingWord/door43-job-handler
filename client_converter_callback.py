@@ -2,6 +2,7 @@ import os
 import tempfile
 from datetime import datetime
 
+from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
 from general_tools.file_utils import unzip, write_file, remove_tree, remove
 from general_tools.url_utils import download_file
@@ -62,7 +63,8 @@ class ClientConverterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        self.temp_dir = tempfile.mkdtemp(suffix='', prefix='client_callback_')
+        self.temp_dir = tempfile.mkdtemp(suffix='',
+                            prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
 
     def process_callback(self):
         # job_id_parts = self.identifier.split('/')
@@ -137,7 +139,10 @@ class ClientConverterCallback:
         except:
             download_success = False  # if multiple project we note fail and move on
             if not multiple_project:
-                remove_tree(self.temp_dir)  # cleanup
+                if prefix and debug_mode_flag:
+                    GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+                else:
+                    remove_tree(self.temp_dir)  # cleanup
             if self.job.errors is None:
                 self.job.errors = []
             message = f"Missing converted file: {converted_zip_url}"
@@ -174,7 +179,10 @@ class ClientConverterCallback:
             self.all_parts_completed = True
             build_log_json = results
 
-        remove_tree(self.temp_dir)  # cleanup
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        else:
+            remove_tree(self.temp_dir)  # cleanup
         return build_log_json
 
     def unzip_converted_files(self, converted_zip_file):
@@ -227,7 +235,7 @@ class ClientConverterCallback:
         else:
             build_log_json['errors'] = []
         build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
-        GlobalSettings.logger.debug(f"Uploading build log to {build_log_key} …")
+        GlobalSettings.logger.debug(f"Uploading build log to S3:{GlobalSettings.cdn_bucket_name}/{build_log_key} …")
         # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
         self.cdn_upload_contents(build_log_json, build_log_key)
         return build_log_json
@@ -235,7 +243,7 @@ class ClientConverterCallback:
     def cdn_upload_contents(self, contents, key):
         file_name = os.path.join(self.temp_dir, 'contents.json')
         write_file(file_name, contents)
-        GlobalSettings.logger.debug(f"Uploading file to {key} …")
+        GlobalSettings.logger.debug(f"Uploading file to S3:{GlobalSettings.cdn_bucket_name}/{key} …")
         GlobalSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
     def get_build_log(self, s3_base_key, part=''):

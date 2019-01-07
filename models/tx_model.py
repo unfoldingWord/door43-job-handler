@@ -47,7 +47,7 @@ class TxModel:
         for c in inspect(self).mapper.column_attrs:
             value = getattr(self, c.key)
             if isinstance(value, (datetime, date)):
-                value = value.strftime("%Y-%m-%dT%H:%M:%SZ")
+                value = value.strftime('%Y-%m-%dT%H:%M:%SZ')
             yield (c.key, value)
 
     def clone(self):
