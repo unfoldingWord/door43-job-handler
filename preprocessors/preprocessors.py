@@ -924,7 +924,15 @@ class TnPreprocessor(Preprocessor):
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
                                 text = read_file(chunk_filepath)
-                                json_data = json.loads(text)
+                                try:
+                                    json_data = json.loads(text)
+                                except json.decoder.JSONDecodeError as e:
+                                    # Clean-up the filepath for display (mostly removing /tmp folder names)
+                                    adjusted_filepath = '/'.join(chunk_filepath.split('/')[6:]) #.replace('/./','/')
+                                    error_message = f"Badly formed tN json file '{adjusted_filepath}': {e}"
+                                    GlobalSettings.logger.error(error_message)
+                                    self.warnings.append(error_message)
+                                    json_data = {}
                                 for tn_unit in json_data:
                                     if 'title' in tn_unit and 'body' in tn_unit:
                                         markdown += f"### {tn_unit['title']}\n\n"
