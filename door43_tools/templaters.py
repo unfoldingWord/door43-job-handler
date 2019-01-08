@@ -18,16 +18,23 @@ def do_template(resource_type, source_dir, output_dir, template_file):
 
 
 def init_template(resource_type, source_dir, output_dir, template_file):
+    """
+    Tries to determine the correct templater for the appropriate resource_type
+    """
     # GlobalSettings.logger.debug(f"init_template({resource_type})")
     if resource_type in ('Open_Bible_Stories','obs'):
         templater = ObsTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Academy','ta'):
+    elif resource_type in ('Translation_Academy','ta') \
+    or resource_type.endswith('-ta') or resource_type.endswith('_ta'):
         templater = TaTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Questions','OBS_Translation_Questions','tq'):
+    elif resource_type in ('Translation_Questions','OBS_Translation_Questions','tq') \
+    or resource_type.endswith('-tq') or resource_type.endswith('_tq'):
         templater = TqTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Words','tw'):
+    elif resource_type in ('Translation_Words','tw') \
+    or resource_type.endswith('-tw') or resource_type.endswith('_tw'):
         templater = TwTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Notes','OBS_Translation_Notes','tn'):
+    elif resource_type in ('Translation_Notes','OBS_Translation_Notes','tn',) \
+    or resource_type.endswith('-tn') or resource_type.endswith('_tn'):
         templater = TnTemplater(resource_type, source_dir, output_dir, template_file)
     else:
         if resource_type not in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
