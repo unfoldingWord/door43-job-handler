@@ -23,13 +23,15 @@ def init_template(resource_type, source_dir, output_dir, template_file):
         templater = ObsTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Academy','ta'):
         templater = TaTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Questions','tq'):
+    elif resource_type in ('Translation_Questions','OBS_Translation_Questions','tq'):
         templater = TqTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Words','tw'):
         templater = TwTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Notes','tn'):
+    elif resource_type in ('Translation_Notes','OBS_Translation_Notes','tn'):
         templater = TnTemplater(resource_type, source_dir, output_dir, template_file)
     else:
+        if resource_type not in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
+            GlobalSettings.logger.error(f"Choosing BibleTemplater for resource_type={resource_type}.")
         templater = BibleTemplater(resource_type, source_dir, output_dir, template_file)
     return templater
 
