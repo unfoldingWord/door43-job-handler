@@ -23,22 +23,29 @@ def init_template(resource_type, source_dir, output_dir, template_file):
     """
     # GlobalSettings.logger.debug(f"init_template({resource_type})")
     if resource_type in ('Open_Bible_Stories','obs'):
+        GlobalSettings.logger.info(f"Using ObsTemplater for {resource_type} …")
         templater = ObsTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Academy','ta') \
     or resource_type.endswith('-ta') or resource_type.endswith('_ta'):
+        GlobalSettings.logger.info(f"Using TaTemplater for {resource_type} …")
         templater = TaTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Questions','OBS_Translation_Questions','tq') \
     or resource_type.endswith('-tq') or resource_type.endswith('_tq'):
+        GlobalSettings.logger.info(f"Using TqTemplater for {resource_type} …")
         templater = TqTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Words','tw') \
     or resource_type.endswith('-tw') or resource_type.endswith('_tw'):
+        GlobalSettings.logger.info(f"Using TwTemplater for {resource_type} …")
         templater = TwTemplater(resource_type, source_dir, output_dir, template_file)
     elif resource_type in ('Translation_Notes','OBS_Translation_Notes','tn',) \
     or resource_type.endswith('-tn') or resource_type.endswith('_tn'):
+        GlobalSettings.logger.info(f"Using TnTemplater for {resource_type} …")
         templater = TnTemplater(resource_type, source_dir, output_dir, template_file)
     else:
-        if resource_type not in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            GlobalSettings.logger.error(f"Choosing BibleTemplater for resource_type={resource_type}.")
+        if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
+            GlobalSettings.logger.info(f"Using BibleTemplater for {resource_type} …")
+        else:
+            GlobalSettings.logger.error(f"Choosing BibleTemplater for unexpected resource_type={resource_type}")
         templater = BibleTemplater(resource_type, source_dir, output_dir, template_file)
     return templater
 
