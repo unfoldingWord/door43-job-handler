@@ -32,7 +32,7 @@ class TestTaPreprocessor(unittest.TestCase):
         file_name = os.path.join('raw_sources', 'en_ta.zip')
         repo_name = 'en_ta'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
         do_preprocess(rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '01-intro.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-process.md')))
@@ -137,7 +137,7 @@ It is important the the leaders of the churches in the language group agree that
         file_path = os.path.join(TestTaPreprocessor.resources_dir, file_name)
 
         # 1) unzip the repo files
-        temp_dir = tempfile.mkdtemp(prefix='repo_')
+        temp_dir = tempfile.mkdtemp(prefix='test_repo_')
         unzip(file_path, temp_dir)
         repo_dir = os.path.join(temp_dir, repo_name)
         if not os.path.isdir(repo_dir):

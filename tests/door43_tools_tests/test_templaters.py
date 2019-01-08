@@ -17,7 +17,7 @@ class TestTemplater(unittest.TestCase):
     def setUp(self):
         """Runs before each test."""
         self.out_dir = ''
-        self.temp_dir = ""
+        self.temp_dir = ''
 
     def tearDown(self):
         """Runs after each test."""
@@ -105,13 +105,13 @@ class TestTemplater(unittest.TestCase):
 
     def extractZipFiles(self, test_folder_name):
         file_path = os.path.join(self.resources_dir, test_folder_name)
-        self.temp_dir = tempfile.mkdtemp(prefix='repo_')
+        self.temp_dir = tempfile.mkdtemp(prefix='test_repo_')
         unzip(file_path, self.temp_dir)
         return self.temp_dir
 
     def doTemplater(self, resource_type, test_folder_name, alreadyProcessed=False):
         template_file = os.path.join(self.resources_dir, 'templates', 'project-page.html')
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
         if not alreadyProcessed:
             return do_template(resource_type, test_folder_name, self.out_dir, template_file)
 

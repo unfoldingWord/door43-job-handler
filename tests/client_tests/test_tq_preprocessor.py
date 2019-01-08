@@ -31,7 +31,7 @@ class TestTqPreprocessor(unittest.TestCase):
         file_name = os.path.join('raw_sources', repo_name + '.zip')
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         repo_dir = os.path.join(repo_dir)
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
 
         # when
         do_preprocess(rc, repo_dir, self.out_dir)
@@ -51,7 +51,7 @@ class TestTqPreprocessor(unittest.TestCase):
         file_path = os.path.join(TestTqPreprocessor.resources_dir, file_name)
 
         # 1) unzip the repo files
-        temp_dir = tempfile.mkdtemp(prefix='repo_')
+        temp_dir = tempfile.mkdtemp(prefix='test_repo_')
         unzip(file_path, temp_dir)
         repo_dir = os.path.join(temp_dir, repo_name)
         if not os.path.isdir(repo_dir):

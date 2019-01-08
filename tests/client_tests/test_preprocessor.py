@@ -29,7 +29,7 @@ class TestPreprocessor(unittest.TestCase):
         file_name = os.path.join('raw_sources', 'en_tw.zip')
         repo_name = 'en_tw'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
         do_preprocess(rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'kt.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'names.md')))
@@ -39,7 +39,7 @@ class TestPreprocessor(unittest.TestCase):
         file_name = os.path.join('raw_sources', 'en_tq_two_books.zip')
         repo_name = 'en_tq_two_books'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
         do_preprocess(rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '57-TIT.md')))
@@ -48,7 +48,7 @@ class TestPreprocessor(unittest.TestCase):
         file_name = os.path.join('raw_sources', 'en_tq_with_one_md_file.zip')
         repo_name = 'en_tq'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
-        self.out_dir = tempfile.mkdtemp(prefix='output_')
+        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
         do_preprocess(rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
 
@@ -57,7 +57,7 @@ class TestPreprocessor(unittest.TestCase):
         file_path = os.path.join(TestPreprocessor.resources_dir, file_name)
 
         # 1) unzip the repo files
-        temp_dir = tempfile.mkdtemp(prefix='repo_')
+        temp_dir = tempfile.mkdtemp(prefix='test_repo_')
         unzip(file_path, temp_dir)
         repo_dir = os.path.join(temp_dir, repo_name)
         if not os.path.isdir(repo_dir):
