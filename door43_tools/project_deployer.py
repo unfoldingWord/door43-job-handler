@@ -42,6 +42,7 @@ class ProjectDeployer:
     #     self.close()
 
 
+    # TODO: Since this code is now inline, should be able to avoid downloading the build_log when we already have it
     def deploy_revision_to_door43(self, build_log_key):
         """
         Deploys a single revision of a project to door43.org
@@ -239,7 +240,7 @@ class ProjectDeployer:
 
     def template_converted_files(self, build_log, download_key, output_dir, repo_name, resource_type, s3_commit_key,
                                  source_dir, start, template_file):
-        GlobalSettings.logger.debug("template_converted_files()")
+        # GlobalSettings.logger.debug("template_converted_files()")
         GlobalSettings.cdn_s3_handler().download_dir(download_key + '/', source_dir)
         source_dir = os.path.join(source_dir, download_key.replace('/', os.path.sep))
         elapsed_seconds = int(time.time() - start)
