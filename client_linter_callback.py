@@ -42,7 +42,7 @@ class ClientLinterCallback:
         if not self.errors:
             self.errors = []
         self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
+                            prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
         self.s3_results_key = s3_results_key
         self.job = None
 
@@ -130,7 +130,7 @@ class ClientLinterCallback:
         :return:
         """
         output_dir = tempfile.mkdtemp(suffix='',
-                        prefix='Door43_callback_deploy_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
+                        prefix='Door43_callback_deploy_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
         build_log = None
         id_parts = identifier.split('/')
         multiple_project = len(id_parts) > 3
@@ -193,7 +193,7 @@ class ClientLinterCallback:
         ClientLinterCallback.upload_build_log(build_log, 'merged.json', output_dir, s3_results_key)
         # Update build_log to start deploy of this part
         ClientLinterCallback.upload_build_log(build_log, 'build_log.json', output_dir, s3_results_key, cache_time=600)
-        GlobalSettings.logger.info("Deployment on AWS should automatically begin now_")
+        # GlobalSettings.logger.info("Deployment on AWS should automatically begin now_")
         return
 
 
