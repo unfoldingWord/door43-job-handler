@@ -164,13 +164,13 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     final_build_log = ccc_build_log
 
     # Now deploy the new pages (was previously a separate AWS Lambda call)
-    if final_build_log['success']=='True' \
-    or final_build_log['status'] in ('success', 'warnings'):
-        GlobalSettings.logger.info("Deploying the website…")
-        deployer = ProjectDeployer()
-        build_log_key = f'{url_part2}/build_log.json'
-        GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
-        deployer.deploy_revision_to_door43(build_log_key)
+    # if final_build_log['success']=='True' \
+    # or final_build_log['status'] in ('success', 'warnings'):
+    GlobalSettings.logger.info(f"Deploying to the website (convert status={final_build_log['status']})…")
+    deployer = ProjectDeployer()
+    build_log_key = f'{url_part2}/build_log.json'
+    GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
+    deployer.deploy_revision_to_door43(build_log_key)
 
     # Finishing off
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
