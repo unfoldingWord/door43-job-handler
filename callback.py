@@ -20,6 +20,7 @@ from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST
 from global_settings.global_settings import GlobalSettings
 from client_converter_callback import ClientConverterCallback
 from client_linter_callback import ClientLinterCallback
+from door43_tools.project_deployer import ProjectDeployer
 
 
 
@@ -82,6 +83,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     Templating is done
     The results are uploaded to the S3 CDN bucket
     The final log is uploaded to the S3 CDN bucket
+    The pages are then deployed.
 
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
@@ -160,6 +162,17 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
                                   queued_json_payload['converter_errors'])
     ccc_build_log = ccc.process_callback()
     final_build_log = ccc_build_log
+
+    # Now deploy the new pages (was previously a separate AWS Lambda call)
+    # if final_build_log['success']=='True' \
+    # or final_build_log['status'] in ('success', 'warnings'):
+    GlobalSettings.logger.info(f"Deploying to the website (convert status={final_build_log['status']})…")
+    deployer = ProjectDeployer()
+    build_log_key = f'{url_part2}/build_log.json'
+    GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
+    deployer.deploy_revision_to_door43(build_log_key)
+
+    # Finishing off
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
     GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")

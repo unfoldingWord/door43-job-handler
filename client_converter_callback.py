@@ -64,7 +64,7 @@ class ClientConverterCallback:
         if not self.errors:
             self.errors = []
         self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S.%f_'))
+                            prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
     def process_callback(self):
         # job_id_parts = self.identifier.split('/')
