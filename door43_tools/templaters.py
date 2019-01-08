@@ -11,10 +11,25 @@ from general_tools.file_utils import load_yaml_object
 
 
 
+# # This resource_type map is used to set the html body class
+# #   so it must match the css in door43.org/_site/css/project-page.css
+# RESOURCE_CLASS_MAP = {'Open_BibleStories':'obs',
+#                         'Translation_Academy':'ta',
+#                         'Translation_Questions':'tq', 'OBS_Translation_Questions':'tq', 'obs_tq':'tq',
+#                         'Translation_Words':'tw',
+#                         'Translation_Notes':'tn', 'OBS_Translation_Notes':'tn', 'obs_tn':'tn',
+#                         'Bible':'bible', 'Aligned_Bible':'bible',
+#                             'Greek_New_Testament':'bible', 'Hebrew_Old_Testament':'bible',
+#                         }
+
+
+
 def do_template(resource_type, source_dir, output_dir, template_file):
+    """
+    Only used by test_templaters.py
+    """
     templater = init_template(resource_type, source_dir, output_dir, template_file)
     return templater.run()
-
 
 
 def init_template(resource_type, source_dir, output_dir, template_file):
@@ -56,7 +71,18 @@ class Templater:
                      'Conversion successful with warnings', 'Index']
 
     def __init__(self, resource_type, source_dir, output_dir, template_file):
-        self.resource_type = resource_type
+        # self.resource_type = resource_type
+        # This adjusted_resource_type is used to set the html body class
+        #   so it must match the css in door43.org/_site/css/project-page.css
+        # try:
+        #     self.adjusted_resource_type = RESOURCE_CLASS_MAP[resource_type]
+        # except KeyError:
+        #     self.adjusted_resource_type = resource_type
+        assert self.adjusted_resource_type # Must be set by subclass
+        GlobalSettings.logger.info(f'Setting html body class="{self.adjusted_resource_type}"')
+        if self.adjusted_resource_type not in ('obs','ta','tq','tw','tn','bible'):
+            GlobalSettings.logger.error(f'Unexpected html body class="{self.adjusted_resource_type}"')
+
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
         self.template_file = template_file  # Local file of template
@@ -78,7 +104,7 @@ class Templater:
         with open(self.template_file) as template_file:
             self.template_html = template_file.read()
             soup = BeautifulSoup(self.template_html, 'html.parser')
-            soup.body['class'] = soup.body.get('class', []) + [self.resource_type]
+            soup.body['class'] = soup.body.get('class', []) + [self.adjusted_resource_type]
             if self.classes:
                 soup.body['class'] = soup.body.get('class', []) + self.classes
             self.template_html = str(soup)
@@ -273,12 +299,14 @@ class Templater:
 
 class ObsTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'obs'
         super(ObsTemplater, self).__init__(*args, **kwargs)
 
 
 
 class TqTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'tq'
         super(TqTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -362,6 +390,7 @@ class TqTemplater(Templater):
 
 class TwTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'tw'
         super(TwTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -404,6 +433,7 @@ class TwTemplater(Templater):
 
 class TnTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'tn'
         super(TnTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -488,6 +518,7 @@ class TnTemplater(Templater):
 
 class BibleTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'bible'
         super(BibleTemplater, self).__init__(*args, **kwargs)
         self.classes = ['bible']
 
@@ -570,6 +601,7 @@ class BibleTemplater(Templater):
 
 class TaTemplater(Templater):
     def __init__(self, *args, **kwargs):
+        self.adjusted_resource_type = 'ta'
         super(TaTemplater, self).__init__(*args, **kwargs)
         self.section_container_id = 1
 
