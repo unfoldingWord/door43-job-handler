@@ -18,7 +18,10 @@ pymysql==0.8.1
 # NOTE: pymysql 0.9.2 wouldn't work in docker build
 
 # boto3 is used by aws_tools
-boto3==1.9.66
+boto3==1.9.75
 
 #gogs_client is used by gogs_tools
 gogs_client==1.0.6
+
+# For templating
+beautifulsoup4==4.7.1
