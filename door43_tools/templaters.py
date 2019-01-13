@@ -71,17 +71,19 @@ class Templater:
                      'Conversion successful with warnings', 'Index']
 
     def __init__(self, resource_type, source_dir, output_dir, template_file):
-        # self.resource_type = resource_type
-        # This adjusted_resource_type is used to set the html body class
+        self.resource_type = resource_type
+        # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
         # try:
-        #     self.adjusted_resource_type = RESOURCE_CLASS_MAP[resource_type]
+        #     self.templater_CSS_class = RESOURCE_CLASS_MAP[resource_type]
         # except KeyError:
-        #     self.adjusted_resource_type = resource_type
-        assert self.adjusted_resource_type # Must be set by subclass
-        GlobalSettings.logger.info(f'Setting html body class="{self.adjusted_resource_type}"')
-        if self.adjusted_resource_type not in ('obs','ta','tq','tw','tn','bible'):
-            GlobalSettings.logger.error(f'Unexpected html body class="{self.adjusted_resource_type}"')
+        #     self.templater_CSS_class = resource_type
+        assert self.templater_CSS_class # Must be set by subclass
+        GlobalSettings.logger.info(f'Using {self.templater_CSS_class} templater…')
+        if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
+            GlobalSettings.logger.error(f'Unexpected templater_CSS_class={self.templater_CSS_class}')
+        self.adjusted_resource_type = self.templater_CSS_class
+        self.classes = [] # These get appended to the templater_CSS_class
 
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
@@ -94,7 +96,6 @@ class Templater:
         self.titles = {}
         self.chapters = {}
         self.book_codes = {}
-        self.classes = []
 
 
     def run(self):
@@ -107,6 +108,7 @@ class Templater:
             soup.body['class'] = soup.body.get('class', []) + [self.adjusted_resource_type]
             if self.classes:
                 soup.body['class'] = soup.body.get('class', []) + self.classes
+            GlobalSettings.logger.info(f'Have {self.template_file} html body class="{soup.body.get("class", [])}"')
             self.template_html = str(soup)
         self.apply_template()
         return True
@@ -299,14 +301,14 @@ class Templater:
 
 class ObsTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'obs'
+        self.templater_CSS_class = 'obs'
         super(ObsTemplater, self).__init__(*args, **kwargs)
 
 
 
 class TqTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'tq'
+        self.templater_CSS_class = 'tq'
         super(TqTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -390,7 +392,7 @@ class TqTemplater(Templater):
 
 class TwTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'tw'
+        self.templater_CSS_class = 'tw'
         super(TwTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -433,7 +435,7 @@ class TwTemplater(Templater):
 
 class TnTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'tn'
+        self.templater_CSS_class = 'tn'
         super(TnTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
         if index:
@@ -518,9 +520,10 @@ class TnTemplater(Templater):
 
 class BibleTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'bible'
+        self.templater_CSS_class = 'bible'
         super(BibleTemplater, self).__init__(*args, **kwargs)
-        self.classes = ['bible']
+        if self.adjusted_resource_type != 'bible': # avoid "bible bible"
+            self.classes = ['bible'] # These get appended to the html body class
 
 
     def get_page_navigation(self):
@@ -601,7 +604,7 @@ class BibleTemplater(Templater):
 
 class TaTemplater(Templater):
     def __init__(self, *args, **kwargs):
-        self.adjusted_resource_type = 'ta'
+        self.templater_CSS_class = 'ta'
         super(TaTemplater, self).__init__(*args, **kwargs)
         self.section_container_id = 1
 
