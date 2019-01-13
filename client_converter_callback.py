@@ -67,25 +67,6 @@ class ClientConverterCallback:
                             prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
     def process_callback(self):
-        # job_id_parts = self.identifier.split('/')
-        # job_id = job_id_parts[0]
-        # #self.job = TxJob.get(job_id)
-        # assert job_id == self.job.job_id
-
-        # This is now checked elsewhere
-        #if not self.job:
-            #error = 'No job found for job_id = {0}, identifier = {0}'.format(job_id, self.identifier)
-            #GlobalSettings.logger.error(error)
-            #raise Exception(error)
-
-        # if len(job_id_parts) == 4:
-        #     part_count, part_id, book = job_id_parts[1:]
-        #     GlobalSettings.logger.debug(f"Multiple project, part {part_id}"
-        #                                 f" of {part_count}, converting book {book}")
-        #     multiple_project = True
-        # else:
-        # GlobalSettings.logger.debug("Single project")
-        # part_id = None
         multiple_project = False
 
         self.job.ended_at = datetime.utcnow()
