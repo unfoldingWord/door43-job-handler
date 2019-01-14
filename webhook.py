@@ -38,6 +38,7 @@ KNOWN_RESOURCE_SUBJECTS = ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Heb
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
 # TODO: Will we also need 'book' in this map???
 RESOURCE_SUBJECT_MAP = {
+            # Maps from rc.resource.identifier and possibly also from rc.resource.type
             'obs': 'Open_Bible_Stories',
             'obs-tn': 'OBS_Translation_Notes',
             'obs-tq': 'OBS_Translation_Questions',
@@ -480,7 +481,7 @@ def process_job(queued_json_payload, redis_connection):
     if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.debug(f"Using (adjusted) subject to set resource_type={adjusted_subject}")
         resource_type = adjusted_subject
-    elif 'bible' in adjusted_subject.lower():
+    elif 'bible' in adjusted_subject.lower() and rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
         GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set resource_type")
         resource_type = 'Bible'
     else:
