@@ -38,9 +38,10 @@ KNOWN_RESOURCE_SUBJECTS = ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Heb
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
 # TODO: Will we also need 'book' in this map???
 RESOURCE_SUBJECT_MAP = {
+            # Maps from rc.resource.identifier and possibly also from rc.resource.type
             'obs': 'Open_Bible_Stories',
-            'obs_tn': 'OBS_Translation_Notes', 'obs-tn': 'OBS_Translation_Notes',
-            'obs_tq': 'OBS_Translation_Questions', 'obs-tq': 'OBS_Translation_Questions',
+            'obs-tn': 'OBS_Translation_Notes',
+            'obs-tq': 'OBS_Translation_Questions',
 
             'ta': 'Translation_Academy',
             'tn': 'Translation_Notes',
@@ -480,7 +481,7 @@ def process_job(queued_json_payload, redis_connection):
     if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.debug(f"Using (adjusted) subject to set resource_type={adjusted_subject}")
         resource_type = adjusted_subject
-    elif 'bible' in adjusted_subject.lower():
+    elif 'bible' in adjusted_subject.lower() and rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
         GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set resource_type")
         resource_type = 'Bible'
     else:
@@ -500,10 +501,19 @@ def process_job(queued_json_payload, redis_connection):
     if not resource_type and rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
         GlobalSettings.logger.debug(f"Using rc.resource.type='{rc.resource.type}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.type]}")
         resource_type = RESOURCE_SUBJECT_MAP[rc.resource.type]
+
     input_format = rc.resource.file_ext
+    if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
+    and input_format not in ('usfm','usfm3',):
+        # This can happen for usfm in .txt files (ts-desktop exports)
+        use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
+        use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_type={resource_type}")
+        input_format = 'usfm'
+
+    # Summarize
     GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
     if resource_type not in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.error(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
+        GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
     assert resource_type and input_format # Might as well fail here if they're not set properly
 
 

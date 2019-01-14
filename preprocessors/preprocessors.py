@@ -52,6 +52,7 @@ class Preprocessor:
         self.rc = rc
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
+        self.num_files_written = 0
         self.warnings = []
 
         # Write out the new manifest file based on the resource container
@@ -403,6 +404,7 @@ class BiblePreprocessor(Preprocessor):
                 # copy(project_path, os.path.join(self.output_dir, filename))
                 self.clean_copy(project_path, os.path.join(self.output_dir, filename))
                 self.book_filenames.append(filename)
+                self.num_files_written += 1
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
                 GlobalSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
@@ -419,20 +421,33 @@ class BiblePreprocessor(Preprocessor):
                             # copy(usfm_path, output_file_path)
                             self.clean_copy(usfm_path, output_file_path)
                         self.book_filenames.append(filename)
+                        self.num_files_written += 1
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
                     GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
+                    # print("chapters", chapters)
                     if len(chapters):
                         #          Piece the USFM file together
                         title_file = os.path.join(project_path, chapters[0], 'title.txt')
                         if os.path.isfile(title_file):
                             title = read_file(title_file)
                             title = re.sub(r' \d+$', '', title).strip()
+                            # print("title1", title)
                         else:
                             title = project.title
+                            # print("title2", title)
                         if not title and os.path.isfile(os.path.join(project_path, 'title.txt')):
                             title = read_file(os.path.join(project_path, 'title.txt'))
+                            # print("title3", title)
+                        # if not title and os.path.isfile(os.path.join(project_path, 'headers.json')):
+                        #     headers_text = read_file(os.path.join(project_path, 'headers.json'))
+                        #     headers_list = json.loads(headers_text)
+                        #     print("headers_list", headers_list)
+                        #     for headers_dict in headers_list:
+                        #         if headers_dict and 'tag' in headers_dict and headers_dict['tag']=='toc1' and content in headers_dict:
+                        #             title = headers_dict['content']
+                        #         print("title4", title)
                         usfm = f"""
 \\id {project.identifier.upper()} {self.rc.resource.title}
 \\ide UTF-8
@@ -473,6 +488,12 @@ class BiblePreprocessor(Preprocessor):
                         # write_file(os.path.join(self.output_dir, filename), usfm)
                         self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
+                        self.num_files_written += 1
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
+            self.warnings.append("No Bible source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files")
         GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.warnings if self.warnings else True
@@ -718,7 +739,6 @@ class TwPreprocessor(Preprocessor):
             'chapters': {},
             'book_codes': {}
             }
-        num_files_written = 0
 
         # Handle a specific non-conformant tW output (JSON in .txt files in 01/ folder) by ts-desktop
         dir_list = os.listdir(self.source_dir)
@@ -782,7 +802,7 @@ class TwPreprocessor(Preprocessor):
             markdown = self.fix_links(markdown, section)
             output_file = os.path.join(self.output_dir, f'{section}.md')
             write_file(output_file, markdown)
-            num_files_written += 1
+            self.num_files_written += 1
             config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
             if os.path.isfile(config_file):
                 copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
@@ -828,18 +848,18 @@ class TwPreprocessor(Preprocessor):
                     markdown = self.fix_links(markdown, section)
                     output_file = os.path.join(self.output_dir, f'{section}.md')
                     write_file(output_file, markdown)
-                    num_files_written += 1
+                    self.num_files_written += 1
                     config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
                     if os.path.isfile(config_file):
                         copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
                 output_file = os.path.join(self.output_dir, 'index.json')
                 write_file(output_file, index_json)
 
-        if num_files_written == 0:
+        if self.num_files_written == 0:
             GlobalSettings.logger.error(f"tW preprocessor didn't write any markdown files")
             self.warnings.append("No tW source files discovered")
         else:
-            GlobalSettings.logger.debug(f"tW preprocessor wrote {num_files_written} markdown files")
+            GlobalSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files")
         GlobalSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.warnings if self.warnings else True
 

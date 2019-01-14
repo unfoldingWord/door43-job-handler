@@ -11,19 +11,6 @@ from general_tools.file_utils import load_yaml_object
 
 
 
-# # This resource_type map is used to set the html body class
-# #   so it must match the css in door43.org/_site/css/project-page.css
-# RESOURCE_CLASS_MAP = {'Open_BibleStories':'obs',
-#                         'Translation_Academy':'ta',
-#                         'Translation_Questions':'tq', 'OBS_Translation_Questions':'tq', 'obs_tq':'tq',
-#                         'Translation_Words':'tw',
-#                         'Translation_Notes':'tn', 'OBS_Translation_Notes':'tn', 'obs_tn':'tn',
-#                         'Bible':'bible', 'Aligned_Bible':'bible',
-#                             'Greek_New_Testament':'bible', 'Hebrew_Old_Testament':'bible',
-#                         }
-
-
-
 def do_template(resource_type, source_dir, output_dir, template_file):
     """
     Only used by test_templaters.py
@@ -74,10 +61,6 @@ class Templater:
         self.resource_type = resource_type
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
-        # try:
-        #     self.templater_CSS_class = RESOURCE_CLASS_MAP[resource_type]
-        # except KeyError:
-        #     self.templater_CSS_class = resource_type
         assert self.templater_CSS_class # Must be set by subclass
         GlobalSettings.logger.info(f'Using {self.templater_CSS_class} templater…')
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
@@ -100,7 +83,7 @@ class Templater:
 
     def run(self):
         # GlobalSettings.logger.debug("Templater.run()")
-        # get the resource container
+        # Get the resource container
         self.rc = RC(self.source_dir)
         with open(self.template_file) as template_file:
             self.template_html = template_file.read()
