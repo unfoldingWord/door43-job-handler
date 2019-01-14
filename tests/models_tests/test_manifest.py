@@ -15,7 +15,7 @@ class TxManifestTests(TestCase):
 
     def setUp(self):
         """Runs before each test."""
-        GlobalSettings(prefix='{0}-'.format(self._testMethodName), db_connection_string='sqlite:///:memory:')
+        GlobalSettings(prefix=f'{self._testMethodName}-', db_connection_string='sqlite:///:memory:')
         self.items = {}
         self.init_items()
         self.populate_table()
@@ -67,7 +67,7 @@ class TxManifestTests(TestCase):
         self.assertEqual(manifests.count(), len(self.items))
         for tx_manifest in manifests:
             self.assertEqual(tx_manifest.resource_id,
-                             self.items['{0}/{1}'.format(tx_manifest.user_name, tx_manifest.repo_name)]['resource_id'])
+                             self.items[f'{tx_manifest.user_name}/{tx_manifest.repo_name}']['resource_id'])
 
     def test_load_manifest(self):
         manifest_dict = self.items['Door43/en_obs']

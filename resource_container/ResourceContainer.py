@@ -308,6 +308,9 @@ class Resource:
         # RJH added the next few lines Dec 2018
         elif 'content_mime_type' in self.rc.manifest and self.rc.manifest['content_mime_type']:
             return self.rc.manifest['content_mime_type']
+        elif 'format' in self.rc.manifest and self.rc.manifest['format']:
+            # GlobalSettings.logger.debug(f"Returning Resource format={self.rc.manifest['format']} from rc.manifest{' for '+self.identifier if self.identifier else ''}.")
+            return self.rc.manifest['format']
         elif self.rc.usfm_files(): # e.g., a plain USFM bundle (with no manifest, etc.)
             return 'text/usfm'
         GlobalSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")

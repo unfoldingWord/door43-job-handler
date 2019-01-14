@@ -20,5 +20,5 @@ class TextPickleType(TypeDecorator):
             try:
                 value = json.loads(value)
             except:
-                GlobalSettings.logger.debug("Bad JSON: {0}".format(value))
+                GlobalSettings.logger.debug(f"Bad JSON: {value}")
         return value

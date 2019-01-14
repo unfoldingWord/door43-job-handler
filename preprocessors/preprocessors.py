@@ -14,25 +14,25 @@ from resource_container.ResourceContainer import RC
 
 def do_preprocess(rc, repo_dir, output_dir):
     if rc.resource.identifier == 'obs':
-        GlobalSettings.logger.debug("do_preprocess: using ObsPreprocessor…")
+        GlobalSettings.logger.info("do_preprocess: using ObsPreprocessor…")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.file_ext == 'usfm':
-        GlobalSettings.logger.debug("do_preprocess: using BiblePreprocessor…")
+    elif rc.resource.file_ext == 'usfm' or rc.resource.format == 'usfm':
+        GlobalSettings.logger.info("do_preprocess: using BiblePreprocessor…")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'ta':
-        GlobalSettings.logger.debug("do_preprocess: using TaPreprocessor…")
+        GlobalSettings.logger.info("do_preprocess: using TaPreprocessor…")
         preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tq':
-        GlobalSettings.logger.debug("do_preprocess: using TqPreprocessor…")
+        GlobalSettings.logger.info("do_preprocess: using TqPreprocessor…")
         preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tw':
-        GlobalSettings.logger.debug("do_preprocess: using TwPreprocessor…")
+        GlobalSettings.logger.info("do_preprocess: using TwPreprocessor…")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
     elif rc.resource.identifier == 'tn':
-        GlobalSettings.logger.debug("do_preprocess: using TnPreprocessor…")
+        GlobalSettings.logger.info("do_preprocess: using TnPreprocessor…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.debug(f"do_preprocess: using Preprocessor for resource: {rc.resource.identifier} …")
+        GlobalSettings.logger.info(f"do_preprocess: using generic Preprocessor for resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
 
@@ -433,14 +433,14 @@ class BiblePreprocessor(Preprocessor):
                             title = project.title
                         if not title and os.path.isfile(os.path.join(project_path, 'title.txt')):
                             title = read_file(os.path.join(project_path, 'title.txt'))
-                        usfm = """
-\\id {0} {1}
+                        usfm = f"""
+\\id {project.identifier.upper()} {self.rc.resource.title}
 \\ide UTF-8
-\\h {2}
-\\toc1 {2}
-\\toc2 {2}
-\\mt {2}
-""".format(project.identifier.upper(), self.rc.resource.title, title)
+\\h {title}
+\\toc1 {title}
+\\toc2 {title}
+\\mt {title}
+"""
                         for chapter in chapters:
                             if chapter in self.ignoreDirectories:
                                 continue
@@ -547,7 +547,7 @@ class TaPreprocessor(Preprocessor):
         else:
             link = f'section-container-{self.section_container_id}'
             self.section_container_id = self.section_container_id + 1
-        markdown = '{0} <a id="{1}"/>{2}\n\n'.format('#' * level, link, self.get_title(project, link, section['title']))
+        markdown = f"""{'#' * level} <a id="{link}"/>{self.get_title(project, link, section['title'])}\n\n"""
         if 'link' in section:
             top_box = ""
             bottom_box = ""
@@ -602,12 +602,10 @@ class TaPreprocessor(Preprocessor):
             # generate the ToC on live.door43.org
             toc_file = os.path.join(self.source_dir, project.path, 'toc.yaml')
             if os.path.isfile(toc_file):
-                copy(toc_file, os.path.join(self.output_dir, '{0}-{1}-toc.yaml'.format(str(idx+1).zfill(2),
-                                                                                       project.identifier)))
+                copy(toc_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-toc.yaml'))
             config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
             if os.path.isfile(config_file):
-                copy(config_file, os.path.join(self.output_dir, '{0}-{1}-config.yaml'.format(str(idx+1).zfill(2),
-                                                                                             project.identifier)))
+                copy(config_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-config.yaml'))
         GlobalSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
@@ -664,7 +662,7 @@ class TqPreprocessor(Preprocessor):
                     chapter = os.path.basename(chapter_dir)
                     link = f'tq-chapter-{book}-{chapter.zfill(3)}'
                     index_json['chapters'][html_file].append(link)
-                    markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
+                    markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
                     chunk_files = sorted(glob(os.path.join(chapter_dir, '*.md')))
                     for chunk_idx, chunk_file in enumerate(chunk_files):
                         start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
@@ -686,7 +684,7 @@ class TqPreprocessor(Preprocessor):
                                 self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
                                 # TODO: The following is probably not the best/right thing to do???
                                 end_verse = '199'
-                        link = 'tq-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), str(start_verse).zfill(3))
+                        link = f'tq-chunk-{book}-{str(chapter).zfill(3)}-{str(start_verse).zfill(3)}'
                         markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
                             format(link, name, chapter.lstrip('0'), start_verse,
                                    '-'+end_verse if start_verse != end_verse else '')
@@ -696,7 +694,7 @@ class TqPreprocessor(Preprocessor):
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
             else:
-                GlobalSettings.logger.debug('TqPreprocessor: extra project found: {0}'.format(project.identifier))
+                GlobalSettings.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
@@ -719,52 +717,124 @@ class TwPreprocessor(Preprocessor):
             'titles': {},
             'chapters': {},
             'book_codes': {}
-        }
-        title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
-        headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
+            }
         num_files_written = 0
-        for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}' …")
+
+        # Handle a specific non-conformant tW output (JSON in .txt files in 01/ folder) by ts-desktop
+        dir_list = os.listdir(self.source_dir)
+        if len(dir_list)==3 and '01' in dir_list: # ['LICENSE.md', '01', 'manifest.json']
+            # Handle tW json (.txt) files containing "title" and "body" fields
+            GlobalSettings.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
+            assert len(self.rc.projects) == 1
+            project = self.rc.projects[0]
+            GlobalSettings.logger.debug(f"tW preprocessor 01: Copying files for '{project.identifier}' …")
+            # GlobalSettings.logger.debug(f"tW preprocessor 01: project.path='{project.path}'")
+            # Collect all the JSON MD data from the text files into dictionaries
             term_text = {}
-            section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
-            for section_dir in section_dirs:
-                section = os.path.basename(section_dir)
-                if section not in self.section_titles:
-                    continue
-                key = '{0}.html'.format(section)
-                index_json['titles'][key] = self.section_titles[section]
-                index_json['chapters'][key] = {}
-                index_json['book_codes'][key] = section
-                term_files = sorted(glob(os.path.join(section_dir, '*.md')))
-                for term_file in term_files:
-                    term = os.path.splitext(os.path.basename(term_file))[0]
-                    text = read_file(term_file)
-                    if title_re.search(text):
-                        title = title_re.search(text).group(1)
-                        text = title_re.sub(r'# <a id="{0}"/>\1 #'.format(term), text)  # inject the term by the title
+            section = 'other' # since we don't have any other info to set this inteligently (e.g., KTs, names)
+            key = f'{section}.html'
+            index_json['titles'][key] = self.section_titles[section]
+            index_json['chapters'][key] = {}
+            index_json['book_codes'][key] = section
+            term_files = sorted(glob(os.path.join(self.source_dir, '01/', '*.txt')))
+            for term_filepath in term_files:
+                # These .txt files actually contain JSON (which contains markdown)
+                GlobalSettings.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
+                term = os.path.splitext(os.path.basename(term_filepath))[0]
+                text = read_file(term_filepath)
+                try:
+                    json_data = json.loads(text)
+                except json.decoder.JSONDecodeError as e:
+                    # Clean-up the filepath for display (mostly removing /tmp folder names)
+                    adjusted_filepath = '/'.join(term_filepath.split('/')[6:]) #.replace('/./','/')
+                    error_message = f"Badly formed tW json file '{adjusted_filepath}': {e}"
+                    GlobalSettings.logger.error(error_message)
+                    self.warnings.append(error_message)
+                    json_data = {}
+                unit_count = 0
+                title = body_text = None
+                for tw_unit in json_data:
+                    if 'title' in tw_unit and 'body' in tw_unit:
+                        title = tw_unit['title']
+                        if not title:
+                            self.warnings.append(f"Missing tW title in {term}.txt: {tw_unit}")
+                        elif '\n' in title:
+                            self.warnings.append(f"Badly formatted tW title in {term}.txt: {title!r}")
+                        raw_body_text = tw_unit['body']
+                        if not raw_body_text:
+                            self.warnings.append(f"Missing tW body in {term}.txt: {tw_unit}")
+                        body_text = f'### <a id="{term}"/>{title}\n\n{raw_body_text}'
+                        unit_count += 1
                     else:
-                        title = os.path.splitext(os.path.basename(term_file))[0]  # No title found, so using term
-                    text = headers_re.sub(r'#\1 \2', text)
-                    index_json['chapters'][key][term] = title
-                    term_text[term] = text
-                # Sort terms by title and add to markdown
-                markdown = ''
-                titles = index_json['chapters'][key]
-                terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
-                for term in terms_sorted_by_title:
-                    if markdown:
-                        markdown += '<hr>\n\n'
-                    markdown += term_text[term] + '\n\n'
-                markdown = '# <a id="tw-section-{0}"/>{1}\n\n'.format(section, self.section_titles[section]) + markdown
-                markdown = self.fix_links(markdown, section)
-                output_file = os.path.join(self.output_dir, '{0}.md'.format(section))
-                write_file(output_file, markdown)
-                num_files_written += 1
-                config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
-                if os.path.isfile(config_file):
-                    copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
+                        self.warnings.append(f"Unexpected tW unit in {term}.txt: {tw_unit}")
+                assert unit_count == 1 # Only expect one title/body set I think
+                index_json['chapters'][key][term] = title
+                term_text[term] = body_text
+            # Now process the dictionaries to sort terms by title and add to markdown
+            markdown = ''
+            titles = index_json['chapters'][key]
+            terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
+            for term in terms_sorted_by_title:
+                if markdown:
+                    markdown += '<hr>\n\n'
+                markdown += f"{term_text[term]}\n\n"
+            markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n{markdown}'
+            markdown = self.fix_links(markdown, section)
+            output_file = os.path.join(self.output_dir, f'{section}.md')
+            write_file(output_file, markdown)
+            num_files_written += 1
+            config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
+            if os.path.isfile(config_file):
+                copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
+
+        else: # handle tW markdown files
+            title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
+            headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
+            for project in self.rc.projects:
+                GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}' …")
+                term_text = {}
+                section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
+                for section_dir in section_dirs:
+                    section = os.path.basename(section_dir)
+                    if section not in self.section_titles:
+                        continue
+                    key = f'{section}.html'
+                    index_json['titles'][key] = self.section_titles[section]
+                    index_json['chapters'][key] = {}
+                    index_json['book_codes'][key] = section
+                    term_files = sorted(glob(os.path.join(section_dir, '*.md')))
+                    for term_filepath in term_files:
+                        term = os.path.splitext(os.path.basename(term_filepath))[0]
+                        text = read_file(term_filepath)
+                        if title_re.search(text):
+                            title = title_re.search(text).group(1)
+                            text = title_re.sub(r'# <a id="{0}"/>\1 #'.format(term), text)  # inject the term by the title
+                        else:
+                            title = os.path.splitext(os.path.basename(term_filepath))[0]  # No title found, so using term
+                        text = headers_re.sub(r'#\1 \2', text)
+                        index_json['chapters'][key][term] = title
+                        term_text[term] = text
+                    # Sort terms by title and add to markdown
+                    markdown = ''
+                    titles = index_json['chapters'][key]
+                    terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
+                    for term in terms_sorted_by_title:
+                        if markdown:
+                            markdown += '<hr>\n\n'
+                        markdown += term_text[term] + '\n\n'
+                    markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n' + markdown
+                    markdown = self.fix_links(markdown, section)
+                    output_file = os.path.join(self.output_dir, f'{section}.md')
+                    write_file(output_file, markdown)
+                    num_files_written += 1
+                    config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
+                    if os.path.isfile(config_file):
+                        copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
+                output_file = os.path.join(self.output_dir, 'index.json')
+                write_file(output_file, index_json)
+
         if num_files_written == 0:
             GlobalSettings.logger.error(f"tW preprocessor didn't write any markdown files")
             self.warnings.append("No tW source files discovered")
@@ -836,13 +906,13 @@ class TnPreprocessor(Preprocessor):
             GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
-                html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
+                html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
                 index_json['book_codes'][html_file] = book
                 name = BOOK_NAMES[book]
                 index_json['titles'][html_file] = name
                 # If there's a TSV file, copy it directly across
                 found_tsv = False
-                tsv_filename_end = '{0}-{1}.tsv'.format(BOOK_NUMBERS[book], book.upper())
+                tsv_filename_end = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv_filename_end): # We have the tsv file
                         found_tsv = True
@@ -853,7 +923,7 @@ class TnPreprocessor(Preprocessor):
                 if not found_tsv: # Look for markdown or json .txt
                     markdown = ''
                     chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
-                    markdown += '# <a id="tn-{0}"/> {1}\n\n'.format(book, name)
+                    markdown += f'# <a id="tn-{book}"/> {name}\n\n'
                     index_json['chapters'][html_file] = []
                     for move_str in ['front', 'intro']:
                         self.move_to_front(chapter_dirs, move_str)
@@ -863,9 +933,9 @@ class TnPreprocessor(Preprocessor):
                         if chapter in self.ignoreFiles or chapter == 'manifest.json':
                             # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
                             continue
-                        link = 'tn-chapter-{0}-{1}'.format(book, chapter.zfill(3))
+                        link = f'tn-chapter-{book}-{chapter.zfill(3)}'
                         index_json['chapters'][html_file].append(link)
-                        markdown += '## <a id="{0}"/> {1} {2}\n\n'.format(link, name, chapter.lstrip('0'))
+                        markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths: # We have .md files
                             # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
@@ -888,7 +958,7 @@ class TnPreprocessor(Preprocessor):
                                     end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
 
                                 start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
-                                link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                                link = f'tn-chunk-{book}-{str(chapter).zfill(3)}-{start_verse_str}'
                                 markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
@@ -919,7 +989,7 @@ class TnPreprocessor(Preprocessor):
                                     end_verse = chapter_verses[chapter_str] if chapter_str in chapter_verses else start_verse
 
                                 start_verse_str = str(start_verse).zfill(3) if start_verse.isdigit() else start_verse
-                                link = 'tn-chunk-{0}-{1}-{2}'.format(book, str(chapter).zfill(3), start_verse_str)
+                                link = f'tn-chunk-{book}-{str(chapter).zfill(3)}-{start_verse_str}'
                                 markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
@@ -942,7 +1012,7 @@ class TnPreprocessor(Preprocessor):
                     if not found_something:
                         self.warnings.append(f"tN Preprocessor didn't find any valid source files for {book}")
                     markdown = self.fix_links(markdown)
-                    book_file_name = '{0}-{1}.md'.format(BOOK_NUMBERS[book], book.upper())
+                    book_file_name = f'{BOOK_NUMBERS[book]}-{book.upper()}.md'
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
                     # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")

@@ -31,6 +31,29 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'Door43_job_handler'
+KNOWN_RESOURCE_SUBJECTS = ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
+            'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
+            'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
+            ) # from https://api.door43.org/v3/subjects
+            # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
+# TODO: Will we also need 'book' in this map???
+RESOURCE_SUBJECT_MAP = {
+            'obs': 'Open_Bible_Stories',
+            'obs_tn': 'OBS_Translation_Notes', 'obs-tn': 'OBS_Translation_Notes',
+            'obs_tq': 'OBS_Translation_Questions', 'obs-tq': 'OBS_Translation_Questions',
+
+            'ta': 'Translation_Academy',
+            'tn': 'Translation_Notes',
+            'tq': 'Translation_Questions',
+            'tw': 'Translation_Words',
+            'bible': 'Bible', 'reg': 'Bible',
+
+            # TODO: Have I got these next two correct???
+            #'help':'Translation_Academy',
+            #'man':'Translation_Academy',
+            }
+
+
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
@@ -451,17 +474,37 @@ def process_job(queued_json_payload, redis_connection):
     GlobalSettings.logger.debug(f"rc.resource.file_ext={rc.resource.file_ext}")
     GlobalSettings.logger.debug(f"rc.resource.type={rc.resource.type}")
     GlobalSettings.logger.debug(f"rc.resource.subject={rc.resource.subject}")
+    GlobalSettings.logger.debug(f"rc.resource.format={rc.resource.format}")
     adjusted_subject = rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
     resource_type = None
-    if adjusted_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
-                'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
-                'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
-                ): # from https://api.door43.org/v3/subjects
+    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
+        GlobalSettings.logger.debug(f"Using (adjusted) subject to set resource_type={adjusted_subject}")
         resource_type = adjusted_subject
-    if not resource_type: resource_type = rc.resource.identifier # e.g., tq, tn, ta
-    if not resource_type: resource_type = rc.resource.type # e.g., help, man
+    elif 'bible' in adjusted_subject.lower():
+        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set resource_type")
+        resource_type = 'Bible'
+    else:
+        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set resource_type")
+    if not resource_type:
+        if rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
+            GlobalSettings.logger.debug(f"Using rc.resource.format to set resource_type={rc.resource.format}")
+            resource_type = 'Bible'
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{rc.resource.format}' to set resource_type")
+    if not resource_type:
+        if rc.resource.identifier in RESOURCE_SUBJECT_MAP:
+            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.identifier]}")
+            resource_type = RESOURCE_SUBJECT_MAP[rc.resource.identifier]
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
+    if not resource_type and rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
+        GlobalSettings.logger.debug(f"Using rc.resource.type='{rc.resource.type}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.type]}")
+        resource_type = RESOURCE_SUBJECT_MAP[rc.resource.type]
     input_format = rc.resource.file_ext
-    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}.")
+    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
+    if resource_type not in KNOWN_RESOURCE_SUBJECTS:
+        GlobalSettings.logger.error(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
+    assert resource_type and input_format # Might as well fail here if they're not set properly
 
 
     # Save manifest to manifest table
@@ -570,7 +613,8 @@ def process_job(queued_json_payload, redis_connection):
         'job_id': our_job_id,
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
         'resource_type': resource_type, # This used to be rc.resource.identifier
-        'input_format': input_format,
+        'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
+                            else input_format, # special case for .txt Bibles
         'output_format': 'html',
         'source': source_url_base + '/' + file_key,
         'callback': 'http://127.0.0.1:8080/tx-callback/' \

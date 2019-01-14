@@ -121,8 +121,8 @@ class TestObsPreprocessor(unittest.TestCase):
 
         for file_to_verify in files_to_verify:
             file_name = os.path.join(folder, file_to_verify)
-            self.assertTrue(os.path.isfile(file_name), 'OBS md file not found: {0}'.format(file_to_verify))
+            self.assertTrue(os.path.isfile(file_name), f'OBS md file not found: {file_to_verify}')
 
         for file_to_verify in files_missing:
             file_name = os.path.join(folder, file_to_verify)
-            self.assertFalse(os.path.isfile(file_name), 'OBS md file present, but should not be: {0}'.format(file_to_verify))
+            self.assertFalse(os.path.isfile(file_name), 'OBS md file present, but should not be: {file_to_verify}')
