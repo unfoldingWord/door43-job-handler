@@ -42,12 +42,14 @@ class ProjectDeployer:
     #     self.close()
 
 
-    # TODO: Since this code is now inline, should be able to avoid downloading the build_log when we already have it
-    def deploy_revision_to_door43(self, build_log_key):
+    def download_buildlog_and_deploy_revision_to_door43(self, build_log_key):
         """
         Deploys a single revision of a project to door43.org
         :param string build_log_key:
         :return bool:
+
+        Was used by Lambda function
+            but now only called by test routines.
         """
         build_log = None
         try:
@@ -61,6 +63,15 @@ class ProjectDeployer:
             GlobalSettings.logger.debug(f"Exiting, Invalid build log at {build_log_key}: {build_log}")
             return False
 
+        return self.deploy_revision_to_door43(build_log)
+
+
+    def deploy_revision_to_door43(self, build_log):
+        """
+        Deploys a single revision of a project to door43.org
+        :param dict build_log:
+        :return bool:
+        """
         start = time.time()
         GlobalSettings.logger.debug(f"Deploying, build log: {json.dumps(build_log)[:256]} …")
 

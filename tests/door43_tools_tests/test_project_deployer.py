@@ -41,34 +41,34 @@ class ProjectDeployerTests(unittest.TestCase):
     def tearDown(self):
         rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_obs_deploy_revision_to_door43(self):
+    def test_obs_download_buildlog_and_deploy_revision_to_door43(self):
         self.mock_s3_obs_project()
         build_log_key = '{0}/build_log.json'.format(self.project_key)
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
         self.assertTrue(ret)
         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/50.html'.format(self.project_key)))
 
-    def test_obs_deploy_revision_to_door43_exception(self):
+    def test_obs_download_buildlog_and_deploy_revision_to_door43_exception(self):
         self.mock_s3_obs_project()
         build_log_key = '{0}/build_log.json'.format(self.project_key)
         self.deployer.run_templater = self.mock_run_templater_exception
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
         self.assertFalse(ret)
 
-    def test_bad_deploy_revision_to_door43(self):
+    def test_bad_download_buildlog_and_deploy_revision_to_door43(self):
         self.mock_s3_obs_project()
         bad_key = 'u/test_user/test_repo/12345678/bad_build_log.json'
-        ret = self.deployer.deploy_revision_to_door43(bad_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(bad_key)
         self.assertFalse(ret)
 
-    def test_tq_deploy_revision_to_door43(self):
+    def test_tq_download_buildlog_and_deploy_revision_to_door43(self):
         # given
         self.mock_s3_tq_project()
         build_log_key = '{0}/build_log.json'.format(self.project_key)
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.assertTrue(ret)
@@ -86,10 +86,10 @@ class ProjectDeployerTests(unittest.TestCase):
             key = '{0}/{1}'.format(parent_key, file_name)
             self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
-    def test_tw_deploy_revision_to_door43(self):
+    def test_tw_download_buildlog_and_deploy_revision_to_door43(self):
         self.mock_s3_tw_project()
         build_log_key = '{0}/build_log.json'.format(self.project_key)
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
         self.assertTrue(ret)
         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
         for file_name in ['index.html', 'kt.html', 'names.html', 'other.html', 'build_log.json', 'manifest.yaml']:
@@ -100,14 +100,14 @@ class ProjectDeployerTests(unittest.TestCase):
             key = '{0}/{1}'.format(parent_key, file_name)
             self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
-    def test_tn_deploy_revision_to_door43(self):
+    def test_tn_download_buildlog_and_deploy_revision_to_door43(self):
         # given
         part = '1'
         self.mock_s3_tn_project(part)
         build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.assertTrue(ret)
@@ -130,7 +130,7 @@ class ProjectDeployerTests(unittest.TestCase):
         expect_success = True
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, output_key)
@@ -145,7 +145,7 @@ class ProjectDeployerTests(unittest.TestCase):
         self.deployer.run_templater = self.mock_run_templater_exception
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.assertFalse(ret)
@@ -160,7 +160,7 @@ class ProjectDeployerTests(unittest.TestCase):
         expect_success = False
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, None)
@@ -175,7 +175,7 @@ class ProjectDeployerTests(unittest.TestCase):
         expect_success = True
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, None)
@@ -192,7 +192,7 @@ class ProjectDeployerTests(unittest.TestCase):
         output_key = '{0}/{1}'.format(self.project_key, output_file)
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, output_key)
@@ -206,7 +206,7 @@ class ProjectDeployerTests(unittest.TestCase):
         self.deployer.run_templater = self.mock_run_templater_exception
 
         # when
-        ret = self.deployer.deploy_revision_to_door43(build_log_key)
+        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
         # then
         self.assertFalse(ret)
