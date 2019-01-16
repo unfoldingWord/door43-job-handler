@@ -164,7 +164,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     final_build_log = ccc_build_log
 
     # Now deploy the new pages (was previously a separate AWS Lambda call)
-    GlobalSettings.logger.info(f"Deploying to the website (convert status={final_build_log['status']})…")
+    GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
     deployer = ProjectDeployer()
     # build_log_key = f'{url_part2}/build_log.json'
     # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")

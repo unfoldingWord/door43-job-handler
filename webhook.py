@@ -514,8 +514,9 @@ def process_job(queued_json_payload, redis_connection):
     GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
     if resource_type not in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
-    assert resource_type and input_format # Might as well fail here if they're not set properly
-
+    if not resource_type or not input_format:
+        # Might as well fail here if they're not set properly
+        raise Exception(f"Unable to find a type/format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={adjusted_subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
