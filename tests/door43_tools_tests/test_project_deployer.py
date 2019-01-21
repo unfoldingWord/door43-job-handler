@@ -180,7 +180,7 @@ class ProjectDeployerTests(unittest.TestCase):
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, None)
 
-    def test_bible_deploy_mutli_part_merg_revision_to_door43(self):
+    def test_bible_deploy_multi_part_merg_revision_to_door43(self):
         # given
         test_repo_name = 'en-ulb-4-books-multipart.zip'
         project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
@@ -197,7 +197,7 @@ class ProjectDeployerTests(unittest.TestCase):
         # then
         self.validate_bible_results(ret, build_log_key, expect_success, output_key)
 
-    def test_bible_deploy_mutli_part_merg_revision_to_door43_exception(self):
+    def test_bible_deploy_multi_part_merg_revision_to_door43_exception(self):
         # given
         test_repo_name = 'en-ulb-4-books-multipart.zip'
         project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
