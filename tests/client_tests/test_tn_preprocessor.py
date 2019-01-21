@@ -36,7 +36,7 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        results = do_preprocess(rc, repo_dir, self.out_dir)
+        results = do_preprocess('Translation_Notes', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())
@@ -59,7 +59,7 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        results = do_preprocess(rc, repo_dir, self.out_dir)
+        results = do_preprocess('Translation_Notes', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())

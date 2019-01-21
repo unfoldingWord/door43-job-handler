@@ -18,7 +18,7 @@ def do_preprocess(repo_subject, rc, repo_dir, output_dir):
         GlobalSettings.logger.info("do_preprocess: using ObsPreprocessor…")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
     # elif rc.resource.file_ext == 'usfm' or rc.resource.format == 'usfm':
-    if repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
+    elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
         GlobalSettings.logger.info("do_preprocess: using BiblePreprocessor…")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
     # elif rc.resource.identifier == 'ta':

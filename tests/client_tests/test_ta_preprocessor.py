@@ -33,7 +33,7 @@ class TestTaPreprocessor(unittest.TestCase):
         repo_name = 'en_ta'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='test_output_')
-        do_preprocess(rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Academy', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '01-intro.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-process.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '03-translate.md')))

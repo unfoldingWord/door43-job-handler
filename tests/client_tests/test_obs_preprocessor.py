@@ -65,7 +65,7 @@ class TestObsPreprocessor(unittest.TestCase):
 
     def runObsPreprocessor(self, rc, repo_dir):
         self.out_dir = tempfile.mkdtemp(prefix='test_output_')
-        do_preprocess(rc, repo_dir, self.out_dir)
+        do_preprocess('Open_Bible_Stories', rc, repo_dir, self.out_dir)
         return self.out_dir
 
     # def test_PackageResource(self):
@@ -89,7 +89,7 @@ class TestObsPreprocessor(unittest.TestCase):
     def packageResource(self, resource, repo_name):
         source_folder = os.path.join(TestObsPreprocessor.resources_dir, resource, repo_name)
         self.temp_dir = tempfile.mkdtemp(prefix='test_repo_')
-        zip_filepath = TestObsPreprocessor.createZipFile(repo_name + ".zip", self.temp_dir, source_folder)
+        zip_filepath = TestObsPreprocessor.createZipFile(repo_name + '.zip', self.temp_dir, source_folder)
         return zip_filepath
 
     @classmethod
