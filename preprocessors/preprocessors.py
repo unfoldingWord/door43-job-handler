@@ -12,27 +12,33 @@ from resource_container.ResourceContainer import RC
 
 
 
-def do_preprocess(rc, repo_dir, output_dir):
-    if rc.resource.identifier == 'obs':
+def do_preprocess(repo_subject, rc, repo_dir, output_dir):
+    # if rc.resource.identifier == 'obs':
+    if repo_subject == 'Open_Bible_Stories':
         GlobalSettings.logger.info("do_preprocess: using ObsPreprocessor…")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.file_ext == 'usfm' or rc.resource.format == 'usfm':
+    # elif rc.resource.file_ext == 'usfm' or rc.resource.format == 'usfm':
+    if repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
         GlobalSettings.logger.info("do_preprocess: using BiblePreprocessor…")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.identifier == 'ta':
+    # elif rc.resource.identifier == 'ta':
+    elif repo_subject == 'Translation_Academy':
         GlobalSettings.logger.info("do_preprocess: using TaPreprocessor…")
         preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.identifier == 'tq':
+    # elif rc.resource.identifier == 'tq':
+    elif repo_subject in ('Translation_Questions','OBS_Translation_Questions'):
         GlobalSettings.logger.info("do_preprocess: using TqPreprocessor…")
         preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.identifier == 'tw':
+    # elif rc.resource.identifier == 'tw':
+    elif repo_subject == 'Translation_Words':
         GlobalSettings.logger.info("do_preprocess: using TwPreprocessor…")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
-    elif rc.resource.identifier == 'tn':
+    # elif rc.resource.identifier == 'tn':
+    elif repo_subject in ('Translation_Notes','OBS_Translation_Notes'):
         GlobalSettings.logger.info("do_preprocess: using TnPreprocessor…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.info(f"do_preprocess: using generic Preprocessor for resource: {rc.resource.identifier} …")
+        GlobalSettings.logger.info(f"do_preprocess: using generic Preprocessor for {repo_subject} resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
 
@@ -78,6 +84,7 @@ class Preprocessor:
                 else:
                     filename = f'{str(idx + 1).zfill(2)}-{project.identifier}.{self.rc.resource.file_ext}'
                 copy(project_path, os.path.join(self.output_dir, filename))
+                self.num_files_written += 1
             else:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
                 GlobalSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
@@ -88,6 +95,7 @@ class Preprocessor:
                         if os.path.isfile(file_path) and not os.path.exists(output_file_path) \
                                 and os.path.basename(file_path) not in self.ignoreFiles:
                             copy(file_path, output_file_path)
+                            self.num_files_written += 1
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
                     GlobalSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
@@ -105,6 +113,12 @@ class Preprocessor:
                         else:
                             filename = f'{str(idx+1).zfill(2)}-{project.identifier}.{self.rc.resource.file_ext}'
                         write_file(os.path.join(self.output_dir, filename), text)
+                        self.num_files_written += 1
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"Default preprocessor didn't write any files")
+            self.warnings.append("No source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files")
         GlobalSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
@@ -196,6 +210,7 @@ class ObsPreprocessor(Preprocessor):
                 if os.path.isfile(file_path) and not os.path.exists(output_file_path) \
                         and os.path.basename(file_path) not in self.ignoreFiles:
                     copy(file_path, output_file_path)
+                    self.num_files_written += 1
             if self.is_chunked(project):
                 for chapter in self.get_chapters(project_path):
                     markdown = f"# {chapter['title']}\n\n"
@@ -205,6 +220,7 @@ class ObsPreprocessor(Preprocessor):
                     markdown += f"_{chapter['reference']}_\n"
                     output_file = os.path.join(self.output_dir, f"{chapter.get('id')}.md")
                     write_file(output_file, markdown)
+                    self.num_files_written += 1
             else:
                 for chapter in self.rc.chapters(project.identifier):
                     f = None
@@ -214,7 +230,13 @@ class ObsPreprocessor(Preprocessor):
                         f = os.path.join(project_path, chapter, 'intro.md')
                     if f:
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
-        GlobalSettings.logger.debug(f"Obs preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+                        self.num_files_written += 1
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
+            self.warnings.append("No OBS source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files")
+        GlobalSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 # end of class ObsPreprocessor
 
@@ -618,6 +640,7 @@ class TaPreprocessor(Preprocessor):
             markdown = self.fix_links(markdown)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
+            self.num_files_written += 1
 
             # Copy the toc and config.yaml file to the output dir so they can be used to
             # generate the ToC on live.door43.org
@@ -627,6 +650,11 @@ class TaPreprocessor(Preprocessor):
             config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
             if os.path.isfile(config_file):
                 copy(config_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-config.yaml'))
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"tA preprocessor didn't write any markdown files")
+            self.warnings.append("No tA source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files")
         GlobalSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return True
 
@@ -714,8 +742,16 @@ class TqPreprocessor(Preprocessor):
                         markdown += text
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
+                self.num_files_written += 1
             else:
                 GlobalSettings.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
+
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
+            self.warnings.append("No tQ source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files")
+
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
@@ -1037,8 +1073,16 @@ class TnPreprocessor(Preprocessor):
                     file_path = os.path.join(self.output_dir, book_file_name)
                     # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
                     write_file(file_path, markdown)
+                    self.num_files_written += 1
             else:
                 GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
+
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error(f"tN preprocessor didn't write any markdown files")
+            self.warnings.append("No tN source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files")
+
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
