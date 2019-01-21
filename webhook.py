@@ -498,6 +498,15 @@ def process_job(queued_json_payload, redis_connection):
             resource_type = RESOURCE_SUBJECT_MAP[rc.resource.identifier]
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
+    if not resource_type:
+        for resource_subject_string in RESOURCE_SUBJECT_MAP:
+            if rc.resource.identifier.endswith('_'+resource_subject_string) \
+            or rc.resource.identifier.endswith('-'+resource_subject_string):
+                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
+                resource_type = RESOURCE_SUBJECT_MAP[resource_subject_string]
+                break
+        else: # if didn't match/break above
+            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
     if not resource_type and rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
         GlobalSettings.logger.debug(f"Using rc.resource.type='{rc.resource.type}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.type]}")
         resource_type = RESOURCE_SUBJECT_MAP[rc.resource.type]
@@ -547,7 +556,7 @@ def process_job(queued_json_payload, redis_connection):
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    preprocessor_result = do_preprocess(rc, repo_dir, preprocess_dir)
+    preprocessor_result = do_preprocess(resource_type, rc, repo_dir, preprocess_dir)
     # preprocess_result is normally True, but can be a warning dict for the Bible preprocessor
     preprocessor_warning_list = preprocessor_result if isinstance(preprocessor_result, list) else None
     if preprocessor_warning_list:
