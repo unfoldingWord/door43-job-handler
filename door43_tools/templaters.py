@@ -11,44 +11,40 @@ from general_tools.file_utils import load_yaml_object
 
 
 
-def do_template(resource_type, source_dir, output_dir, template_file):
+def do_template(repo_subject, source_dir, output_dir, template_file):
     """
     Only used by test_templaters.py
     """
-    templater = init_template(resource_type, source_dir, output_dir, template_file)
+    templater = init_template(repo_subject, source_dir, output_dir, template_file)
     return templater.run()
 
 
-def init_template(resource_type, source_dir, output_dir, template_file):
+def init_template(repo_subject, source_dir, output_dir, template_file):
     """
-    Tries to determine the correct templater for the appropriate resource_type
+    Tries to determine the correct templater for the appropriate repo_subject
     """
-    # GlobalSettings.logger.debug(f"init_template({resource_type})")
-    if resource_type in ('Open_Bible_Stories','obs'):
-        GlobalSettings.logger.info(f"Using ObsTemplater for {resource_type} …")
-        templater = ObsTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Academy','ta') \
-    or resource_type.endswith('-ta') or resource_type.endswith('_ta'):
-        GlobalSettings.logger.info(f"Using TaTemplater for {resource_type} …")
-        templater = TaTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Questions','OBS_Translation_Questions','tq') \
-    or resource_type.endswith('-tq') or resource_type.endswith('_tq'):
-        GlobalSettings.logger.info(f"Using TqTemplater for {resource_type} …")
-        templater = TqTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Words','tw') \
-    or resource_type.endswith('-tw') or resource_type.endswith('_tw'):
-        GlobalSettings.logger.info(f"Using TwTemplater for {resource_type} …")
-        templater = TwTemplater(resource_type, source_dir, output_dir, template_file)
-    elif resource_type in ('Translation_Notes','OBS_Translation_Notes','tn',) \
-    or resource_type.endswith('-tn') or resource_type.endswith('_tn'):
-        GlobalSettings.logger.info(f"Using TnTemplater for {resource_type} …")
-        templater = TnTemplater(resource_type, source_dir, output_dir, template_file)
+    # GlobalSettings.logger.debug(f"init_template({repo_subject})")
+    if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions',):
+        GlobalSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
+        templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Academy',):
+        GlobalSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
+        templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Questions',):
+        GlobalSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
+        templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Words',):
+        GlobalSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
+        templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Notes',):
+        GlobalSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
+        templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
     else:
-        if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            GlobalSettings.logger.info(f"Using BibleTemplater for {resource_type} …")
+        if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
+            GlobalSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
         else:
-            GlobalSettings.logger.error(f"Choosing BibleTemplater for unexpected resource_type={resource_type}")
-        templater = BibleTemplater(resource_type, source_dir, output_dir, template_file)
+            GlobalSettings.logger.error(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+        templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
     return templater
 
 
@@ -57,15 +53,14 @@ class Templater:
     NO_NAV_TITLES = ['', 'Conversion requested…', 'Conversion started…', 'Conversion successful',
                      'Conversion successful with warnings', 'Index']
 
-    def __init__(self, resource_type, source_dir, output_dir, template_file):
-        self.resource_type = resource_type
+    def __init__(self, repo_subject, source_dir, output_dir, template_file):
+        self.repo_subject = repo_subject
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
         assert self.templater_CSS_class # Must be set by subclass
-        GlobalSettings.logger.info(f'Using {self.templater_CSS_class} templater…')
+        GlobalSettings.logger.debug(f"Using '{self.templater_CSS_class}' templater…")
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
-            GlobalSettings.logger.error(f'Unexpected templater_CSS_class={self.templater_CSS_class}')
-        self.adjusted_resource_type = self.templater_CSS_class
+            GlobalSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
         self.classes = [] # These get appended to the templater_CSS_class
 
         self.source_dir = source_dir  # Local directory
@@ -88,10 +83,12 @@ class Templater:
         with open(self.template_file) as template_file:
             self.template_html = template_file.read()
             soup = BeautifulSoup(self.template_html, 'html.parser')
-            soup.body['class'] = soup.body.get('class', []) + [self.adjusted_resource_type]
+            soup.body['class'] = soup.body.get('class', []) + [self.templater_CSS_class]
             if self.classes:
+                for some_class in self.classes: # Check that we don't double unnecessarily
+                    assert some_class != self.templater_CSS_class
                 soup.body['class'] = soup.body.get('class', []) + self.classes
-            GlobalSettings.logger.info(f'Have {self.template_file} html body class="{soup.body.get("class", [])}"')
+            GlobalSettings.logger.info(f"Have {self.template_file} body class(es)={soup.body.get('class', [])}")
             self.template_html = str(soup)
         self.apply_template()
         return True
@@ -280,13 +277,17 @@ class Templater:
                     GlobalSettings.logger.debug(f'Updating nav in {out_file} …')
                     # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                     write_file(out_file, html)
+# end of class Templater
 
 
 class ObsTemplater(Templater):
     def __init__(self, *args, **kwargs):
         self.templater_CSS_class = 'obs'
         super(ObsTemplater, self).__init__(*args, **kwargs)
-
+        if self.repo_subject == 'OBS_Translation_Notes':
+            self.classes=['tn']
+        elif self.repo_subject == 'OBS_Translation_Questions':
+            self.classes=['tq']
 
 
 class TqTemplater(Templater):
@@ -370,6 +371,7 @@ class TqTemplater(Templater):
         </nav>
             """
         return html
+# end of class TqTemplater
 
 
 
@@ -413,6 +415,7 @@ class TwTemplater(Templater):
             </nav>
         """
         return html
+# end of class TwTemplater
 
 
 
@@ -498,6 +501,7 @@ class TnTemplater(Templater):
         </nav>
             """
         return html
+# end of class TnTemplater
 
 
 
@@ -505,8 +509,8 @@ class BibleTemplater(Templater):
     def __init__(self, *args, **kwargs):
         self.templater_CSS_class = 'bible'
         super(BibleTemplater, self).__init__(*args, **kwargs)
-        if self.adjusted_resource_type != 'bible': # avoid "bible bible"
-            self.classes = ['bible'] # These get appended to the html body class
+        # if self.templater_CSS_class != 'bible': # avoid "bible bible"
+            # self.classes = ['bible'] # These get appended to the html body class
 
 
     def get_page_navigation(self):
@@ -582,6 +586,7 @@ class BibleTemplater(Templater):
         </nav>
             """
         return html
+# end of class BibleTemplater
 
 
 
@@ -657,3 +662,4 @@ class TaTemplater(Templater):
             </nav>
         """
         return html
+# end of class TaTemplater

@@ -15,7 +15,6 @@ py-dateutil==2.2.0
 # sqlalchemy is used by manifest
 sqlalchemy==1.2.16
 pymysql==0.9.3
-# NOTE: pymysql 0.9.2 wouldn't work in docker build so stayed at 0.8.1
 
 # boto3 is used by aws_tools
 boto3==1.9.82
