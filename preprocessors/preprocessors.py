@@ -772,7 +772,9 @@ class TwPreprocessor(Preprocessor):
 
         # Handle a specific non-conformant tW output (JSON in .txt files in 01/ folder) by ts-desktop
         dir_list = os.listdir(self.source_dir)
-        if len(dir_list)==3 and '01' in dir_list: # ['LICENSE.md', '01', 'manifest.json']
+        if len(dir_list)>=3 \
+        and '01' in dir_list and 'LICENSE.md' in dir_list and 'manifest.json' in dir_list:
+            # TODO: Is the above the best way to detect these types of repos (One has .DS_Store file also)
             # Handle tW json (.txt) files containing "title" and "body" fields
             GlobalSettings.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
             assert len(self.rc.projects) == 1
