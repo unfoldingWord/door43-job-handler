@@ -31,7 +31,7 @@ class TestTemplater(unittest.TestCase):
         test_folder_name = os.path.join('converted_projects', 'en-ulb-4-books.zip')
         expect_success = True
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('bible', test_file_path)
+        success = self.doTemplater('Bible', test_file_path)
         self.verifyBibleTemplater(success, expect_success, self.out_dir,
                                   ['01-GEN.html', '02-EXO.html', '03-LEV.html', '05-DEU.html'])
 
@@ -39,14 +39,14 @@ class TestTemplater(unittest.TestCase):
         test_folder_name = os.path.join('converted_projects', 'aab_obs_text_obs-complete.zip')
         expect_success = True
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('obs', test_file_path)
+        success = self.doTemplater('OBS', test_file_path)
         self.verifyObsTemplater(success, expect_success, self.out_dir)
 
     def testTemplaterTaComplete(self):
         test_folder_name = os.path.join('converted_projects', 'en_ta-complete.zip')
         expect_success = True
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('ta', test_file_path)
+        success = self.doTemplater('Translation_Academy', test_file_path)
         self.verifyTaTemplater(success, expect_success, self.out_dir,
                                ['checking.html', 'intro.html', 'process.html', 'translate.html'])
         # Verify sidebar nav generated
@@ -60,7 +60,7 @@ class TestTemplater(unittest.TestCase):
         expect_success = True
         test_file_path = self.extractZipFiles(test_folder_name)
         test_file_path = os.path.join(test_file_path, 'en_tw_converted')
-        success = self.doTemplater('tw', test_file_path)
+        success = self.doTemplater('Translation_Words', test_file_path)
         self.verifyTaTemplater(success, expect_success, self.out_dir, ['kt.html', 'names.html', 'other.html'])
         # Verify sidebar nav generated
         soup = BeautifulSoup(read_file(os.path.join(self.out_dir, 'kt.html')), 'html.parser')
@@ -73,14 +73,14 @@ class TestTemplater(unittest.TestCase):
         expect_success = True
         missing_chapters = range(1, 51)
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('obs', test_file_path)
+        success = self.doTemplater('OBS', test_file_path)
         self.verifyObsTemplater(success, expect_success, self.out_dir, missing_chapters)
 
     def testCommitToDoor43MissingFirstFrame(self):
         test_folder_name = "converted_projects/aah_obs_text_obs-missing_first_frame.zip"
         expect_success = True
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('obs', test_file_path)
+        success = self.doTemplater('OBS', test_file_path)
         self.verifyObsTemplater(success, expect_success, self.out_dir)
 
     def testCommitToDoor43MissingChapter50(self):
@@ -88,13 +88,13 @@ class TestTemplater(unittest.TestCase):
         expect_success = True
         missing_chapters = [50]
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('obs', test_file_path)
+        success = self.doTemplater('OBS', test_file_path)
         self.verifyObsTemplater(success, expect_success, self.out_dir, missing_chapters)
 
     def testTemplaterRightToLeft(self):
         test_folder_name = os.path.join(self.resources_dir, 'converted_projects', 'glk_obs_text_obs-complete.zip')
         test_file_path = self.extractZipFiles(test_folder_name)
-        success = self.doTemplater('obs', test_file_path)
+        success = self.doTemplater('OBS', test_file_path)
 
         # Check for dir attribute in html tag
         with open(os.path.join(self.out_dir, '01.html'), 'r') as f:
