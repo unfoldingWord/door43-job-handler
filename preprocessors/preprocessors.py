@@ -13,32 +13,26 @@ from resource_container.ResourceContainer import RC
 
 
 def do_preprocess(repo_subject, rc, repo_dir, output_dir):
-    # if rc.resource.identifier == 'obs':
-    if repo_subject == 'Open_Bible_Stories':
-        GlobalSettings.logger.info("do_preprocess: using ObsPreprocessor…")
+    if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions'):
+        GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for {repo_subject} …")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
-    # elif rc.resource.file_ext == 'usfm' or rc.resource.format == 'usfm':
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
-        GlobalSettings.logger.info("do_preprocess: using BiblePreprocessor…")
+        GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for {repo_subject} …")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
-    # elif rc.resource.identifier == 'ta':
     elif repo_subject == 'Translation_Academy':
-        GlobalSettings.logger.info("do_preprocess: using TaPreprocessor…")
+        GlobalSettings.logger.info(f"do_preprocess: using TaPreprocessor for {repo_subject} …")
         preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
-    # elif rc.resource.identifier == 'tq':
-    elif repo_subject in ('Translation_Questions','OBS_Translation_Questions'):
-        GlobalSettings.logger.info("do_preprocess: using TqPreprocessor…")
+    elif repo_subject == 'Translation_Questions':
+        GlobalSettings.logger.info(f"do_preprocess: using TqPreprocessor for {repo_subject} …")
         preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
-    # elif rc.resource.identifier == 'tw':
     elif repo_subject == 'Translation_Words':
-        GlobalSettings.logger.info("do_preprocess: using TwPreprocessor…")
+        GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for {repo_subject} …")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
-    # elif rc.resource.identifier == 'tn':
-    elif repo_subject in ('Translation_Notes','OBS_Translation_Notes'):
-        GlobalSettings.logger.info("do_preprocess: using TnPreprocessor…")
+    elif repo_subject == 'Translation_Notes':
+        GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for {repo_subject} …")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.info(f"do_preprocess: using generic Preprocessor for {repo_subject} resource: {rc.resource.identifier} …")
+        GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for {repo_subject} resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
 
@@ -807,25 +801,30 @@ class TwPreprocessor(Preprocessor):
                     GlobalSettings.logger.error(error_message)
                     self.warnings.append(error_message)
                     json_data = {}
-                unit_count = 0
-                title = body_text = None
-                for tw_unit in json_data:
-                    if 'title' in tw_unit and 'body' in tw_unit:
-                        title = tw_unit['title']
-                        if not title:
-                            self.warnings.append(f"Missing tW title in {term}.txt: {tw_unit}")
-                        elif '\n' in title:
-                            self.warnings.append(f"Badly formatted tW title in {term}.txt: {title!r}")
-                        raw_body_text = tw_unit['body']
-                        if not raw_body_text:
-                            self.warnings.append(f"Missing tW body in {term}.txt: {tw_unit}")
-                        body_text = f'### <a id="{term}"/>{title}\n\n{raw_body_text}'
-                        unit_count += 1
-                    else:
-                        self.warnings.append(f"Unexpected tW unit in {term}.txt: {tw_unit}")
-                assert unit_count == 1 # Only expect one title/body set I think
-                index_json['chapters'][key][term] = title
-                term_text[term] = body_text
+                if json_data:
+                    unit_count = 0
+                    title = body_text = None
+                    for tw_unit in json_data:
+                        if 'title' in tw_unit and 'body' in tw_unit:
+                            title = tw_unit['title']
+                            if not title:
+                                self.warnings.append(f"Missing tW title in {term}.txt: {tw_unit}")
+                            elif '\n' in title:
+                                self.warnings.append(f"Badly formatted tW title in {term}.txt: {title!r}")
+                            raw_body_text = tw_unit['body']
+                            if not raw_body_text:
+                                self.warnings.append(f"Missing tW body in {term}.txt: {tw_unit}")
+                            body_text = f'### <a id="{term}"/>{title}\n\n{raw_body_text}'
+                            unit_count += 1
+                        else:
+                            self.warnings.append(f"Unexpected tW unit in {term}.txt: {tw_unit}")
+                    assert unit_count == 1 # Only expect one title/body set I think
+                    index_json['chapters'][key][term] = title
+                    term_text[term] = body_text
+                else:
+                    error_message = f"No tW json data found in file '{adjusted_filepath}'"
+                    GlobalSettings.logger.error(error_message)
+                    self.warnings.append(error_message)
             # Now process the dictionaries to sort terms by title and add to markdown
             markdown = ''
             titles = index_json['chapters'][key]
