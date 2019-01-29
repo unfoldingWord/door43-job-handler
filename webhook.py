@@ -340,7 +340,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
 # end of upload_to_BDB
 
 
-user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
+# user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
@@ -385,7 +385,7 @@ def process_job(queued_json_payload, redis_connection):
     The given payload will be automatically appended to the 'failed' queue
         by rq if an exception is thrown in this module.
     """
-    global user_projects_invoked_string
+    # global user_projects_invoked_string
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
@@ -451,8 +451,8 @@ def process_job(queued_json_payload, redis_connection):
     adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
     stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
-    # stats_client.gauge(user_projects_invoked_string, -1) # Mark as 'in-process'
+    # NOTE: following line removed as stats recording used too much disk space
+    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
 
 
     # Here's our programmed failure (for remotely testing failures)
@@ -597,7 +597,8 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
     pj_job_dict['callback'] = GlobalSettings.api_url + '/client/callback'
     pj_job_dict['output_format'] = 'html'
-    pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+    # NOTE: following line removed as stats recording used too much disk space
+    # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pj_job_dict['links'] = {
         'href': f"{GlobalSettings.api_url}/tx/job/{our_job_id}",
         'rel': 'self',
@@ -748,7 +749,8 @@ def job(queued_json_payload):
         logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
-        stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+        # NOTE: following line removed as stats recording used too much disk space
+        # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)

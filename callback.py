@@ -75,7 +75,7 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 # end of verify_expected_job
 
 
-user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
+# user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_callback(pc_prefix, queued_json_payload, redis_connection):
     """
     The job info is retrieved from REDIS and matched/checked
@@ -88,7 +88,7 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     The given payload will be appended to the 'failed' queue
         if an exception is thrown in this module.
     """
-    global user_projects_invoked_string
+    # global user_projects_invoked_string
     GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {queued_json_payload}")
 
     # Check that this is an expected callback job
@@ -138,9 +138,10 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     else:
         identifier = job_id
         GlobalSettings.logger.debug(f"Got identifier from job_id: {identifier}.")
-    user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
-                        if 'user_projects_invoked_string' in matched_job_dict \
-                        else f'??{identifier}??'
+    # NOTE: following line removed as stats recording used too much disk space
+    # user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
+    #                     if 'user_projects_invoked_string' in matched_job_dict \
+    #                     else f'??{identifier}??'
 
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
@@ -234,7 +235,8 @@ def job(queued_json_payload):
         logger2.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
-        stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+        # NOTE: following line removed as stats recording used too much disk space
+        # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
@@ -251,7 +253,8 @@ def job(queued_json_payload):
     GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
     stats_client.timing(f'{stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
-    stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
+    # NOTE: following line removed as stats recording used too much disk space
+    # stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
     stats_client.incr(f'{stats_prefix}.callback.jobs.succeeded')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
