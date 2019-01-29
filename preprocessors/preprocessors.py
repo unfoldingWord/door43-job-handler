@@ -986,6 +986,7 @@ class TnPreprocessor(Preprocessor):
                         found_tsv = True
                         GlobalSettings.logger.debug(f"tN preprocessor got {this_filepath}")
                         copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        self.num_files_written += 1
                         break
                 # NOTE: This code will create an .md file if there is a missing TSV file
                 if not found_tsv: # Look for markdown or json .txt
