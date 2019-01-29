@@ -254,7 +254,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Check/Remove some of this code once tC export is fixed
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
-        # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')} )")
+        # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -269,15 +269,26 @@ class BiblePreprocessor(Preprocessor):
         preadjusted_file_contents = file_contents
         # First do global fixes to bad tC USFM
         preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
+        # Invalid \q… markers
         preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
+        # \q markers with following text but missing the space in-betweeb
         preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
         if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
         preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
 
         preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
+        # Invalid \p… markers
         preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
         if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
         preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
+
+        # Find (useless) paragraph formatting before a section break (probably should be after break)
+        ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
+        if ps_count:
+            self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{'' if ps_count==1 else 's'} before \\s# markers")
+        qs_count = len(re.findall(r'\\q1* *\n?\\s', preadjusted_file_contents))
+        if qs_count:
+            self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{'' if qs_count==1 else 's'} before \\s# markers")
 
         # Then do other global clean-ups
         ks_count = preadjusted_file_contents.count('\\k-s')
