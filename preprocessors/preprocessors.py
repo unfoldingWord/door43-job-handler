@@ -267,34 +267,45 @@ class BiblePreprocessor(Preprocessor):
         B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
         needs_global_check = False
         preadjusted_file_contents = file_contents
+
         # First do global fixes to bad tC USFM
+        # Hide good \q# markers
         preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
         # Invalid \q… markers
         preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
         # \q markers with following text but missing the space in-betweeb
         preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
         if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
+        # Restore good \q# markers
         preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
 
+        # Hide empty \p markers
         preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
         # Invalid \p… markers
         preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
         if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
+        # Restore empty \p markers
         preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
 
-        # Find (useless) paragraph formatting before a section break (probably should be after break)
+        # Find  and warn about (useless) paragraph formatting before a section break
+        #  (probably should be after break)
         ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
         if ps_count:
-            self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{'' if ps_count==1 else 's'} before \\s# markers")
+            s_suffix = '' if ps_count==1 else 's'
+            self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
         qs_count = len(re.findall(r'\\q1* *\n?\\s', preadjusted_file_contents))
         if qs_count:
-            self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{'' if qs_count==1 else 's'} before \\s# markers")
+            s_suffix = '' if qs_count==1 else 's'
+            self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
 
         # Then do other global clean-ups
         ks_count = preadjusted_file_contents.count('\\k-s')
         ke_count = preadjusted_file_contents.count('\\k-e')
         zs_count = preadjusted_file_contents.count('\\zaln-s')
         ze_count = preadjusted_file_contents.count('\\zaln-e')
+        if ks_count or zs_count: # Assume it's USFM3
+            if '\\usfm 3' not in preadjusted_file_contents:
+                self.warnings.append(f"{B} - '\\usfm 3.0' line seems missing")
         close_count = preadjusted_file_contents.count('\\*')
         expected_close_count = ks_count + ke_count + zs_count + ze_count
         if close_count < expected_close_count:
@@ -332,6 +343,8 @@ class BiblePreprocessor(Preprocessor):
             if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
                 GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
                 adjusted_line += '*' # Try a change to a closing marker
+
+            # Remove \w fields (just leaving the word)
             ixW = adjusted_line.find('\\w ')
             while ixW != -1:
                 ixEnd = adjusted_line.find('\\w*', ixW)
@@ -602,7 +615,7 @@ class TaPreprocessor(Preprocessor):
             question = self.get_question(project, link)
             if question:
                 # TODO: Shouldn't text like this be translated ???
-                top_box += f'This page answers the question: *{question}*\n\n'
+                top_box += f"This page answers the question: *{question}*\n\n"
             config = project.config()
             if link in config:
                 if 'dependencies' in config[link] and config[link]['dependencies']:
@@ -627,6 +640,7 @@ class TaPreprocessor(Preprocessor):
             for subsection in section['sections']:
                 markdown += self.compile_ta_section(project, subsection, level + 1)
         return markdown
+
 
     def run(self):
         GlobalSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
@@ -986,6 +1000,7 @@ class TnPreprocessor(Preprocessor):
                         found_tsv = True
                         GlobalSettings.logger.debug(f"tN preprocessor got {this_filepath}")
                         copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        self.num_files_written += 1
                         break
                 # NOTE: This code will create an .md file if there is a missing TSV file
                 if not found_tsv: # Look for markdown or json .txt

@@ -291,7 +291,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
     GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
     files_data = {
-        'nameLine': (None, prefixed_our_name),
+        'nameLine': (None, f'DCS_Auto_{prefixed_our_name}'),
         'emailLine': (None, 'noone@nowhere.org'),
         'projectLine': (None, job_name),
             'doChecks': (None, 'Yes'),
@@ -299,7 +299,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
                 'OTfinished': (None, 'No'),
                 'DCfinished': (None, 'No'),
                 'ALLfinished': (None, 'No'),
-            'doExports': (None, 'Yes'),
+            'doExports': (None, 'No'),
                 'photoBible': (None, 'No'),
                 'odfs': (None, 'No'),
                 'pdfs': (None, 'No'),
@@ -447,8 +447,8 @@ def process_job(queued_json_payload, redis_connection):
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
     ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
-    ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
+    # ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    # adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
     stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     # NOTE: following line removed as stats recording used too much disk space
@@ -672,14 +672,14 @@ def process_job(queued_json_payload, redis_connection):
         raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
-    # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-    #     if prefix and not debug_mode_flag: # Only for dev- chain
-    #         GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-    #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-    #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-    #         # Not using the preprocessed files (only the originals above)
-    #         # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-    #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+    if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
+        if prefix and not debug_mode_flag: # Only for dev- chain
+            GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+            original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
+            # Not using the preprocessed files (only the originals above)
+            # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
