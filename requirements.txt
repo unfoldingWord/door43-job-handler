@@ -4,7 +4,7 @@ redis==2.10.6
 rq==0.12.0
 statsd==3.3.0
 requests==2.21.0
-watchtower==0.5.4
+watchtower==0.5.5
 
 # yaml is used by file_utils used by ResourceContainer
 pyyaml==3.13
@@ -13,11 +13,11 @@ pyyaml==3.13
 py-dateutil==2.2.0
 
 # sqlalchemy is used by manifest
-sqlalchemy==1.2.16
+sqlalchemy==1.2.17
 pymysql==0.9.3
 
 # boto3 is used by aws_tools
-boto3==1.9.82
+boto3==1.9.88
 
 #gogs_client is used by gogs_tools
 gogs_client==1.0.6
