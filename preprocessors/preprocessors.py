@@ -55,6 +55,15 @@ class Preprocessor:
         self.num_files_written = 0
         self.warnings = []
 
+        # Check that we had a manifest (or equivalent) file
+        # found_manifest = False
+        # for some_filename in ('manifest.yaml','manifest.json','package.json','project.json','meta.json',):
+        #     if os.path.isfile(os.path.join(source_dir,some_filename)):
+        #         found_manifest = True; break
+        # if not found_manifest:
+        if not self.rc.loadeded_manifest_file:
+            self.warnings.append("Possible missing manifest file in project folder")
+
         # Write out the new manifest file based on the resource container
         write_file(os.path.join(self.output_dir, 'manifest.yaml'), self.rc.as_dict())
 
@@ -114,7 +123,9 @@ class Preprocessor:
         else:
             GlobalSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files")
         GlobalSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.num_files_written, self.warnings
+    # end of DefaultPreprocessor run()
+
 
     def mark_chapter(self, ident, chapter, text):
         return text  # default does nothing to text
@@ -231,7 +242,8 @@ class ObsPreprocessor(Preprocessor):
         else:
             GlobalSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files")
         GlobalSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.num_files_written, self.warnings
+    # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
 
 
@@ -536,7 +548,7 @@ class BiblePreprocessor(Preprocessor):
             GlobalSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files")
         GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
-        return self.warnings if self.warnings else True
+        return self.num_files_written, self.warnings
     # end of BiblePreprocessor run()
 # end of class BiblePreprocessor
 
@@ -617,7 +629,7 @@ class TaPreprocessor(Preprocessor):
                 # TODO: Shouldn't text like this be translated ???
                 top_box += f"This page answers the question: *{question}*\n\n"
             config = project.config()
-            if link in config:
+            if config and link in config:
                 if 'dependencies' in config[link] and config[link]['dependencies']:
                     top_box += 'In order to understand this topic, it would be good to read:\n\n'
                     for dependency in config[link]['dependencies']:
@@ -661,7 +673,7 @@ class TaPreprocessor(Preprocessor):
             write_file(output_file, markdown)
             self.num_files_written += 1
 
-            # Copy the toc and config.yaml file to the output dir so they can be used to
+            # tA: Copy the toc and config.yaml file to the output dir so they can be used to
             # generate the ToC on live.door43.org
             toc_file = os.path.join(self.source_dir, project.path, 'toc.yaml')
             if os.path.isfile(toc_file):
@@ -669,13 +681,17 @@ class TaPreprocessor(Preprocessor):
             config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
             if os.path.isfile(config_file):
                 copy(config_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-config.yaml'))
+            elif project.path!='./':
+                self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"tA preprocessor didn't write any markdown files")
+            GlobalSettings.logger.error("tA preprocessor didn't write any markdown files")
             self.warnings.append("No tA source files discovered")
         else:
             GlobalSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files")
         GlobalSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return True
+        return self.num_files_written, self.warnings
+    # end of TaPreprocessor run()
+
 
     def fix_links(self, content):
         # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
@@ -775,7 +791,7 @@ class TqPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         GlobalSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.warnings if self.warnings else True
+        return self.num_files_written, self.warnings
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
 
@@ -868,6 +884,8 @@ class TwPreprocessor(Preprocessor):
             config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
             if os.path.isfile(config_file):
                 copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
+            elif project.path!='./':
+                self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
 
@@ -914,6 +932,8 @@ class TwPreprocessor(Preprocessor):
                     config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
                     if os.path.isfile(config_file):
                         copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
+                    elif project.path!='./':
+                        self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
                 output_file = os.path.join(self.output_dir, 'index.json')
                 write_file(output_file, index_json)
 
@@ -923,7 +943,8 @@ class TwPreprocessor(Preprocessor):
         else:
             GlobalSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files")
         GlobalSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.warnings if self.warnings else True
+        return self.num_files_written, self.warnings
+    # end of TwPreprocessor run()
 
 
     def fix_links(self, content, section):
@@ -1114,7 +1135,9 @@ class TnPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         # GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.warnings if self.warnings else True
+        return self.num_files_written, self.warnings
+    # end of TnPreprocessor run()
+
 
     def move_to_front(self, files, move_str):
         if files:

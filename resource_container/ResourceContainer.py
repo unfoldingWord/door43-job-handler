@@ -25,6 +25,7 @@ class RC:
         self._manifest = manifest
         self._repo_name = repo_name
         self._resource = None
+        self.loadeded_manifest_file = False
         self._projects = []
 
     @property
@@ -35,6 +36,7 @@ class RC:
 
     def get_manifest_from_dir(self):
         manifest = None
+        self.loadeded_manifest_file = False
         if not self.path or not os.path.isdir(self.path):
             return get_manifest_from_repo_name(self.repo_name)
         try:
@@ -42,30 +44,35 @@ class RC:
         except ParserError as e:
             GlobalSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
         if manifest:
+            self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
         except JSONDecodeError as e:
                 GlobalSettings.logger.error(f"Badly formed 'manifest.json' in {self.repo_name}: {e}")
         if manifest:
+            self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'package.json'))
         except JSONDecodeError as e:
                 GlobalSettings.logger.error(f"Badly formed 'package.json' in {self.repo_name}: {e}")
         if manifest:
+            self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'project.json'))
         except JSONDecodeError as e:
                 GlobalSettings.logger.error(f"Badly formed 'project.json' in {self.repo_name}: {e}")
         if manifest:
+            self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'meta.json'))
         except JSONDecodeError as e:
                 GlobalSettings.logger.error(f"Badly formed 'meta.json' in {self.repo_name}: {e}")
         if manifest:
+            self.loadeded_manifest_file = True
             return manifest
         return get_manifest_from_repo_name(self.repo_name)
 
