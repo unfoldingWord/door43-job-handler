@@ -32,10 +32,13 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'Door43_job_handler'
-KNOWN_RESOURCE_SUBJECTS = ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
+KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
+            'Greek_Lexicon', 'Hebrew_Lexicon',
+            # and from https://api.door43.org/v3/subjects:
+            'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
             'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
-            ) # from https://api.door43.org/v3/subjects
+            )
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
 # TODO: Will we also need 'book' in this map???
 RESOURCE_SUBJECT_MAP = {
@@ -43,12 +46,21 @@ RESOURCE_SUBJECT_MAP = {
             'obs': 'Open_Bible_Stories',
             'obs-tn': 'OBS_Translation_Notes',
             'obs-tq': 'OBS_Translation_Questions',
+            'obs-sq': 'Generic_Markdown', # See if this works for OBS Study Questions
+            'obs-sn': 'Open_Bible_Stories', # See if this works for OBS Study Notes
+                                            #  (seems better than Generic_Markdown)
+            'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
+
+            'bible': 'Bible', 'reg': 'Bible',
+                'ulb': 'Bible', 'udb': 'Bible',
 
             'ta': 'Translation_Academy',
             'tn': 'Translation_Notes',
             'tq': 'Translation_Questions',
             'tw': 'Translation_Words',
-            'bible': 'Bible', 'reg': 'Bible',
+
+            'ugl': 'Greek_Lexicon',
+            'uhl': 'Hebrew_Lexicon',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -235,7 +247,65 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     if not prefix: # For dev- save this file longer
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
-#end of download_repo function
+# end of download_repo function
+
+
+def get_tX_subject(grs_rc):
+    """
+    Given a resource container, try to determine the subject
+        even if the manifest has no subject field.
+
+    https://api.door43.org/v3/subjects specifies 11 subjects (as of Feb 2019)
+
+    Can return None if we can't determine one.
+    """
+    GlobalSettings.logger.debug(f"grs_rc.resource.identifier={grs_rc.resource.identifier}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.file_ext={grs_rc.resource.file_ext}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.type={grs_rc.resource.type}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.subject={grs_rc.resource.subject}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.format={grs_rc.resource.format}")
+
+    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
+    repo_subject = None
+    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
+        GlobalSettings.logger.debug(f"Using (adjusted) subject to set repo_subject={adjusted_subject}")
+        repo_subject = adjusted_subject
+    elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
+        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
+        repo_subject = 'Bible'
+    else:
+        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
+
+    if not repo_subject:
+        if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
+            GlobalSettings.logger.debug(f"Using rc.resource.format to set repo_subject={grs_rc.resource.format}")
+            repo_subject = 'Bible'
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
+
+    if not repo_subject:
+        if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
+            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}")
+            repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+
+    if not repo_subject:
+        for resource_subject_string in RESOURCE_SUBJECT_MAP:
+            if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
+            or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
+                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
+                repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
+                break
+        else: # if didn't match/break above
+            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+
+    if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
+        GlobalSettings.logger.debug(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}")
+        repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
+
+    return repo_subject
+# end of get_tX_subject function
 
 
 def remember_job(rj_job_dict, rj_redis_connection):
@@ -471,47 +541,8 @@ def process_job(queued_json_payload, redis_connection):
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
-    # Use the subject to set the resource type more intelligently
-    GlobalSettings.logger.debug(f"rc.resource.identifier={rc.resource.identifier}")
-    GlobalSettings.logger.debug(f"rc.resource.file_ext={rc.resource.file_ext}")
-    GlobalSettings.logger.debug(f"rc.resource.type={rc.resource.type}")
-    GlobalSettings.logger.debug(f"rc.resource.subject={rc.resource.subject}")
-    GlobalSettings.logger.debug(f"rc.resource.format={rc.resource.format}")
-    adjusted_subject = rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
-    resource_type = None
-    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.debug(f"Using (adjusted) subject to set resource_type={adjusted_subject}")
-        resource_type = adjusted_subject
-    elif 'bible' in adjusted_subject.lower() and rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set resource_type")
-        resource_type = 'Bible'
-    else:
-        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set resource_type")
-    if not resource_type:
-        if rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
-            GlobalSettings.logger.debug(f"Using rc.resource.format to set resource_type={rc.resource.format}")
-            resource_type = 'Bible'
-        else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{rc.resource.format}' to set resource_type")
-    if not resource_type:
-        if rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.identifier]}")
-            resource_type = RESOURCE_SUBJECT_MAP[rc.resource.identifier]
-        else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
-    if not resource_type:
-        for resource_subject_string in RESOURCE_SUBJECT_MAP:
-            if rc.resource.identifier.endswith('_'+resource_subject_string) \
-            or rc.resource.identifier.endswith('-'+resource_subject_string):
-                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
-                resource_type = RESOURCE_SUBJECT_MAP[resource_subject_string]
-                break
-        else: # if didn't match/break above
-            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
-    if not resource_type and rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        GlobalSettings.logger.debug(f"Using rc.resource.type='{rc.resource.type}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.type]}")
-        resource_type = RESOURCE_SUBJECT_MAP[rc.resource.type]
-
+    # Use the RC to set the resource_type and input_format parameters for tX
+    resource_type = get_tX_subject(rc) # use the subject to set the resource type more intelligently
     input_format = rc.resource.file_ext
     if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
@@ -519,14 +550,13 @@ def process_job(queued_json_payload, redis_connection):
         use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
         use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_type={resource_type}")
         input_format = 'usfm'
-
-    # Summarize
     GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
     if resource_type not in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
     if not resource_type or not input_format:
         # Might as well fail here if they're not set properly
-        raise Exception(f"Unable to find a type/format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={adjusted_subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+        raise Exception(f"Unable to find a type/format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
