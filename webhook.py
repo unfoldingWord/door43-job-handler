@@ -152,16 +152,16 @@ def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job
     :param string repo_owner:
     :return dict:
     """
-    build_log_json = dict(cbl_job)
-    build_log_json['repo_name'] = repo_name
-    build_log_json['repo_owner'] = repo_owner
-    build_log_json['commit_id'] = commit_id
-    build_log_json['committed_by'] = pusher_username
-    build_log_json['commit_url'] = commit_url
-    build_log_json['compare_url'] = compare_url
-    build_log_json['commit_message'] = commit_message
+    build_log_dict = dict(cbl_job)
+    build_log_dict['repo_name'] = repo_name
+    build_log_dict['repo_owner'] = repo_owner
+    build_log_dict['commit_id'] = commit_id
+    build_log_dict['committed_by'] = pusher_username
+    build_log_dict['commit_url'] = commit_url
+    build_log_dict['compare_url'] = compare_url
+    build_log_dict['commit_message'] = commit_message
 
-    return build_log_json
+    return build_log_dict
 # end of create_build_log function
 
 
@@ -600,6 +600,7 @@ def process_job(queued_json_payload, redis_connection):
 
     if not num_preprocessor_files_written:
         GlobalSettings.logger.error("No files written by preprocessor -- aborting!")
+        build_log_dict = {}
     else:
         # Zip up the massaged files
         GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
@@ -656,10 +657,10 @@ def process_job(queued_json_payload, redis_connection):
         clear_commit_directory_in_cdn(s3_commit_key)
 
         # Create a build log
-        build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
+        build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
                                         pusher_username, repo_name, repo_owner_username)
         # Upload an initial build_log
-        upload_build_log_to_s3(base_temp_dir_name, build_log_json, s3_commit_key)
+        upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
 
         # Update the project.json file
         update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
@@ -724,7 +725,7 @@ def process_job(queued_json_payload, redis_connection):
         GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
     return job_descriptive_name
 #end of process_job function
 
