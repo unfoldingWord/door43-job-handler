@@ -602,7 +602,7 @@ def process_job(queued_json_payload, redis_connection):
     #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
     if input_format=='md' and not num_preprocessor_files_written:
         with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
-            f.write("# NO FILES FOUND\nSorry, we couldn't find any .md files (not even README.md). Please check your manifest file.")
+            f.write("# NO FILES FOUND\nSorry, we couldn't find any markdown files to convert (not even README.md). Please check your manifest file.")
             num_preprocessor_files_written += 1
 
 
