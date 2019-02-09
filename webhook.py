@@ -550,7 +550,7 @@ def process_job(queued_json_payload, redis_connection):
         use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
         use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_type={resource_type}")
         input_format = 'usfm'
-    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
+    GlobalSettings.logger.info(f"Got resource_type='{resource_type}', input_format='{input_format}'")
     if resource_type not in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
     if not resource_type or not input_format:
@@ -598,127 +598,133 @@ def process_job(queued_json_payload, redis_connection):
             shutil.copy(os.path.join(repo_dir, 'README.md'),preprocess_dir)
             num_preprocessor_files_written += 1
 
-    if not num_preprocessor_files_written:
-        GlobalSettings.logger.error("No files written by preprocessor -- aborting!")
-        build_log_dict = {}
-    else:
-        # Zip up the massaged files
-        GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
-        preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
-        GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
-        add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
-        GlobalSettings.logger.debug("Zipping finished.")
+    # Try creating a file if there's nothing else to at least cause the page to build
+    #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
+    if input_format=='md' and not num_preprocessor_files_written:
+        with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
+            f.write("# NO FILES FOUND\nSorry, we couldn't find any .md files (not even README.md). Please check your manifest file.")
+            num_preprocessor_files_written += 1
 
 
-        # Upload zipped file to the S3 pre-convert bucket
-        GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-        our_job_id = get_unique_job_id()
-        file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
+    # Seems we should always process, even if no files
+    #   so that at least any errors/warnings get displayed
+
+    # Zip up the massaged files
+    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
+    preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
+    add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
+    GlobalSettings.logger.debug("Zipping finished.")
+
+    # Upload zipped file to the S3 pre-convert bucket
+    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
+    our_job_id = get_unique_job_id()
+    file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
 
 
-        # We no longer use txJob class but just create our own Python dict
-        GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
-        pj_job_dict = {}
-        pj_job_dict['job_id'] = our_job_id
-        pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-        pj_job_dict['user_name'] = repo_owner_username
-        pj_job_dict['repo_name'] = repo_name
-        pj_job_dict['commit_id'] = commit_id
-        pj_job_dict['manifests_id'] = tx_manifest.id
-        pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        # Seems never used (RJH)
-        #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
-        pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
-        pj_job_dict['input_format'] = input_format
-        pj_job_dict['source'] = f'{source_url_base}/{file_key}'
-        pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
-        pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
-        pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
-        pj_job_dict['callback'] = f'{GlobalSettings.api_url}/client/callback'
-        pj_job_dict['output_format'] = 'html'
-        # NOTE: following line removed as stats recording used too much disk space
-        # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
-        pj_job_dict['links'] = {
-            'href': f'{GlobalSettings.api_url}/tx/job/{our_job_id}',
-            'rel': 'self',
-            'method': 'GET'
+    # We no longer use txJob class but just create our own Python dict
+    GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
+    pj_job_dict = {}
+    pj_job_dict['job_id'] = our_job_id
+    pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
+    pj_job_dict['user_name'] = repo_owner_username
+    pj_job_dict['repo_name'] = repo_name
+    pj_job_dict['commit_id'] = commit_id
+    pj_job_dict['manifests_id'] = tx_manifest.id
+    pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    # Seems never used (RJH)
+    #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
+    pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
+    pj_job_dict['input_format'] = input_format
+    pj_job_dict['source'] = f'{source_url_base}/{file_key}'
+    pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
+    pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+    pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
+    pj_job_dict['callback'] = f'{GlobalSettings.api_url}/client/callback'
+    pj_job_dict['output_format'] = 'html'
+    # NOTE: following line removed as stats recording used too much disk space
+    # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+    pj_job_dict['links'] = {
+        'href': f'{GlobalSettings.api_url}/tx/job/{our_job_id}',
+        'rel': 'self',
+        'method': 'GET'
+    }
+    if preprocessor_warning_list:
+        pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
+    pj_job_dict['status'] = None
+    pj_job_dict['success'] = False
+
+
+    # Save the job info in Redis for the callback to use
+    remember_job(pj_job_dict, redis_connection)
+
+    # Get S3 cdn bucket/dir and empty it
+    s3_commit_key = f"u/{pj_job_dict['user_name']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
+    clear_commit_directory_in_cdn(s3_commit_key)
+
+    # Create a build log
+    build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
+                                    pusher_username, repo_name, repo_owner_username)
+    # Upload an initial build_log
+    upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
+
+    # Update the project.json file
+    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
+
+
+
+    # Pass the work request onto the tX system
+    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
+    tx_payload = {
+        'job_id': our_job_id,
+        'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
+        'resource_type': resource_type, # This used to be rc.resource.identifier
+        'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
+                            else input_format, # special case for .txt Bibles
+        'output_format': 'html',
+        'source': source_url_base + '/' + file_key,
+        'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    else DOOR43_CALLBACK_URL,
+        'user_token': gogs_user_token, # Checked by tX enqueue job
+        'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
-        if preprocessor_warning_list:
-            pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-        pj_job_dict['status'] = None
-        pj_job_dict['success'] = False
+    if 'options' in pj_job_dict and pj_job_dict['options']:
+        GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
+        tx_payload['options'] = pj_job_dict['options']
 
+    GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    try:
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
 
-        # Save the job info in Redis for the callback to use
-        remember_job(pj_job_dict, redis_connection)
-
-        # Get S3 cdn bucket/dir and empty it
-        s3_commit_key = f"u/{pj_job_dict['user_name']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
-        clear_commit_directory_in_cdn(s3_commit_key)
-
-        # Create a build log
-        build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-                                        pusher_username, repo_name, repo_owner_username)
-        # Upload an initial build_log
-        upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
-
-        # Update the project.json file
-        update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
-
-
-
-        # Pass the work request onto the tX system
-        GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
-        tx_payload = {
-            'job_id': our_job_id,
-            'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-            'resource_type': resource_type, # This used to be rc.resource.identifier
-            'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
-                                else input_format, # special case for .txt Bibles
-            'output_format': 'html',
-            'source': source_url_base + '/' + file_key,
-            'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                            if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                        else DOOR43_CALLBACK_URL,
-            'user_token': gogs_user_token, # Checked by tX enqueue job
-            'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
-            }
-        if 'options' in pj_job_dict and pj_job_dict['options']:
-            GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
-            tx_payload['options'] = pj_job_dict['options']
-
-        GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    if response:
+        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
         try:
-            response = requests.post(tx_post_url, json=tx_payload)
-        except requests.exceptions.ConnectionError as e:
-            GlobalSettings.logger.critical(f"Callback connection error: {e}")
-            response = None
-
-        if response:
-            #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-            #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
-            try:
-                GlobalSettings.logger.info(f"response.json = {response.json()}")
-            except json.decoder.JSONDecodeError:
-                GlobalSettings.logger.info("No valid response JSON found")
-                GlobalSettings.logger.debug(f"response.text = {response.text}")
-            if response.status_code != 200:
-                GlobalSettings.logger.critical(f"Failed to submit job to tX:"
-                                            f" {response.status_code}={response.reason}")
-        else: # no response
-            error_msg = "Submission of job to tX system got no response"
-            GlobalSettings.logger.critical(error_msg)
-            raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
+            GlobalSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            GlobalSettings.logger.info("No valid response JSON found")
+            GlobalSettings.logger.debug(f"response.text = {response.text}")
+        if response.status_code != 200:
+            GlobalSettings.logger.critical(f"Failed to submit job to tX:"
+                                        f" {response.status_code}={response.reason}")
+    else: # no response
+        error_msg = "Submission of job to tX system got no response"
+        GlobalSettings.logger.critical(error_msg)
+        raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
-        if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-            if prefix and not debug_mode_flag: # Only for dev- chain
-                GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-                original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-                upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-                # Not using the preprocessed files (only the originals above)
-                # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-                # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+    if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
+        if prefix and not debug_mode_flag: # Only for dev- chain
+            GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+            original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
+            # Not using the preprocessed files (only the originals above)
+            # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
