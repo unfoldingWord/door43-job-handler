@@ -555,7 +555,11 @@ def process_job(queued_json_payload, redis_connection):
         GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
     if not resource_type or not input_format:
         # Might as well fail here if they're not set properly
-        raise Exception(f"Unable to find a type/format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+        else:
+            remove_tree(base_temp_dir_name)  # cleanup
+        raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
 
 
     # Save manifest to manifest table
