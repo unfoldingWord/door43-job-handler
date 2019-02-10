@@ -14,25 +14,25 @@ from resource_container.ResourceContainer import RC
 
 def do_preprocess(repo_subject, rc, repo_dir, output_dir):
     if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions'):
-        GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
-        GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
         preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Academy':
-        GlobalSettings.logger.info(f"do_preprocess: using TaPreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
         preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Questions':
-        GlobalSettings.logger.info(f"do_preprocess: using TqPreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
         preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
-        GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Notes':
-        GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for {repo_subject} …")
+        GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for {repo_subject} resource: {rc.resource.identifier} …")
+        GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
 

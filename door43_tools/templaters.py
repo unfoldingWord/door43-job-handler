@@ -24,7 +24,8 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
     Tries to determine the correct templater for the appropriate repo_subject
     """
     # GlobalSettings.logger.debug(f"init_template({repo_subject})")
-    if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions',):
+    if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
+                                        'OBS_Translation_Notes','OBS_Translation_Questions',):
         GlobalSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
@@ -88,7 +89,7 @@ class Templater:
                 for some_class in self.classes: # Check that we don't double unnecessarily
                     assert some_class != self.templater_CSS_class
                 soup.body['class'] = soup.body.get('class', []) + self.classes
-            GlobalSettings.logger.info(f"Have {self.template_file} body class(es)={soup.body.get('class', [])}")
+            GlobalSettings.logger.info(f"Have {self.template_file.split('/')[-1]} body class(es)={soup.body.get('class', [])}")
             self.template_html = str(soup)
         self.apply_template()
         return True

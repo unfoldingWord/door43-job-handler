@@ -32,10 +32,13 @@ from global_settings.global_settings import GlobalSettings
 
 
 OUR_NAME = 'Door43_job_handler'
-KNOWN_RESOURCE_SUBJECTS = ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
+KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
+            'Greek_Lexicon', 'Hebrew_Lexicon',
+            # and from https://api.door43.org/v3/subjects:
+            'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
             'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
-            ) # from https://api.door43.org/v3/subjects
+            )
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
 # TODO: Will we also need 'book' in this map???
 RESOURCE_SUBJECT_MAP = {
@@ -43,12 +46,21 @@ RESOURCE_SUBJECT_MAP = {
             'obs': 'Open_Bible_Stories',
             'obs-tn': 'OBS_Translation_Notes',
             'obs-tq': 'OBS_Translation_Questions',
+            'obs-sq': 'Generic_Markdown', # See if this works for OBS Study Questions
+            'obs-sn': 'Open_Bible_Stories', # See if this works for OBS Study Notes
+                                            #  (seems better than Generic_Markdown)
+            'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
+
+            'bible': 'Bible', 'reg': 'Bible',
+                'ulb': 'Bible', 'udb': 'Bible',
 
             'ta': 'Translation_Academy',
             'tn': 'Translation_Notes',
             'tq': 'Translation_Questions',
             'tw': 'Translation_Words',
-            'bible': 'Bible', 'reg': 'Bible',
+
+            'ugl': 'Greek_Lexicon',
+            'uhl': 'Hebrew_Lexicon',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -140,16 +152,16 @@ def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job
     :param string repo_owner:
     :return dict:
     """
-    build_log_json = dict(cbl_job)
-    build_log_json['repo_name'] = repo_name
-    build_log_json['repo_owner'] = repo_owner
-    build_log_json['commit_id'] = commit_id
-    build_log_json['committed_by'] = pusher_username
-    build_log_json['commit_url'] = commit_url
-    build_log_json['compare_url'] = compare_url
-    build_log_json['commit_message'] = commit_message
+    build_log_dict = dict(cbl_job)
+    build_log_dict['repo_name'] = repo_name
+    build_log_dict['repo_owner'] = repo_owner
+    build_log_dict['commit_id'] = commit_id
+    build_log_dict['committed_by'] = pusher_username
+    build_log_dict['commit_url'] = commit_url
+    build_log_dict['compare_url'] = compare_url
+    build_log_dict['commit_message'] = commit_message
 
-    return build_log_json
+    return build_log_dict
 # end of create_build_log function
 
 
@@ -235,7 +247,65 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     if not prefix: # For dev- save this file longer
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
-#end of download_repo function
+# end of download_repo function
+
+
+def get_tX_subject(grs_rc):
+    """
+    Given a resource container, try to determine the subject
+        even if the manifest has no subject field.
+
+    https://api.door43.org/v3/subjects specifies 11 subjects (as of Feb 2019)
+
+    Can return None if we can't determine one.
+    """
+    GlobalSettings.logger.debug(f"grs_rc.resource.identifier={grs_rc.resource.identifier}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.file_ext={grs_rc.resource.file_ext}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.type={grs_rc.resource.type}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.subject={grs_rc.resource.subject}")
+    GlobalSettings.logger.debug(f"grs_rc.resource.format={grs_rc.resource.format}")
+
+    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
+    repo_subject = None
+    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
+        GlobalSettings.logger.debug(f"Using (adjusted) subject to set repo_subject={adjusted_subject}")
+        repo_subject = adjusted_subject
+    elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
+        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
+        repo_subject = 'Bible'
+    else:
+        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
+
+    if not repo_subject:
+        if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
+            GlobalSettings.logger.debug(f"Using rc.resource.format to set repo_subject={grs_rc.resource.format}")
+            repo_subject = 'Bible'
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
+
+    if not repo_subject:
+        if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
+            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}")
+            repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
+        else:
+            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+
+    if not repo_subject:
+        for resource_subject_string in RESOURCE_SUBJECT_MAP:
+            if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
+            or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
+                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
+                repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
+                break
+        else: # if didn't match/break above
+            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+
+    if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
+        GlobalSettings.logger.debug(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}")
+        repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
+
+    return repo_subject
+# end of get_tX_subject function
 
 
 def remember_job(rj_job_dict, rj_redis_connection):
@@ -471,47 +541,8 @@ def process_job(queued_json_payload, redis_connection):
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
-    # Use the subject to set the resource type more intelligently
-    GlobalSettings.logger.debug(f"rc.resource.identifier={rc.resource.identifier}")
-    GlobalSettings.logger.debug(f"rc.resource.file_ext={rc.resource.file_ext}")
-    GlobalSettings.logger.debug(f"rc.resource.type={rc.resource.type}")
-    GlobalSettings.logger.debug(f"rc.resource.subject={rc.resource.subject}")
-    GlobalSettings.logger.debug(f"rc.resource.format={rc.resource.format}")
-    adjusted_subject = rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
-    resource_type = None
-    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.debug(f"Using (adjusted) subject to set resource_type={adjusted_subject}")
-        resource_type = adjusted_subject
-    elif 'bible' in adjusted_subject.lower() and rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set resource_type")
-        resource_type = 'Bible'
-    else:
-        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set resource_type")
-    if not resource_type:
-        if rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
-            GlobalSettings.logger.debug(f"Using rc.resource.format to set resource_type={rc.resource.format}")
-            resource_type = 'Bible'
-        else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{rc.resource.format}' to set resource_type")
-    if not resource_type:
-        if rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.identifier]}")
-            resource_type = RESOURCE_SUBJECT_MAP[rc.resource.identifier]
-        else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
-    if not resource_type:
-        for resource_subject_string in RESOURCE_SUBJECT_MAP:
-            if rc.resource.identifier.endswith('_'+resource_subject_string) \
-            or rc.resource.identifier.endswith('-'+resource_subject_string):
-                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
-                resource_type = RESOURCE_SUBJECT_MAP[resource_subject_string]
-                break
-        else: # if didn't match/break above
-            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc.resource.identifier}' to set resource_type")
-    if not resource_type and rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        GlobalSettings.logger.debug(f"Using rc.resource.type='{rc.resource.type}' to set resource_type={RESOURCE_SUBJECT_MAP[rc.resource.type]}")
-        resource_type = RESOURCE_SUBJECT_MAP[rc.resource.type]
-
+    # Use the RC to set the resource_type and input_format parameters for tX
+    resource_type = get_tX_subject(rc) # use the subject to set the resource type more intelligently
     input_format = rc.resource.file_ext
     if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
@@ -519,14 +550,17 @@ def process_job(queued_json_payload, redis_connection):
         use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
         use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_type={resource_type}")
         input_format = 'usfm'
-
-    # Summarize
-    GlobalSettings.logger.info(f"Got resource_type={resource_type}, input_format={input_format}")
+    GlobalSettings.logger.info(f"Got resource_type='{resource_type}', input_format='{input_format}'")
     if resource_type not in KNOWN_RESOURCE_SUBJECTS:
         GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
     if not resource_type or not input_format:
         # Might as well fail here if they're not set properly
-        raise Exception(f"Unable to find a type/format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={adjusted_subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+        if prefix and debug_mode_flag:
+            GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+        else:
+            remove_tree(base_temp_dir_name)  # cleanup
+        raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
@@ -568,133 +602,140 @@ def process_job(queued_json_payload, redis_connection):
             shutil.copy(os.path.join(repo_dir, 'README.md'),preprocess_dir)
             num_preprocessor_files_written += 1
 
-    if not num_preprocessor_files_written:
-        GlobalSettings.logger.error("No files written by preprocessor -- aborting!")
-    else:
-        # Zip up the massaged files
-        GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
-        preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
-        GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
-        add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
-        GlobalSettings.logger.debug("Zipping finished.")
+    # Try creating a file if there's nothing else to at least cause the page to build
+    #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
+    if input_format=='md' and not num_preprocessor_files_written:
+        with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
+            f.write("# NO FILES FOUND\nSorry, we couldn't find any markdown files to convert (not even README.md). Please check your manifest file.")
+            num_preprocessor_files_written += 1
 
 
-        # Upload zipped file to the S3 pre-convert bucket
-        GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-        our_job_id = get_unique_job_id()
-        file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
+    # Seems we should always process, even if no files
+    #   so that at least any errors/warnings get displayed
+
+    # Zip up the massaged files
+    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
+    preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
+    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
+    add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
+    GlobalSettings.logger.debug("Zipping finished.")
+
+    # Upload zipped file to the S3 pre-convert bucket
+    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
+    our_job_id = get_unique_job_id()
+    file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
 
 
-        # We no longer use txJob class but just create our own Python dict
-        GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
-        pj_job_dict = {}
-        pj_job_dict['job_id'] = our_job_id
-        pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-        pj_job_dict['user_name'] = repo_owner_username
-        pj_job_dict['repo_name'] = repo_name
-        pj_job_dict['commit_id'] = commit_id
-        pj_job_dict['manifests_id'] = tx_manifest.id
-        pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        # Seems never used (RJH)
-        #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
-        pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
-        pj_job_dict['input_format'] = input_format
-        pj_job_dict['source'] = f'{source_url_base}/{file_key}'
-        pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
-        pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
-        pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
-        pj_job_dict['callback'] = f'{GlobalSettings.api_url}/client/callback'
-        pj_job_dict['output_format'] = 'html'
-        # NOTE: following line removed as stats recording used too much disk space
-        # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
-        pj_job_dict['links'] = {
-            'href': f'{GlobalSettings.api_url}/tx/job/{our_job_id}',
-            'rel': 'self',
-            'method': 'GET'
+    # We no longer use txJob class but just create our own Python dict
+    GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
+    pj_job_dict = {}
+    pj_job_dict['job_id'] = our_job_id
+    pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
+    pj_job_dict['user_name'] = repo_owner_username
+    pj_job_dict['repo_name'] = repo_name
+    pj_job_dict['commit_id'] = commit_id
+    pj_job_dict['manifests_id'] = tx_manifest.id
+    pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    # Seems never used (RJH)
+    #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
+    pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
+    pj_job_dict['input_format'] = input_format
+    pj_job_dict['source'] = f'{source_url_base}/{file_key}'
+    pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
+    pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+    pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
+    pj_job_dict['callback'] = f'{GlobalSettings.api_url}/client/callback'
+    pj_job_dict['output_format'] = 'html'
+    # NOTE: following line removed as stats recording used too much disk space
+    # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+    pj_job_dict['links'] = {
+        'href': f'{GlobalSettings.api_url}/tx/job/{our_job_id}',
+        'rel': 'self',
+        'method': 'GET'
+    }
+    if preprocessor_warning_list:
+        pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
+    pj_job_dict['status'] = None
+    pj_job_dict['success'] = False
+
+
+    # Save the job info in Redis for the callback to use
+    remember_job(pj_job_dict, redis_connection)
+
+    # Get S3 cdn bucket/dir and empty it
+    s3_commit_key = f"u/{pj_job_dict['user_name']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
+    clear_commit_directory_in_cdn(s3_commit_key)
+
+    # Create a build log
+    build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
+                                    pusher_username, repo_name, repo_owner_username)
+    # Upload an initial build_log
+    upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
+
+    # Update the project.json file
+    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
+
+
+
+    # Pass the work request onto the tX system
+    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
+    tx_payload = {
+        'job_id': our_job_id,
+        'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
+        'resource_type': resource_type, # This used to be rc.resource.identifier
+        'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
+                            else input_format, # special case for .txt Bibles
+        'output_format': 'html',
+        'source': source_url_base + '/' + file_key,
+        'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                    else DOOR43_CALLBACK_URL,
+        'user_token': gogs_user_token, # Checked by tX enqueue job
+        'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
-        if preprocessor_warning_list:
-            pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-        pj_job_dict['status'] = None
-        pj_job_dict['success'] = False
+    if 'options' in pj_job_dict and pj_job_dict['options']:
+        GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
+        tx_payload['options'] = pj_job_dict['options']
 
+    GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    try:
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
 
-        # Save the job info in Redis for the callback to use
-        remember_job(pj_job_dict, redis_connection)
-
-        # Get S3 cdn bucket/dir and empty it
-        s3_commit_key = f"u/{pj_job_dict['user_name']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
-        clear_commit_directory_in_cdn(s3_commit_key)
-
-        # Create a build log
-        build_log_json = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-                                        pusher_username, repo_name, repo_owner_username)
-        # Upload an initial build_log
-        upload_build_log_to_s3(base_temp_dir_name, build_log_json, s3_commit_key)
-
-        # Update the project.json file
-        update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
-
-
-
-        # Pass the work request onto the tX system
-        GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
-        tx_payload = {
-            'job_id': our_job_id,
-            'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-            'resource_type': resource_type, # This used to be rc.resource.identifier
-            'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
-                                else input_format, # special case for .txt Bibles
-            'output_format': 'html',
-            'source': source_url_base + '/' + file_key,
-            'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                            if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                        else DOOR43_CALLBACK_URL,
-            'user_token': gogs_user_token, # Checked by tX enqueue job
-            'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
-            }
-        if 'options' in pj_job_dict and pj_job_dict['options']:
-            GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
-            tx_payload['options'] = pj_job_dict['options']
-
-        GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    if response:
+        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
         try:
-            response = requests.post(tx_post_url, json=tx_payload)
-        except requests.exceptions.ConnectionError as e:
-            GlobalSettings.logger.critical(f"Callback connection error: {e}")
-            response = None
-
-        if response:
-            #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-            #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
-            try:
-                GlobalSettings.logger.info(f"response.json = {response.json()}")
-            except json.decoder.JSONDecodeError:
-                GlobalSettings.logger.info("No valid response JSON found")
-                GlobalSettings.logger.debug(f"response.text = {response.text}")
-            if response.status_code != 200:
-                GlobalSettings.logger.critical(f"Failed to submit job to tX:"
-                                            f" {response.status_code}={response.reason}")
-        else: # no response
-            error_msg = "Submission of job to tX system got no response"
-            GlobalSettings.logger.critical(error_msg)
-            raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
+            GlobalSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            GlobalSettings.logger.info("No valid response JSON found")
+            GlobalSettings.logger.debug(f"response.text = {response.text}")
+        if response.status_code != 200:
+            GlobalSettings.logger.critical(f"Failed to submit job to tX:"
+                                        f" {response.status_code}={response.reason}")
+    else: # no response
+        error_msg = "Submission of job to tX system got no response"
+        GlobalSettings.logger.critical(error_msg)
+        raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
-        if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-            if prefix and not debug_mode_flag: # Only for dev- chain
-                GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-                original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-                upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-                # Not using the preprocessed files (only the originals above)
-                # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-                # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+    if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
+        if prefix and not debug_mode_flag: # Only for dev- chain
+            GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+            original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
+            # Not using the preprocessed files (only the originals above)
+            # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
         GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_json}")
+    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
     return job_descriptive_name
 #end of process_job function
 
