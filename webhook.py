@@ -33,7 +33,7 @@ from global_settings.global_settings import GlobalSettings
 
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
-            'Greek_Lexicon', 'Hebrew_Lexicon',
+            'Greek_Lexicon', 'Hebrew_Aramaic_Lexicon',
             # and from https://api.door43.org/v3/subjects:
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
@@ -48,7 +48,7 @@ RESOURCE_SUBJECT_MAP = {
             'obs-tq': 'OBS_Translation_Questions',
             'obs-sq': 'Generic_Markdown', # See if this works for OBS Study Questions
             'obs-sn': 'Open_Bible_Stories', # See if this works for OBS Study Notes
-                                            #  (seems better than Generic_Markdown)
+                                            #  (seems to work better than Generic_Markdown)
             'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
 
             'bible': 'Bible', 'reg': 'Bible',
@@ -60,7 +60,7 @@ RESOURCE_SUBJECT_MAP = {
             'tw': 'Translation_Words',
 
             'ugl': 'Greek_Lexicon',
-            'uhl': 'Hebrew_Lexicon',
+            'uhal': 'Hebrew_Aramaic_Lexicon',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -265,27 +265,28 @@ def get_tX_subject(grs_rc):
     GlobalSettings.logger.debug(f"grs_rc.resource.subject={grs_rc.resource.subject}")
     GlobalSettings.logger.debug(f"grs_rc.resource.format={grs_rc.resource.format}")
 
-    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
     repo_subject = None
+
+    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
     if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.debug(f"Using (adjusted) subject to set repo_subject={adjusted_subject}")
+        GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
         repo_subject = adjusted_subject
     elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
+        GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
         repo_subject = 'Bible'
     else:
         GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
-            GlobalSettings.logger.debug(f"Using rc.resource.format to set repo_subject={grs_rc.resource.format}")
+            GlobalSettings.logger.info(f"Using rc.resource.format to set repo_subject='{grs_rc.resource.format}'")
             repo_subject = 'Bible'
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}")
+            GlobalSettings.logger.info(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}'")
             repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
@@ -294,15 +295,19 @@ def get_tX_subject(grs_rc):
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
             or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
-                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
+                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[resource_subject_string]}'")
                 repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
                 break
         else: # if didn't match/break above
             GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
 
     if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        GlobalSettings.logger.debug(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}")
+        GlobalSettings.logger.info(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}'")
         repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
+
+    if not repo_subject:
+            GlobalSettings.logger.info("Trying setting repo_subject='Generic_Markdown'")
+            repo_subject = 'Generic_Markdown'
 
     return repo_subject
 # end of get_tX_subject function
@@ -604,7 +609,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Try creating a file if there's nothing else to at least cause the page to build
     #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
-    if input_format=='md' and not num_preprocessor_files_written:
+    if not num_preprocessor_files_written:
         with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
             f.write("# NO FILES FOUND\nSorry, we couldn't find any markdown files to convert (not even README.md). Please check your manifest file.")
             num_preprocessor_files_written += 1
@@ -614,7 +619,7 @@ def process_job(queued_json_payload, redis_connection):
     #   so that at least any errors/warnings get displayed
 
     # Zip up the massaged files
-    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
+    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
     preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
     GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
     add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
