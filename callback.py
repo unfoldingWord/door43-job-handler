@@ -89,7 +89,10 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
         if an exception is thrown in this module.
     """
     # global user_projects_invoked_string
-    GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {queued_json_payload}")
+    str_payload = str(queued_json_payload)
+    str_payload_adjusted = str_payload if len(str_payload)<1500 \
+                            else f'{str_payload[:1000]} …… {str_payload[-500:]}'
+    GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {str_payload_adjusted}")
 
     # Check that this is an expected callback job
     if 'job_id' not in queued_json_payload:
@@ -173,11 +176,15 @@ def process_callback(pc_prefix, queued_json_payload, redis_connection):
     deployer.deploy_revision_to_door43(final_build_log) # No need to download the build log since we have it here
 
     # Finishing off
-    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {final_build_log}")
+    str_final_build_log = str(final_build_log)
+    str_final_build_log_adjusted = str_final_build_log if len(str_final_build_log)<1500 \
+                            else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
+    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
     return job_descriptive_name
 #end of process_callback function
+
 
 
 def job(queued_json_payload):
