@@ -31,6 +31,9 @@ def do_preprocess(repo_subject, rc, repo_dir, output_dir):
     elif repo_subject == 'Translation_Notes':
         GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
+    elif repo_subject in ('Greek_Lexicon','Hebrew_Aramaic_Lexicon'):
+        GlobalSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
+        preprocessor = LexiconPreprocessor(rc, repo_dir, output_dir)
     else:
         GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
@@ -553,6 +556,7 @@ class BiblePreprocessor(Preprocessor):
 # end of class BiblePreprocessor
 
 
+
 class TaPreprocessor(Preprocessor):
     manual_title_map = {
         'checking': 'Checking Manual',
@@ -652,6 +656,7 @@ class TaPreprocessor(Preprocessor):
             for subsection in section['sections']:
                 markdown += self.compile_ta_section(project, subsection, level + 1)
         return markdown
+    # end of compile_ta_section(self, project, section, level)
 
 
     def run(self):
@@ -716,8 +721,9 @@ class TaPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
-    # end of TaPreprocessor run()
+    # end of TaPreprocessor fix_links(content)
 # end of class TaPreprocessor
+
 
 
 class TqPreprocessor(Preprocessor):
@@ -794,6 +800,7 @@ class TqPreprocessor(Preprocessor):
         return self.num_files_written, self.warnings
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
+
 
 
 class TwPreprocessor(Preprocessor):
@@ -997,6 +1004,7 @@ class TnPreprocessor(Preprocessor):
     def get_book_list(self):
         return self.book_filenames
 
+
     def run(self):
         GlobalSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
@@ -1146,6 +1154,7 @@ class TnPreprocessor(Preprocessor):
                 files.pop()
                 files.insert(0, last_file)
 
+
     def fix_links(self, content):
         # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/Door43/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
@@ -1166,3 +1175,100 @@ class TnPreprocessor(Preprocessor):
                          content, flags=re.IGNORECASE)
         return content
 # end of class TnPreprocessor
+
+
+
+class LexiconPreprocessor(Preprocessor):
+
+    # def __init__(self, *args, **kwargs):
+    #     super(LexiconPreprocessor, self).__init__(*args, **kwargs)
+
+
+    def compile_lexicon_entry(self, project, folder):
+        """
+        Recursive section markdown creator
+
+        :param project:
+        :param str folder:
+        :return: markdown str
+        """
+        # GlobalSettings.logger.debug(f"compile_lexicon_entry for {project} {folder} …")
+        content_folderpath = os.path.join(self.source_dir, project.path, folder)
+        file_list = os.listdir(content_folderpath)
+        if len(file_list) != 1: # expecting '01.md'
+            GlobalSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
+        markdown = f"# {folder}"
+        content = ""
+        content_file = os.path.join(content_folderpath, '01.md')
+        if os.path.isfile(content_file):
+            content = read_file(content_file)
+        else:
+            msg = f"compile_lexicon_entry couldn't find any files for {folder}"
+            GlobalSettings.logger.error(msg)
+            self.warnings.append(msg)
+        if content:
+            markdown += f'{content}\n\n'
+        return markdown
+    # end of compile_lexicon_entry(self, project, section, level)
+
+
+    def run(self):
+        GlobalSettings.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        for project in self.rc.projects:
+            project_path = os.path.join(self.source_dir, project.path)
+            print("project_path", project_path)
+
+            GlobalSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
+
+            for something in sorted(os.listdir(project_path)):
+                if os.path.isdir(os.path.join(project_path, something)) and something not in LexiconPreprocessor.ignoreDirectories:
+                    entry_markdown = self.compile_lexicon_entry(project, something)
+                    write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
+                    self.num_files_written += 1
+
+            index_filepath = os.path.join(project_path, 'index.md')
+            if os.path.isfile(index_filepath):
+                with open(index_filepath, 'rt') as ixf:
+                    index_markdown = ixf.read()
+                    index_markdown = self.fix_links(index_markdown)
+                write_file(os.path.join(self.output_dir, 'index.md'), index_markdown)
+                self.num_files_written += 1
+
+            # idx = 0
+            # markdown = f'# {project.identifier.title()}\n\n'
+            # markdown = self.fix_links(markdown)
+            # output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
+            # write_file(output_file, markdown)
+            # self.num_files_written += 1
+
+            # # Lexicon: Copy the toc and config.yaml file to the output dir so they can be used to
+            # # generate the ToC on live.door43.org
+            # toc_file = os.path.join(self.source_dir, project.path, 'toc.yaml')
+            # if os.path.isfile(toc_file):
+            #     copy(toc_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-toc.yaml'))
+            # config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
+            # if os.path.isfile(config_file):
+            #     copy(config_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-config.yaml'))
+            # elif project.path!='./':
+            #     self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
+
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
+            self.warnings.append("No lexicon source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files")
+
+        str_list = str(os.listdir(self.output_dir))
+        str_list_adjusted = str_list if len(str_list)<1500 \
+                                else f'{str_list[:1000]} …… {str_list[-500:]}'
+        GlobalSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
+        return self.num_files_written, self.warnings
+    # end of LexiconPreprocessor run()
+
+
+    def fix_links(self, content):
+        # Point to .md file instead of to folder
+        content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content)
+        return content
+    # end of LexiconPreprocessor fix_links(content)
+# end of class LexiconPreprocessor
