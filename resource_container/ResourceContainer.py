@@ -321,6 +321,7 @@ class Resource:
         elif self.rc.usfm_files(): # e.g., a plain USFM bundle (with no manifest, etc.)
             return 'text/usfm'
         GlobalSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
+    # end of Resource.format() property
 
 
     @property
@@ -342,6 +343,7 @@ class Resource:
             result = 'usfm'
         # GlobalSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
         return result
+    # end of Resource.file_ext() property
 
 
     @property
@@ -366,6 +368,8 @@ class Resource:
         else:
             # GlobalSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.type() in resource_map. (Returning 'book'.)")
             return 'book'
+    # end of Resource.type() property
+
 
     @property
     def identifier(self):
@@ -382,6 +386,8 @@ class Resource:
             # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['slug'].lower()}' from self.resource['slug']")
             return self.resource['slug'].lower()
         GlobalSettings.logger.critical(f"Returning Resource identifier=None.")
+    # end of Resource.identifier() property
+
 
     @property
     def title(self):
@@ -400,6 +406,8 @@ class Resource:
             #print(f"RESOURCE.title (final ELSE) returning4 resource identifier {self.identifier!r}")
             # GlobalSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.title() in resource_map. (Returning '{self.identifier}'.)")
             return self.identifier
+    # end of Resource.title() property
+
 
     @property
     def subject(self):

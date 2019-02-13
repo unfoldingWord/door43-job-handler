@@ -28,7 +28,7 @@ def do_preprocess(repo_subject, rc, repo_dir, output_dir):
     elif repo_subject == 'Translation_Words':
         GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
         preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
-    elif repo_subject == 'Translation_Notes':
+    elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
         GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
     elif repo_subject in ('Greek_Lexicon','Hebrew_Aramaic_Lexicon'):
@@ -38,6 +38,7 @@ def do_preprocess(repo_subject, rc, repo_dir, output_dir):
         GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(rc, repo_dir, output_dir)
     return preprocessor.run()
+# end of do_preprocess()
 
 
 
@@ -1221,36 +1222,24 @@ class LexiconPreprocessor(Preprocessor):
             GlobalSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
 
             for something in sorted(os.listdir(project_path)):
-                if os.path.isdir(os.path.join(project_path, something)) and something not in LexiconPreprocessor.ignoreDirectories:
+                if os.path.isdir(os.path.join(project_path, something)) \
+                and something not in LexiconPreprocessor.ignoreDirectories:
                     entry_markdown = self.compile_lexicon_entry(project, something)
                     write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
+                    self.num_files_written += 1
+                elif os.path.isfile(os.path.join(project_path, something)) \
+                and something not in LexiconPreprocessor.ignoreFiles \
+                and something != 'index.md':
+                    copy(os.path.join(project_path, something), self.output_dir)
                     self.num_files_written += 1
 
             index_filepath = os.path.join(project_path, 'index.md')
             if os.path.isfile(index_filepath):
                 with open(index_filepath, 'rt') as ixf:
                     index_markdown = ixf.read()
-                    index_markdown = self.fix_links(index_markdown)
+                index_markdown = self.fix_links(index_markdown)
                 write_file(os.path.join(self.output_dir, 'index.md'), index_markdown)
                 self.num_files_written += 1
-
-            # idx = 0
-            # markdown = f'# {project.identifier.title()}\n\n'
-            # markdown = self.fix_links(markdown)
-            # output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
-            # write_file(output_file, markdown)
-            # self.num_files_written += 1
-
-            # # Lexicon: Copy the toc and config.yaml file to the output dir so they can be used to
-            # # generate the ToC on live.door43.org
-            # toc_file = os.path.join(self.source_dir, project.path, 'toc.yaml')
-            # if os.path.isfile(toc_file):
-            #     copy(toc_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-toc.yaml'))
-            # config_file = os.path.join(self.source_dir, project.path, 'config.yaml')
-            # if os.path.isfile(config_file):
-            #     copy(config_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-config.yaml'))
-            # elif project.path!='./':
-            #     self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
 
         if self.num_files_written == 0:
             GlobalSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
@@ -1267,8 +1256,11 @@ class LexiconPreprocessor(Preprocessor):
 
 
     def fix_links(self, content):
-        # Point to .md file instead of to folder
-        content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content)
+        # Point to .html file instead of to .md file (UHAL)
+        content = re.sub(r'\[(.+?).md\]\(', r'[\1](', content) # Remove .md from text
+        content = re.sub(r'\]\(\./(.+?).md\)', r'](\1.html)', content) # Change link from ./xyz.md to xyz.html
+        # Point to .html file instead of to folder (UGL)
+        content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content) # Change link from ./xyz to xyz.html
         return content
     # end of LexiconPreprocessor fix_links(content)
 # end of class LexiconPreprocessor
