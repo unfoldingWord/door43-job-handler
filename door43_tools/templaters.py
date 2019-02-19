@@ -37,7 +37,7 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
     elif repo_subject in ('Translation_Words',):
         GlobalSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
         templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Notes',):
+    elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
         GlobalSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
         templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
     else:

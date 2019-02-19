@@ -33,14 +33,15 @@ from global_settings.global_settings import GlobalSettings
 
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
-            'Greek_Lexicon', 'Hebrew_Lexicon',
+            'Greek_Lexicon', 'Hebrew_Aramaic_Lexicon',
             # and from https://api.door43.org/v3/subjects:
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
-            'Translation_Academy', 'Translation_Notes', 'Translation_Questions', 'Translation_Words',
+            'Translation_Academy', 'Translation_Questions', 'Translation_Words',
+            'Translation_Notes', 'TSV_Translation_Notes',
             'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
             )
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
-# TODO: Will we also need 'book' in this map???
+# TODO: Will we also need 'book' in this map below???
 RESOURCE_SUBJECT_MAP = {
             # Maps from rc.resource.identifier and possibly also from rc.resource.type
             'obs': 'Open_Bible_Stories',
@@ -48,11 +49,11 @@ RESOURCE_SUBJECT_MAP = {
             'obs-tq': 'OBS_Translation_Questions',
             'obs-sq': 'Generic_Markdown', # See if this works for OBS Study Questions
             'obs-sn': 'Open_Bible_Stories', # See if this works for OBS Study Notes
-                                            #  (seems better than Generic_Markdown)
+                                            #  (seems to work better than Generic_Markdown)
             'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
 
             'bible': 'Bible', 'reg': 'Bible',
-                'ulb': 'Bible', 'udb': 'Bible',
+                'ulb': 'Bible', 'udb': 'Bible', # These sometimes don't have the correct subject in the manifest
 
             'ta': 'Translation_Academy',
             'tn': 'Translation_Notes',
@@ -60,7 +61,7 @@ RESOURCE_SUBJECT_MAP = {
             'tw': 'Translation_Words',
 
             'ugl': 'Greek_Lexicon',
-            'uhl': 'Hebrew_Lexicon',
+            'uhal': 'Hebrew_Aramaic_Lexicon',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -255,7 +256,7 @@ def get_tX_subject(grs_rc):
     Given a resource container, try to determine the subject
         even if the manifest has no subject field.
 
-    https://api.door43.org/v3/subjects specifies 11 subjects (as of Feb 2019)
+    https://api.door43.org/v3/subjects specifies 12 subjects (as of Feb 2019)
 
     Can return None if we can't determine one.
     """
@@ -265,27 +266,28 @@ def get_tX_subject(grs_rc):
     GlobalSettings.logger.debug(f"grs_rc.resource.subject={grs_rc.resource.subject}")
     GlobalSettings.logger.debug(f"grs_rc.resource.format={grs_rc.resource.format}")
 
-    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
     repo_subject = None
+
+    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
     if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.debug(f"Using (adjusted) subject to set repo_subject={adjusted_subject}")
+        GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
         repo_subject = adjusted_subject
     elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        GlobalSettings.logger.debug(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
+        GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
         repo_subject = 'Bible'
     else:
         GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
-            GlobalSettings.logger.debug(f"Using rc.resource.format to set repo_subject={grs_rc.resource.format}")
+            GlobalSettings.logger.info(f"Using rc.resource.format to set repo_subject='{grs_rc.resource.format}'")
             repo_subject = 'Bible'
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            GlobalSettings.logger.debug(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}")
+            GlobalSettings.logger.info(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}'")
             repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
@@ -294,15 +296,23 @@ def get_tX_subject(grs_rc):
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
             or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
-                GlobalSettings.logger.debug(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject={RESOURCE_SUBJECT_MAP[resource_subject_string]}")
+                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[resource_subject_string]}'")
                 repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
                 break
         else: # if didn't match/break above
             GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
 
     if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        GlobalSettings.logger.debug(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject={RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}")
+        GlobalSettings.logger.info(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}'")
         repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
+
+    if grs_rc.resource.format=='tsv' and repo_subject=='Translation_Notes':
+        GlobalSettings.logger.info(f"Using rc.resource.format={grs_rc.resource.format} to change repo_subject from '{repo_subject}' to 'TSV_Translation_Notes'")
+        repo_subject = 'TSV_Translation_Notes'
+
+    if not repo_subject:
+            GlobalSettings.logger.info("Trying setting repo_subject='Generic_Markdown'")
+            repo_subject = 'Generic_Markdown'
 
     return repo_subject
 # end of get_tX_subject function
@@ -348,7 +358,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
     rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
-# end of remember_job
+# end of remember_job function
 
 
 def upload_to_BDB(job_name, BDB_zip_filepath):
@@ -541,19 +551,19 @@ def process_job(queued_json_payload, redis_connection):
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
 
-    # Use the RC to set the resource_type and input_format parameters for tX
-    resource_type = get_tX_subject(rc) # use the subject to set the resource type more intelligently
+    # Use the RC to set the resource_subject and input_format parameters for tX
+    resource_subject = get_tX_subject(rc) # use the subject to set the resource type more intelligently
     input_format = rc.resource.file_ext
-    if resource_type in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
+    if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
         # This can happen for usfm in .txt files (ts-desktop exports)
         use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
-        use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_type={resource_type}")
+        use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_subject={resource_subject}")
         input_format = 'usfm'
-    GlobalSettings.logger.info(f"Got resource_type='{resource_type}', input_format='{input_format}'")
-    if resource_type not in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.critical(f"Got unexpected resource_type={resource_type} with input_format={input_format}")
-    if not resource_type or not input_format:
+    GlobalSettings.logger.info(f"Got resource_subject='{resource_subject}', input_format='{input_format}'")
+    if resource_subject not in KNOWN_RESOURCE_SUBJECTS:
+        GlobalSettings.logger.critical(f"Got unexpected resource_subject={resource_subject} with input_format={input_format}")
+    if not resource_subject or not input_format:
         # Might as well fail here if they're not set properly
         if prefix and debug_mode_flag:
             GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
@@ -569,7 +579,7 @@ def process_job(queued_json_payload, redis_connection):
         'user_name': repo_owner_username,
         'lang_code': rc.resource.language.identifier,
         'resource_id': rc.resource.identifier,
-        'resource_type': resource_type, # This used to be rc.resource.type
+        'resource_type': resource_subject, # This used to be rc.resource.type
         'title': rc.resource.title,
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
@@ -591,7 +601,7 @@ def process_job(queued_json_payload, redis_connection):
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_type, rc, repo_dir, preprocess_dir)
+    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, rc, repo_dir, preprocess_dir)
     if preprocessor_warning_list:
         GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
@@ -604,7 +614,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Try creating a file if there's nothing else to at least cause the page to build
     #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
-    if input_format=='md' and not num_preprocessor_files_written:
+    if not num_preprocessor_files_written:
         with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
             f.write("# NO FILES FOUND\nSorry, we couldn't find any markdown files to convert (not even README.md). Please check your manifest file.")
             num_preprocessor_files_written += 1
@@ -614,7 +624,7 @@ def process_job(queued_json_payload, redis_connection):
     #   so that at least any errors/warnings get displayed
 
     # Zip up the massaged files
-    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written} preprocessed files…")
+    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
     preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
     GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
     add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
@@ -638,7 +648,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     # Seems never used (RJH)
     #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
-    pj_job_dict['resource_type'] = resource_type # This used to be rc.resource.identifier
+    pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
     pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = f'{source_url_base}/{file_key}'
     pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
@@ -682,8 +692,8 @@ def process_job(queued_json_payload, redis_connection):
     tx_payload = {
         'job_id': our_job_id,
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-        'resource_type': resource_type, # This used to be rc.resource.identifier
-        'input_format': 'usfm' if resource_type=='bible' and input_format=='txt' \
+        'resource_type': resource_subject, # This used to be rc.resource.identifier
+        'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                             else input_format, # special case for .txt Bibles
         'output_format': 'html',
         'source': source_url_base + '/' + file_key,

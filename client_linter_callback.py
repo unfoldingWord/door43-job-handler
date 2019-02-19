@@ -46,7 +46,7 @@ class ClientLinterCallback:
         self.s3_results_key = s3_results_key
         self.job = None
 
-    def process_callback(self):
+    def do_post_processing(self):
         if not self.identifier:
             error = 'No identifier found'
             GlobalSettings.logger.error(error)
@@ -107,6 +107,7 @@ class ClientLinterCallback:
             remove_tree(self.temp_dir)  # cleanup
         GlobalSettings.db_close()
         return build_log
+    # end of do_post_processing()
 
 
     @staticmethod

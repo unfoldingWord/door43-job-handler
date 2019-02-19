@@ -66,9 +66,7 @@ class ClientConverterCallback:
         self.temp_dir = tempfile.mkdtemp(suffix='',
                             prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
-    def process_callback(self):
-        multiple_project = False
-
+    def do_post_processing(self):
         self.job.ended_at = datetime.utcnow()
         self.job.success = self.success
         for message in self.log:
@@ -104,9 +102,6 @@ class ClientConverterCallback:
 
         s3_commit_key = f'u/{self.job.user_name}/{self.job.repo_name}/{self.job.commit_id}'
         upload_key = s3_commit_key
-        # if multiple_project:
-        #     upload_key += '/' + part_id
-
         GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key} …")
 
         # Download the ZIP file of the converted files
@@ -119,11 +114,11 @@ class ClientConverterCallback:
             download_file(converted_zip_url, converted_zip_file)
         except:
             download_success = False  # if multiple project we note fail and move on
-            if not multiple_project:
-                if prefix and debug_mode_flag:
-                    GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-                else:
-                    remove_tree(self.temp_dir)  # cleanup
+            # if not multiple_project:
+            if prefix and debug_mode_flag:
+                GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+            else:
+                remove_tree(self.temp_dir)  # cleanup
             if self.job.errors is None:
                 self.job.errors = []
             message = f"Missing converted file: {converted_zip_url}"
@@ -140,17 +135,11 @@ class ClientConverterCallback:
             # Unzip the archive
             unzip_dir = self.unzip_converted_files(converted_zip_file)
 
+            # TODO: Do we really need this now?
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
             self.upload_converted_files(upload_key, unzip_dir)
 
-        # if multiple_project:
-        #     # Now download the existing build_log.json file, update it and upload it back to S3 as convert_log
-        #     build_log_json = self.update_convert_log(s3_commit_key, part_id + "/")
-
-        #     # mark current part as finished
-        #     self.cdn_upload_contents({}, s3_commit_key + '/' + part_id + '/finished')
-
-        # else:  # single part conversion
+        # TODO: Do we really need this now?
         # Now download the existing build_log.json file, update it and upload it back to S3 as convert_log
         build_log_json = self.update_convert_log(s3_commit_key)
         self.cdn_upload_contents({}, s3_commit_key + '/finished')  # flag finished
@@ -165,6 +154,8 @@ class ClientConverterCallback:
         else:
             remove_tree(self.temp_dir)  # cleanup
         return build_log_json
+    # end of do_post_processing()
+
 
     def unzip_converted_files(self, converted_zip_file):
         unzip_dir = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
@@ -176,6 +167,7 @@ class ClientConverterCallback:
 
         return unzip_dir
 
+
     @staticmethod
     def upload_converted_files(s3_commit_key, unzip_dir):
         GlobalSettings.logger.debug(f"Uploading converted files from {unzip_dir} to {s3_commit_key} …")
@@ -186,10 +178,12 @@ class ClientConverterCallback:
                 # GlobalSettings.logger.debug(f"Uploading {filename} to {key} …")
                 GlobalSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
 
+
     def update_convert_log(self, s3_base_key, part=''):
         build_log_json = self.get_build_log(s3_base_key, part)
         self.upload_convert_log(build_log_json, s3_base_key, part)
         return build_log_json
+
 
     def upload_convert_log(self, build_log_json, s3_base_key, part=''):
         if self.job.started_at:
