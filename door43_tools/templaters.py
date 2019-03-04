@@ -25,7 +25,8 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
     """
     # GlobalSettings.logger.debug(f"init_template({repo_subject})")
     if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
-                                        'OBS_Translation_Notes','OBS_Translation_Questions',):
+                        'OBS_Translation_Notes','OBS_Translation_Questions',
+                        'Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         GlobalSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
@@ -44,7 +45,7 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
         if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
             GlobalSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
         else:
-            GlobalSettings.logger.error(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+            GlobalSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
         templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
     return templater
 
@@ -55,6 +56,7 @@ class Templater:
                      'Conversion successful with warnings', 'Index']
 
     def __init__(self, repo_subject, source_dir, output_dir, template_file):
+        # GlobalSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
         self.repo_subject = repo_subject
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
@@ -183,19 +185,19 @@ class Templater:
                 canonical = links[0]['href']
 
         # Loop through the html files
-        for filename in self.files:
-            if filename not in self.already_converted:
-                GlobalSettings.logger.debug(f"Applying template to {filename} …")
+        for filepath in self.files:
+            if filepath not in self.already_converted:
+                GlobalSettings.logger.debug(f"Applying template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the downloaded file into a dom abject
-                with open(filename, 'r') as f:
+                with open(filepath, 'r') as f:
                     file_soup = BeautifulSoup(f, 'html.parser')
 
                 # get the title from the raw html file
                 if not title and file_soup.head and file_soup.head.title:
                     title = file_soup.head.title.text
                 else:
-                    title = os.path.basename(filename)
+                    title = os.path.basename(filepath)
 
                 # get the language code, if we haven't yet
                 if not language_code:
@@ -225,14 +227,14 @@ class Templater:
                 heading_span.append(heading)
 
                 if left_sidebar_div:
-                    left_sidebar_html = self.build_left_sidebar(filename)
+                    left_sidebar_html = self.build_left_sidebar(filepath)
                     left_sidebar = BeautifulSoup(left_sidebar_html, 'html.parser').nav.extract()
                     left_sidebar_div.clear()
                     left_sidebar_div.append(left_sidebar)
 
                 if right_sidebar_div:
                     right_sidebar_div.clear()
-                    right_sidebar_html = self.build_right_sidebar(filename)
+                    right_sidebar_html = self.build_right_sidebar(filepath)
                     if right_sidebar_html:
                         right_sidebar = BeautifulSoup(right_sidebar_html, 'html.parser')
                         if right_sidebar and right_sidebar.nav:
@@ -253,19 +255,19 @@ class Templater:
                 html = html.replace('{{ HEADING }}', title)
 
                 # write to output directory
-                out_file = os.path.join(self.output_dir, os.path.basename(filename))
-                GlobalSettings.logger.debug(f'Writing {out_file} …')
+                out_file = os.path.join(self.output_dir, os.path.basename(filepath))
+                GlobalSettings.logger.debug(f'Templater writing {out_file} …')
                 # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                 write_file(out_file, html)
 
             else:  # if already templated, need to update navigation bar
                 # Read the templated file into a dom abject
-                with open(filename, 'r') as f:
+                with open(filepath, 'r') as f:
                     soup = BeautifulSoup(f, 'html.parser')
 
                 right_sidebar_div = soup.body.find('div', id='right-sidebar')
                 if right_sidebar_div:
-                    right_sidebar_html = self.build_right_sidebar(filename)
+                    right_sidebar_html = self.build_right_sidebar(filepath)
                     right_sidebar = BeautifulSoup(right_sidebar_html, 'html.parser').nav.extract()
                     right_sidebar_div.clear()
                     right_sidebar_div.append(right_sidebar)
@@ -274,7 +276,7 @@ class Templater:
                     html = str(soup)
 
                     # write to output directory
-                    out_file = os.path.join(self.output_dir, os.path.basename(filename))
+                    out_file = os.path.join(self.output_dir, os.path.basename(filepath))
                     GlobalSettings.logger.debug(f'Updating nav in {out_file} …')
                     # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                     write_file(out_file, html)

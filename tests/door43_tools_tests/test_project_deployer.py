@@ -22,11 +22,11 @@ class ProjectDeployerTests(unittest.TestCase):
 
     def setUp(self):
         """Runs before each test."""
-        GlobalSettings(prefix='{0}-'.format(self._testMethodName))
+        GlobalSettings(prefix=f'{self._testMethodName}-')
         GlobalSettings.cdn_s3_handler().create_bucket()
         GlobalSettings.door43_s3_handler().create_bucket()
-        self.temp_dir = tempfile.mkdtemp(prefix="test_project_deployer")
-        self.deployer = ProjectDeployer()
+        self.temp_dir = tempfile.mkdtemp(prefix='test_project_deployer')
+        self.deployer = ProjectDeployer(self.temp_dir)
         TdLanguage.language_list = {
             'aa': TdLanguage({'gw': False, 'ld': 'ltr', 'ang': 'Afar', 'lc': 'aa', 'ln': 'Afaraf', 'lr': 'Africa',
                               'pk': 6}),
@@ -41,175 +41,175 @@ class ProjectDeployerTests(unittest.TestCase):
     def tearDown(self):
         rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_obs_download_buildlog_and_deploy_revision_to_door43(self):
-        self.mock_s3_obs_project()
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-        self.assertTrue(ret)
-        self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
-        self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/50.html'.format(self.project_key)))
+    # def test_obs_download_buildlog_and_deploy_revision_to_door43(self):
+    #     self.mock_s3_obs_project()
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     self.assertTrue(ret)
+    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
+    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/50.html'.format(self.project_key)))
 
-    def test_obs_download_buildlog_and_deploy_revision_to_door43_exception(self):
-        self.mock_s3_obs_project()
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
-        self.deployer.run_templater = self.mock_run_templater_exception
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-        self.assertFalse(ret)
+    # def test_obs_download_buildlog_and_deploy_revision_to_door43_exception(self):
+    #     self.mock_s3_obs_project()
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
+    #     self.deployer.run_templater = self.mock_run_templater_exception
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     self.assertFalse(ret)
 
-    def test_bad_download_buildlog_and_deploy_revision_to_door43(self):
-        self.mock_s3_obs_project()
-        bad_key = 'u/test_user/test_repo/12345678/bad_build_log.json'
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(bad_key)
-        self.assertFalse(ret)
+    # def test_bad_download_buildlog_and_deploy_revision_to_door43(self):
+    #     self.mock_s3_obs_project()
+    #     bad_key = 'u/test_user/test_repo/12345678/bad_build_log.json'
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(bad_key)
+    #     self.assertFalse(ret)
 
-    def test_tq_download_buildlog_and_deploy_revision_to_door43(self):
-        # given
-        self.mock_s3_tq_project()
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
+    # def test_tq_download_buildlog_and_deploy_revision_to_door43(self):
+    #     # given
+    #     self.mock_s3_tq_project()
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.assertTrue(ret)
-        self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
-        files_to_verify = ['manifest.yaml']
-        for book in BOOK_NUMBERS:
-            html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
-            files_to_verify.append(html_file)
+    #     # then
+    #     self.assertTrue(ret)
+    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
+    #     files_to_verify = ['manifest.yaml']
+    #     for book in BOOK_NUMBERS:
+    #         html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
+    #         files_to_verify.append(html_file)
 
-        for file_name in files_to_verify:
-            key = '{0}/{1}'.format(self.project_key, file_name)
-            self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
-        parent_key = '/'.join(self.project_key.split('/')[:-1])
-        for file_name in ['project.json']:
-            key = '{0}/{1}'.format(parent_key, file_name)
-            self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #     for file_name in files_to_verify:
+    #         key = '{0}/{1}'.format(self.project_key, file_name)
+    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #     parent_key = '/'.join(self.project_key.split('/')[:-1])
+    #     for file_name in ['project.json']:
+    #         key = '{0}/{1}'.format(parent_key, file_name)
+    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
-    def test_tw_download_buildlog_and_deploy_revision_to_door43(self):
-        self.mock_s3_tw_project()
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-        self.assertTrue(ret)
-        self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
-        for file_name in ['index.html', 'kt.html', 'names.html', 'other.html', 'build_log.json', 'manifest.yaml']:
-            key = '{0}/{1}'.format(self.project_key, file_name)
-            self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
-        parent_key = '/'.join(self.project_key.split('/')[:-1])
-        for file_name in ['project.json']:
-            key = '{0}/{1}'.format(parent_key, file_name)
-            self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    # def test_tw_download_buildlog_and_deploy_revision_to_door43(self):
+    #     self.mock_s3_tw_project()
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     self.assertTrue(ret)
+    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
+    #     for file_name in ['index.html', 'kt.html', 'names.html', 'other.html', 'build_log.json', 'manifest.yaml']:
+    #         key = '{0}/{1}'.format(self.project_key, file_name)
+    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #     parent_key = '/'.join(self.project_key.split('/')[:-1])
+    #     for file_name in ['project.json']:
+    #         key = '{0}/{1}'.format(parent_key, file_name)
+    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
-    def test_tn_download_buildlog_and_deploy_revision_to_door43(self):
-        # given
-        part = '1'
-        self.mock_s3_tn_project(part)
-        build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
+    # def test_tn_download_buildlog_and_deploy_revision_to_door43(self):
+    #     # given
+    #     part = '1'
+    #     self.mock_s3_tn_project(part)
+    #     build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.assertTrue(ret)
-        self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/build_log.json'.format(self.project_key)))
-        files_to_verify = ['01-GEN.html', 'index.json']
+    #     # then
+    #     self.assertTrue(ret)
+    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/build_log.json'.format(self.project_key)))
+    #     files_to_verify = ['01-GEN.html', 'index.json']
 
-        for file_name in files_to_verify:
-            key = '{0}/{1}'.format(self.project_key, file_name)
-            self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #     for file_name in files_to_verify:
+    #         key = '{0}/{1}'.format(self.project_key, file_name)
+    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
-    def test_bible_deploy_part_revision_to_door43(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key)
-        part = 1
-        build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
-        output_file = '02-EXO.html'
-        output_key = '{0}/{1}'.format(self.project_key, output_file)
-        expect_success = True
+    # def test_bible_deploy_part_revision_to_door43(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key)
+    #     part = 1
+    #     build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
+    #     output_file = '02-EXO.html'
+    #     output_key = '{0}/{1}'.format(self.project_key, output_file)
+    #     expect_success = True
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.validate_bible_results(ret, build_log_key, expect_success, output_key)
+    #     # then
+    #     self.validate_bible_results(ret, build_log_key, expect_success, output_key)
 
-    def test_bible_deploy_part_revision_to_door43_exception(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key)
-        part = 1
-        build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
-        self.deployer.run_templater = self.mock_run_templater_exception
+    # def test_bible_deploy_part_revision_to_door43_exception(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key)
+    #     part = 1
+    #     build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
+    #     self.deployer.run_templater = self.mock_run_templater_exception
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.assertFalse(ret)
+    #     # then
+    #     self.assertFalse(ret)
 
-    def test_bible_deploy_part_not_ready_revision_to_door43(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key)
-        part = 0
-        build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
-        expect_success = False
+    # def test_bible_deploy_part_not_ready_revision_to_door43(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key)
+    #     part = 0
+    #     build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
+    #     expect_success = False
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.validate_bible_results(ret, build_log_key, expect_success, None)
+    #     # then
+    #     self.validate_bible_results(ret, build_log_key, expect_success, None)
 
-    def test_bible_deploy_part_file_missing_revision_to_door43(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key)
-        part = 2
-        build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
-        expect_success = True
+    # def test_bible_deploy_part_file_missing_revision_to_door43(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key)
+    #     part = 2
+    #     build_log_key = '{0}/{1}/build_log.json'.format(self.project_key, part)
+    #     expect_success = True
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.validate_bible_results(ret, build_log_key, expect_success, None)
+    #     # then
+    #     self.validate_bible_results(ret, build_log_key, expect_success, None)
 
-    def test_bible_deploy_multi_part_merg_revision_to_door43(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key, True)
-        self.set_deployed_flags(project_key, 4)
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
-        expect_success = True
-        output_file = '02-EXO.html'
-        output_key = '{0}/{1}'.format(self.project_key, output_file)
+    # def test_bible_deploy_multi_part_merg_revision_to_door43(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key, True)
+    #     self.set_deployed_flags(project_key, 4)
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
+    #     expect_success = True
+    #     output_file = '02-EXO.html'
+    #     output_key = '{0}/{1}'.format(self.project_key, output_file)
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.validate_bible_results(ret, build_log_key, expect_success, output_key)
+    #     # then
+    #     self.validate_bible_results(ret, build_log_key, expect_success, output_key)
 
-    def test_bible_deploy_multi_part_merg_revision_to_door43_exception(self):
-        # given
-        test_repo_name = 'en-ulb-4-books-multipart.zip'
-        project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
-        self.mock_s3_bible_project(test_repo_name, project_key, True)
-        build_log_key = '{0}/build_log.json'.format(self.project_key)
-        self.deployer.run_templater = self.mock_run_templater_exception
+    # def test_bible_deploy_multi_part_merg_revision_to_door43_exception(self):
+    #     # given
+    #     test_repo_name = 'en-ulb-4-books-multipart.zip'
+    #     project_key = 'u/tx-manager-test-data/en-ulb/22f3d09f7a'
+    #     self.mock_s3_bible_project(test_repo_name, project_key, True)
+    #     build_log_key = '{0}/build_log.json'.format(self.project_key)
+    #     self.deployer.run_templater = self.mock_run_templater_exception
 
-        # when
-        ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+    #     # when
+    #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
 
-        # then
-        self.assertFalse(ret)
+    #     # then
+    #     self.assertFalse(ret)
 
     # def test_redeploy_all_projects(self):
     #     self.mock_s3_obs_project()
