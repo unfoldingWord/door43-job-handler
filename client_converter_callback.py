@@ -149,7 +149,7 @@ class ClientConverterCallback:
         # build_log_json = self.update_convert_log(s3_commit_key)
         # self.cdn_upload_contents({}, s3_commit_key + '/finished')  # flag finished
         converter_build_log = self.make_our_build_log()
-        print("Got ConPP converter_build_log", converter_build_log)
+        # print("Got ConPP converter_build_log", converter_build_log)
 
         # NOTE: Disabled 4Mar2019 coz moved to callback.py
         # results = ClientLinterCallback.deploy_if_conversion_finished(s3_commit_key, self.identifier)
@@ -196,6 +196,7 @@ class ClientConverterCallback:
 
 
     def make_our_build_log(self):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
         build_log_dict = {}
         if self.job.started_at:
             build_log_dict['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -221,7 +222,7 @@ class ClientConverterCallback:
         else:
             build_log_dict['errors'] = []
         return build_log_dict
-    #end of make_our_build_log()
+    # end of make_our_build_log()
 
 
     # NOTE: Do we need this -- disabled 25Feb2019

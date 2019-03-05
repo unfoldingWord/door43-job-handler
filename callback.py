@@ -97,6 +97,7 @@ def merge_results_logs(build_log, file_results, linter_file):
     if not build_log:
         return file_results
     if file_results:
+        merge_dicts_lists(build_log, file_results, 'message')
         merge_dicts_lists(build_log, file_results, 'log')
         merge_dicts_lists(build_log, file_results, 'warnings')
         merge_dicts_lists(build_log, file_results, 'errors')

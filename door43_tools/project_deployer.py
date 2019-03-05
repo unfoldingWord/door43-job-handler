@@ -255,8 +255,13 @@ class ProjectDeployer:
 
 
     def template_converted_files(self, build_log, output_dir, repo_name, resource_type, s3_commit_key,
-                                 source_dir, start_time, template_file):
-        GlobalSettings.logger.debug("template_converted_files()…")
+                                 source_dir, start_time, template_filepath):
+        GlobalSettings.logger.info(f"template_converted_files({build_log}, od={output_dir}, '{repo_name}'," \
+                                   f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
+                                   f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
+        assert 'errors' in build_log
+        assert 'message' in build_log
+        assert repo_name
         # GlobalSettings.cdn_s3_handler().download_dir(download_key + '/', source_dir)
         # source_dir = os.path.join(source_dir, download_key.replace('/', os.path.sep))
         # elapsed_seconds = int(time.time() - start_time)
@@ -264,8 +269,9 @@ class ProjectDeployer:
         source_dir = self.unzip_dir
         html_files = sorted(glob(os.path.join(source_dir, '*.html')))
         if len(html_files) < 1:
-            content = ''
-            if len(build_log['errors']) > 0:
+            GlobalSettings.logger.warning("No html files found by ProjectDeployer.template_converted_files!")
+            content = ""
+            if build_log['errors']:
                 content += """
                         <div style="text-align:center;margin-bottom:20px">
                             <i class="fa fa-times-circle-o" style="font-size: 250px;font-weight: 300;color: red"></i>
@@ -291,12 +297,12 @@ class ProjectDeployer:
             write_file(repo_index_file, html)
 
         # Merge the source files with the template
-        templater = init_template(resource_type, source_dir, output_dir, template_file)
+        templater = init_template(resource_type, source_dir, output_dir, template_filepath)
         try:
             self.run_templater(templater)
             success = True
         except Exception as e:
-            GlobalSettings.logger.error(f"Error applying template {template_file} to resource type {resource_type}:")
+            GlobalSettings.logger.error(f"Error applying template {template_filepath} to resource type {resource_type}:")
             GlobalSettings.logger.error(f'{e}: {traceback.format_exc()}')
             self.close()
             success = False
