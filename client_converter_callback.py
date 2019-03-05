@@ -120,10 +120,10 @@ class ClientConverterCallback:
         except:
             download_success = False  # if multiple project we note fail and move on
             # if not multiple_project:
-            if prefix and debug_mode_flag:
-                GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-            else:
-                remove_tree(self.temp_dir)  # cleanup
+            # if prefix and debug_mode_flag:
+            #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+            # else:
+            #     remove_tree(self.temp_dir)  # cleanup
             if self.job.errors is None:
                 self.job.errors = []
             message = f"Missing converted file: {converted_zip_url}"
@@ -159,10 +159,10 @@ class ClientConverterCallback:
         #     self.all_parts_completed = True
         #     build_log_json = results
 
-        if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-        else:
-            remove_tree(self.temp_dir)  # cleanup
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        # else:
+        #     remove_tree(self.temp_dir)  # cleanup
         return unzip_dir, converter_build_log
     # end of do_post_processing()
 

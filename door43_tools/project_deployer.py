@@ -23,8 +23,8 @@ class ProjectDeployer:
     by applying the door43.org template to the raw html files
     """
 
-    def __init__(self, temp_dir, unzip_dir):
-        # GlobalSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir})…")
+    def __init__(self, unzip_dir, temp_dir):
+        GlobalSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
         self.unzip_dir = unzip_dir
         self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
 

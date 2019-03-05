@@ -291,7 +291,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
 
     # Now deploy the new pages (was previously a separate AWS Lambda call)
     GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
-    deployer = ProjectDeployer(our_temp_dir, unzip_dir)
+    deployer = ProjectDeployer(unzip_dir, our_temp_dir)
     # build_log_key = f'{url_part2}/build_log.json'
     # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
     # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
