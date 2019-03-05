@@ -23,21 +23,21 @@ class ProjectDeployer:
     by applying the door43.org template to the raw html files
     """
 
-    def __init__(self, unzip_dir):
+    def __init__(self, temp_dir, unzip_dir):
         # GlobalSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir})…")
         self.unzip_dir = unzip_dir
-        self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_deployer_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+        self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
 
 
     def close(self):
         """
-        Delete temp files (except in debug mode)
+        Delete temp files (except in debug mode) -- no longer required!!!
         """
-        if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"Temp deployer folder '{self.temp_dir}' has been left on disk for debugging!")
-        else:
-            remove_tree(self.temp_dir)
+        pass
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"Temp deployer folder '{self.temp_dir}' has been left on disk for debugging!")
+        # else:
+        #     remove_tree(self.temp_dir)
 
 
     # def __del__(self):
@@ -188,7 +188,7 @@ class ProjectDeployer:
                                             to_key=f'{s3_repo_key}/manifest.json')
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key, '/' + s3_commit_key)
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key + '/index.html', '/' + s3_commit_key)
-            self.write_data_to_file(output_dir, s3_commit_key, 'deployed', ' ')  # flag that deploy has finished
+            self.write_data_to_file_and_upload(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except:
             pass
 
@@ -256,7 +256,7 @@ class ProjectDeployer:
 
     def template_converted_files(self, build_log, output_dir, repo_name, resource_type, s3_commit_key,
                                  source_dir, start_time, template_filepath):
-        GlobalSettings.logger.info(f"template_converted_files({build_log}, od={output_dir}, '{repo_name}'," \
+        GlobalSettings.logger.debug(f"template_converted_files({build_log}, od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
         assert 'errors' in build_log
@@ -316,15 +316,15 @@ class ProjectDeployer:
             self.update_index_key(index_json, templater, 'chapters')
             self.update_index_key(index_json, templater, 'book_codes')
             GlobalSettings.logger.debug("final 'index.json': " + json.dumps(index_json)[:256])
-            self.write_data_to_file(output_dir, s3_commit_key, index_json_fname, index_json)
+            self.write_data_to_file_and_upload(output_dir, s3_commit_key, index_json_fname, index_json)
         return source_dir, success
 
 
-    def write_data_to_file(self, output_dir, s3_commit_key, fname, data):
+    def write_data_to_file_and_upload(self, output_dir, s3_commit_key, fname, data):
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
-        GlobalSettings.logger.debug(f"Writing {fname} to {key} …")
+        GlobalSettings.logger.debug(f"Uploading {fname} to {key} …")
         GlobalSettings.cdn_s3_handler().upload_file(out_file, key, cache_time=0)
 
 

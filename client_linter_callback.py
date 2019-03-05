@@ -42,8 +42,8 @@ class ClientLinterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+        # self.temp_dir = tempfile.mkdtemp(suffix='',
+        #                     prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
         # self.s3_results_key = s3_results_key
         self.job = None
 
@@ -108,10 +108,10 @@ class ClientLinterCallback:
         #     self.all_parts_completed = True
         #     build_log = results
 
-        if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-        else:
-            remove_tree(self.temp_dir)  # cleanup
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        # else:
+        #     remove_tree(self.temp_dir)  # cleanup
         GlobalSettings.db_close()
         return build_log
     # end of do_post_processing()

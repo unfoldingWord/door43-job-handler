@@ -129,11 +129,11 @@ def merge_dicts_lists(build_log, file_results, key):
 
 
 # TODO: Is this really needed? What uses it?
-def update_project_file(build_log, output_dir=None):
+def update_project_file(build_log, output_dir):
     GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dir})…")
-    if not output_dir:
-        output_dir = tempfile.mkdtemp(suffix='',
-                     prefix='Door43_callback_deploy_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+    # if not output_dir:
+    #     output_dir = tempfile.mkdtemp(suffix='',
+    #                  prefix='Door43_callback_update_project_file_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
     commit_id = build_log['commit_id']
     user_name = build_log['repo_owner']
@@ -166,11 +166,11 @@ def update_project_file(build_log, output_dir=None):
     project_file = os.path.join(output_dir, 'project.json')
     write_file(project_file, project_json)
     GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key, cache_time=0)
-    if prefix and debug_mode_flag:
-        GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
-    else:
-        remove_tree(output_dir)
-    return project_json
+    # if prefix and debug_mode_flag:
+    #     GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
+    # else:
+    #     remove_tree(output_dir)
+    # return project_json
 # end of update_project_file function
 
 
@@ -250,6 +250,9 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     matched_job_dict['warnings'] = []
     matched_job_dict['errors'] = []
 
+    our_temp_dir = tempfile.mkdtemp(suffix='',
+                     prefix='Door43_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter post-processing…")
@@ -268,7 +271,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                                   queued_json_payload['converter_success'],
                                   queued_json_payload['converter_info'],
                                   queued_json_payload['converter_warnings'],
-                                  queued_json_payload['converter_errors'])
+                                  queued_json_payload['converter_errors'],
+                                  our_temp_dir)
     unzip_dir, converter_log = ccc.do_post_processing()
     # deploy_if_conversion_finished(url_part2, identifier)
     final_build_log = merge_results_logs(build_log, converter_log, linter_file=False) # What is the last parameter for?
@@ -281,24 +285,23 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         final_build_log['status'] = 'success'
         final_build_log['success'] = True
     final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    output_dir = tempfile.mkdtemp(suffix='',
-                     prefix='Door43_callback_deploy_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
-    update_project_file(final_build_log, output_dir)
+    update_project_file(final_build_log, our_temp_dir)
     # NOTE: The following is disabled coz it's done (again) later by the deployer
     # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
-    if prefix and debug_mode_flag:
-        GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
-    else:
-        remove_tree(output_dir)
 
     # Now deploy the new pages (was previously a separate AWS Lambda call)
     GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
-    deployer = ProjectDeployer(unzip_dir)
+    deployer = ProjectDeployer(our_temp_dir, unzip_dir)
     # build_log_key = f'{url_part2}/build_log.json'
     # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
     # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
     # No need to download the build log since we have it here
     deployer.deploy_revision_to_door43(final_build_log)
+
+    if prefix and debug_mode_flag:
+        GlobalSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
+    else:
+        remove_tree(our_temp_dir)
 
     # Finishing off
     str_final_build_log = str(final_build_log)

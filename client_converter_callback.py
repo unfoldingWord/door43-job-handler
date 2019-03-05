@@ -41,7 +41,7 @@ class LocalJob:
 
 class ClientConverterCallback:
 
-    def __init__(self, job_dict, identifier, success, info, warnings, errors):
+    def __init__(self, job_dict, identifier, success, info, warnings, errors, output_dir):
         """
         :param string identifier:
         :param bool success:
@@ -49,13 +49,14 @@ class ClientConverterCallback:
         :param list warnings:
         :param list errors:
         """
-        GlobalSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors})…")
+        GlobalSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors}, od={output_dir})…")
         self.job = LocalJob(job_dict)
         self.identifier = identifier
         self.success = success
         self.log = info
         self.warnings = warnings
         self.errors = errors
+        self.temp_dir = output_dir
         self.all_parts_completed = False
 
         if not self.log:
@@ -64,8 +65,9 @@ class ClientConverterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+        # self.temp_dir = tempfile.mkdtemp(suffix='',
+        #                     prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+
 
     def do_post_processing(self):
         GlobalSettings.logger.debug(f"ClientConverterCallback.do_post_processing()…")
@@ -173,8 +175,8 @@ class ClientConverterCallback:
             unzip(converted_zip_file, unzip_dir)
         finally:
             GlobalSettings.logger.debug("Unzip finished.")
-
         return unzip_dir
+    # end of unzip_converted_files function
 
 
     @staticmethod
