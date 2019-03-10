@@ -7,8 +7,9 @@
 # Python imports
 import os
 from datetime import datetime
-from time import time
+import time
 from ast import literal_eval
+import tempfile
 import traceback
 
 # Library (PyPi) imports
@@ -21,6 +22,7 @@ from global_settings.global_settings import GlobalSettings
 from client_converter_callback import ClientConverterCallback
 from client_linter_callback import ClientLinterCallback
 from door43_tools.project_deployer import ProjectDeployer
+from general_tools.file_utils import write_file, remove_tree
 
 
 
@@ -75,6 +77,103 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 # end of verify_expected_job
 
 
+# def upload_build_log(build_log, file_name, output_dir, s3_results_key, cache_time=0):
+#     GlobalSettings.logger.debug(f"ClientLinterCallback.upload_build_log(…, {file_name}, {output_dir}, {s3_results_key}, {cache_time})…")
+#     build_log_filepath = os.path.join(output_dir, file_name)
+#     write_file(build_log_filepath, build_log)
+#     upload_key = f'{s3_results_key}/{file_name}'
+#     GlobalSettings.logger.debug(f"Uploading build log to {GlobalSettings.cdn_bucket_name}/{upload_key} …")
+#     GlobalSettings.cdn_s3_handler().upload_file(build_log_filepath, upload_key, cache_time=cache_time)
+# # end of upload_build_log function
+
+
+def merge_results_logs(build_log, file_results, linter_file):
+    """
+    Given a second partial build log file_results,
+        combine the log/warnings/errors lists into the first build_log.
+    """
+    assert not linter_file
+    GlobalSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {linter_file})…")
+    if not build_log:
+        return file_results
+    if file_results:
+        merge_dicts_lists(build_log, file_results, 'message')
+        merge_dicts_lists(build_log, file_results, 'log')
+        merge_dicts_lists(build_log, file_results, 'warnings')
+        merge_dicts_lists(build_log, file_results, 'errors')
+        if not linter_file and ('success' in file_results) and (file_results['success'] is False):
+            build_log['success'] = file_results['success']
+    return build_log
+# end of merge_results_logs function
+
+
+def merge_dicts_lists(build_log, file_results, key):
+    """
+    Used for merging log dicts from various sub-processes.
+
+    build_log is a dict
+    file_results is a dict
+    value is a key (string) for the lists that will be merged if in both dicts
+
+    Alters first parameter build_log in place.
+    """
+    GlobalSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
+    if key in file_results:
+        value = file_results[key]
+        if value:
+            if (key in build_log) and (build_log[key]):
+                build_log[key] += value
+            else:
+                build_log[key] = value
+# end of merge_dicts_lists function
+
+
+# TODO: Is this really needed? What uses it?
+def update_project_file(build_log, output_dir):
+    GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dir})…")
+    # if not output_dir:
+    #     output_dir = tempfile.mkdtemp(suffix='',
+    #                  prefix='Door43_callback_update_project_file_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+
+    commit_id = build_log['commit_id']
+    user_name = build_log['repo_owner']
+    repo_name = build_log['repo_name']
+    project_json_key = f'u/{user_name}/{repo_name}/project.json'
+    project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
+    project_json['user'] = user_name
+    project_json['repo'] = repo_name
+    project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{user_name}/{repo_name}'
+    commit = {
+        'id': commit_id,
+        'created_at': build_log['created_at'],
+        'status': build_log['status'],
+        'success': build_log['success'],
+        'started_at': None,
+        'ended_at': None
+    }
+    if 'started_at' in build_log:
+        commit['started_at'] = build_log['started_at']
+    if 'ended_at' in build_log:
+        commit['ended_at'] = build_log['ended_at']
+    if 'commits' not in project_json:
+        project_json['commits'] = []
+    commits = []
+    for c in project_json['commits']:
+        if c['id'] != commit_id:
+            commits.append(c)
+    commits.append(commit)
+    project_json['commits'] = commits
+    project_file = os.path.join(output_dir, 'project.json')
+    write_file(project_file, project_json)
+    GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key, cache_time=0)
+    # if prefix and debug_mode_flag:
+    #     GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
+    # else:
+    #     remove_tree(output_dir)
+    # return project_json
+# end of update_project_file function
+
+
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     """
@@ -110,11 +209,12 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     matched_job_dict = verify_result
     GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
     job_descriptive_name = f"{queued_json_payload['resource_type']}({queued_json_payload['input_format']})"
-
+    if 'repo_owner' not in matched_job_dict: # Why did we have to add this?
+        matched_job_dict['repo_owner'] = matched_job_dict['user_name'] # Where did it used to be done/gotten from?
 
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to tX
-    for fieldname in ('user_name', 'repo_name', 'commit_id',):
+    for fieldname in ('user_name', 'repo_name', 'commit_id'):
         assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
 
@@ -146,6 +246,13 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     #                     if 'user_projects_invoked_string' in matched_job_dict \
     #                     else f'??{identifier}??'
 
+    matched_job_dict['log'] = []
+    matched_job_dict['warnings'] = []
+    matched_job_dict['errors'] = []
+
+    our_temp_dir = tempfile.mkdtemp(suffix='',
+                     prefix='Door43_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+
     # We get the tx-manager existing calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter post-processing…")
@@ -155,25 +262,46 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                                queued_json_payload['linter_info'] if 'linter_info' in queued_json_payload else None,
                                queued_json_payload['linter_warnings'],
                                queued_json_payload['linter_errors'] if 'linter_errors' in queued_json_payload else None,
-                               s3_results_key=url_part2)
-    # clc_build_log = clc.do_post_processing() # We don't use the result
-    clc.do_post_processing()
+                                )
+                            #    s3_results_key=url_part2)
+    linter_log = clc.do_post_processing()
+    build_log = merge_results_logs(matched_job_dict, linter_log, linter_file=False) # What is the last parameter for?
     GlobalSettings.logger.info("Running converter post-processing…")
     ccc = ClientConverterCallback(this_job_dict, identifier,
                                   queued_json_payload['converter_success'],
                                   queued_json_payload['converter_info'],
                                   queued_json_payload['converter_warnings'],
-                                  queued_json_payload['converter_errors'])
-    ccc_build_log = ccc.do_post_processing()
-    final_build_log = ccc_build_log
+                                  queued_json_payload['converter_errors'],
+                                  our_temp_dir)
+    unzip_dir, converter_log = ccc.do_post_processing()
+    # deploy_if_conversion_finished(url_part2, identifier)
+    final_build_log = merge_results_logs(build_log, converter_log, linter_file=False) # What is the last parameter for?
+
+    if final_build_log['errors']:
+        final_build_log['status'] = 'errors'
+    elif final_build_log['warnings']:
+        final_build_log['status'] = 'warnings'
+    else:
+        final_build_log['status'] = 'success'
+        final_build_log['success'] = True
+    final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    update_project_file(final_build_log, our_temp_dir)
+    # NOTE: The following is disabled coz it's done (again) later by the deployer
+    # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
 
     # Now deploy the new pages (was previously a separate AWS Lambda call)
     GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
-    deployer = ProjectDeployer()
+    deployer = ProjectDeployer(unzip_dir, our_temp_dir)
     # build_log_key = f'{url_part2}/build_log.json'
     # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
     # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-    deployer.deploy_revision_to_door43(final_build_log) # No need to download the build log since we have it here
+    # No need to download the build log since we have it here
+    deployer.deploy_revision_to_door43(final_build_log)
+
+    if prefix and debug_mode_flag:
+        GlobalSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
+    else:
+        remove_tree(our_temp_dir)
 
     # Finishing off
     str_final_build_log = str(final_build_log)
@@ -196,7 +324,7 @@ def job(queued_json_payload):
             then the job gets added to the 'failed' queue.
     """
     GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
-    start_time = time()
+    start_time = time.time()
     stats_client.incr(f'{stats_prefix}.callback.jobs.attempted')
 
     current_job = get_current_job()
@@ -246,12 +374,12 @@ def job(queued_json_payload):
         # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
-    elapsed_milliseconds = round((time() - start_time) * 1000)
+    elapsed_milliseconds = round((time.time() - start_time) * 1000)
     stats_client.timing(f'{stats_prefix}.callback.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {round(time.time() - start_time)} seconds.")
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \

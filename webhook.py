@@ -33,7 +33,7 @@ from global_settings.global_settings import GlobalSettings
 
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
-            'Greek_Lexicon', 'Hebrew_Aramaic_Lexicon',
+            'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon',
             # and from https://api.door43.org/v3/subjects:
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
@@ -60,8 +60,8 @@ RESOURCE_SUBJECT_MAP = {
             'tq': 'Translation_Questions',
             'tw': 'Translation_Words',
 
-            'ugl': 'Greek_Lexicon',
-            'uhal': 'Hebrew_Aramaic_Lexicon',
+            'ugl': 'Greek_Lexicon', # Subject for en_ugl is 'Greek English Lexicon' but we want to stay more generic
+            'uhal': 'Hebrew-Aramaic_Lexicon',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -121,6 +121,7 @@ def update_project_json(base_temp_dir_name, commit_id, upj_job_dict, repo_name, 
     project_json['commits'] = commits
     project_file = os.path.join(base_temp_dir_name, 'project.json')
     write_file(project_file, project_json)
+    GlobalSettings.logger.debug(f'Saving project.json to {GlobalSettings.cdn_bucket_name}/{project_json_key}')
     GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
 # end of update_project_json function
 
@@ -132,6 +133,7 @@ def upload_build_log_to_s3(base_temp_dir_name, build_log, s3_commit_key, part=''
     :param string part:
     :return:
     """
+    assert not part
     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
     write_file(build_log_file, build_log)
     upload_key = f'{s3_commit_key}/{part}build_log.json'
@@ -415,8 +417,8 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
             GlobalSettings.logger.error(f"Failed to submit job to BDB:"
                                            f" {response.status_code}={response.reason}")
     else: # no response
-        error_msg = "Submission of job to BDB got no response"
-        GlobalSettings.logger.error(error_msg)
+        # error_msg = "Submission of job to BDB got no response"
+        GlobalSettings.logger.error("Submission of job to BDB got no response")
         #raise Exception(error_msg) # Is this the best thing to do here?
 # end of upload_to_BDB
 
@@ -514,7 +516,7 @@ def process_job(queued_json_payload, redis_connection):
     # Gather other details from the commit that we will note for the job(s)
     repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
-    compare_url = queued_json_payload['compare_url']
+    # compare_url = queued_json_payload['compare_url']
     commit_message = commit['message'].strip() # Seems to always end with a newline
 
     if 'pusher' in queued_json_payload:
@@ -677,13 +679,16 @@ def process_job(queued_json_payload, redis_connection):
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Create a build log
-    build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-                                    pusher_username, repo_name, repo_owner_username)
+    # NOTE: Do we need this -- disabled 25Feb2019
+    # build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
+    #                                 pusher_username, repo_name, repo_owner_username)
     # Upload an initial build_log
-    upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
+    # NOTE: Do we need this -- disabled 25Feb2019
+    # upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
 
     # Update the project.json file
-    update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
+    # NOTE: Do we need this -- disabled 25Feb2019
+    # update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
 
 
 
@@ -745,7 +750,8 @@ def process_job(queued_json_payload, redis_connection):
         GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
+    # GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
+    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} has finished.")
     return job_descriptive_name
 #end of process_job function
 

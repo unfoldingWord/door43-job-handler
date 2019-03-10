@@ -31,7 +31,7 @@ def do_preprocess(repo_subject, rc, repo_dir, output_dir):
     elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
         GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
-    elif repo_subject in ('Greek_Lexicon','Hebrew_Aramaic_Lexicon'):
+    elif repo_subject in ('Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         GlobalSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
         preprocessor = LexiconPreprocessor(rc, repo_dir, output_dir)
     else:
@@ -386,7 +386,9 @@ class BiblePreprocessor(Preprocessor):
                 ix = adjusted_line.find('\\zaln-s')
                 if ix != -1:
                     adjusted_line = adjusted_line[:ix] # Remove zaln-s field right up to end of line
-            assert '\\z' not in adjusted_line
+            if '\\z' in adjusted_line:
+                GlobalSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                self.warnings.append(f"{B} {C}:{V} - Remaining \\z field")
             if not adjusted_line: # was probably just a \zaln-s milestone with nothing else
                 continue
             if adjusted_line != line: # it's non-blank and it changed
@@ -1188,6 +1190,7 @@ class LexiconPreprocessor(Preprocessor):
     def compile_lexicon_entry(self, project, folder):
         """
         Recursive section markdown creator
+        Expects a folder containing only one file: 01.md
 
         :param project:
         :param str folder:
@@ -1198,8 +1201,7 @@ class LexiconPreprocessor(Preprocessor):
         file_list = os.listdir(content_folderpath)
         if len(file_list) != 1: # expecting '01.md'
             GlobalSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
-        markdown = f"# {folder}"
-        content = ""
+        markdown = "" # f"# {folder}\n" # Not needed coz Strongs number is included inside the file
         content_file = os.path.join(content_folderpath, '01.md')
         if os.path.isfile(content_file):
             content = read_file(content_file)
@@ -1207,8 +1209,10 @@ class LexiconPreprocessor(Preprocessor):
             msg = f"compile_lexicon_entry couldn't find any files for {folder}"
             GlobalSettings.logger.error(msg)
             self.warnings.append(msg)
+            content = None
         if content:
-            markdown += f'{content}\n\n'
+            # markdown += f'{content}\n\n'
+            markdown = f'{content}\n'
         return markdown
     # end of compile_lexicon_entry(self, project, section, level)
 
@@ -1222,24 +1226,33 @@ class LexiconPreprocessor(Preprocessor):
             GlobalSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
 
             for something in sorted(os.listdir(project_path)):
+                # something can be a file or a folder containing the markdown file
                 if os.path.isdir(os.path.join(project_path, something)) \
                 and something not in LexiconPreprocessor.ignoreDirectories:
+                    # Entries are in separate folders (like en_ugl)
                     entry_markdown = self.compile_lexicon_entry(project, something)
+                    entry_markdown = self.fix_entry_links(entry_markdown)
                     write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
                     self.num_files_written += 1
                 elif os.path.isfile(os.path.join(project_path, something)) \
                 and something not in LexiconPreprocessor.ignoreFiles \
                 and something != 'index.md':
-                    copy(os.path.join(project_path, something), self.output_dir)
+                    # Entries are in the main folder in named .md files
+                    # copy(os.path.join(project_path, something), self.output_dir)
+                    # entry_markdown = read_file(something)
+                    with open(os.path.join(project_path, something), 'rt') as ef:
+                        entry_markdown = ef.read()
+                    entry_markdown = self.fix_entry_links(entry_markdown)
+                    write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
                     self.num_files_written += 1
 
-            index_filepath = os.path.join(project_path, 'index.md')
-            if os.path.isfile(index_filepath):
-                with open(index_filepath, 'rt') as ixf:
-                    index_markdown = ixf.read()
-                index_markdown = self.fix_links(index_markdown)
-                write_file(os.path.join(self.output_dir, 'index.md'), index_markdown)
-                self.num_files_written += 1
+            # index_filepath = os.path.join(project_path, 'index.md')
+            # if os.path.isfile(index_filepath):
+            #     with open(index_filepath, 'rt') as ixf:
+            #         index_markdown = ixf.read()
+            #     index_markdown = self.fix_index_links(index_markdown)
+            #     write_file(os.path.join(self.output_dir, 'index.md'), index_markdown)
+            #     self.num_files_written += 1
 
         if self.num_files_written == 0:
             GlobalSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
@@ -1255,12 +1268,35 @@ class LexiconPreprocessor(Preprocessor):
     # end of LexiconPreprocessor run()
 
 
-    def fix_links(self, content):
+    def fix_index_links(self, content):
         # Point to .html file instead of to .md file (UHAL)
         content = re.sub(r'\[(.+?).md\]\(', r'[\1](', content) # Remove .md from text
         content = re.sub(r'\]\(\./(.+?).md\)', r'](\1.html)', content) # Change link from ./xyz.md to xyz.html
         # Point to .html file instead of to folder (UGL)
         content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content) # Change link from ./xyz to xyz.html
         return content
-    # end of LexiconPreprocessor fix_links(content)
+    # end of LexiconPreprocessor fix_index_links(content)
+
+
+    def fix_entry_links(self, content):
+        # Change link from (../G12345/01.md) to (G12345.html)
+        content = re.sub(r'\]\(\.\./(G\d{5})/01.md\)', r'](\1.html)', content)
+        # Change link from (//en-uhl/H4398) to (https://door43.org/u/unfoldingWord/en_uhal/master/H12345.html)
+        content = re.sub(r'\]\(//en-uhl/(H\d{4})\)', r'](https://{}door43.org/u/unfoldingWord/en_uhal/master/\1.html)'.format('dev.' if prefix=='dev-' else ''), content)
+        # Change link from (Exo 4:14) to (https://door43.org/u/unfoldingWord/en_ult/master/02-EXO.html#002-ch-004-v-014)
+        ult_link_re = r'\]\(([\d\w]{3}) (\d{1:3})\:(\d{1:3})\)'
+        while True:
+            match = re.search(ult_link_re, content)
+            if not match: break
+            print("Got re match", match.group(0), match.group(1), match.group(2), match.group(3))
+            BBB = match.group(1).upper()
+            nn = BOOK_NUMBERS[BBB.lower()] # two digit book number
+            ch = match.group(2).zfill(3)
+            vs = match.group(3).zfill(3)
+            content = re.subn(ult_link_re,
+                            r'](https://{}door43.org/u/unfoldingWord/en_ult/master/{}-{}.html#0{}-ch-{}-v-{})' \
+                                        .format('dev.' if prefix=='dev-' else '', nn, BBB, nn, ch, vs),
+                            content, count=1)
+        return content
+    # end of LexiconPreprocessor fix_entry_links(content)
 # end of class LexiconPreprocessor

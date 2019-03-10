@@ -6,7 +6,7 @@ from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
 from general_tools.file_utils import unzip, write_file, remove_tree, remove
 from general_tools.url_utils import download_file
-from client_linter_callback import ClientLinterCallback
+# from client_linter_callback import ClientLinterCallback
 
 
 
@@ -41,7 +41,7 @@ class LocalJob:
 
 class ClientConverterCallback:
 
-    def __init__(self, job_dict, identifier, success, info, warnings, errors):
+    def __init__(self, job_dict, identifier, success, info, warnings, errors, output_dir):
         """
         :param string identifier:
         :param bool success:
@@ -49,12 +49,14 @@ class ClientConverterCallback:
         :param list warnings:
         :param list errors:
         """
+        GlobalSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors}, od={output_dir})…")
         self.job = LocalJob(job_dict)
         self.identifier = identifier
         self.success = success
         self.log = info
         self.warnings = warnings
         self.errors = errors
+        self.temp_dir = output_dir
         self.all_parts_completed = False
 
         if not self.log:
@@ -63,10 +65,12 @@ class ClientConverterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        self.temp_dir = tempfile.mkdtemp(suffix='',
-                            prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+        # self.temp_dir = tempfile.mkdtemp(suffix='',
+        #                     prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+
 
     def do_post_processing(self):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.do_post_processing()…")
         self.job.ended_at = datetime.utcnow()
         self.job.success = self.success
         for message in self.log:
@@ -101,7 +105,8 @@ class ClientConverterCallback:
         self.job.log_message(f"Finished job {self.job.job_id} at {self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')}")
 
         s3_commit_key = f'u/{self.job.user_name}/{self.job.repo_name}/{self.job.commit_id}'
-        upload_key = s3_commit_key
+        # NOTE: Disabled 4Mar2019 coz unused
+        # upload_key = s3_commit_key
         GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key} …")
 
         # Download the ZIP file of the converted files
@@ -115,10 +120,10 @@ class ClientConverterCallback:
         except:
             download_success = False  # if multiple project we note fail and move on
             # if not multiple_project:
-            if prefix and debug_mode_flag:
-                GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-            else:
-                remove_tree(self.temp_dir)  # cleanup
+            # if prefix and debug_mode_flag:
+            #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+            # else:
+            #     remove_tree(self.temp_dir)  # cleanup
             if self.job.errors is None:
                 self.job.errors = []
             message = f"Missing converted file: {converted_zip_url}"
@@ -136,36 +141,42 @@ class ClientConverterCallback:
             unzip_dir = self.unzip_converted_files(converted_zip_file)
 
             # TODO: Do we really need this now?
+            # NOTE: Do we need this -- disabled 25Feb2019
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
-            self.upload_converted_files(upload_key, unzip_dir)
+            # self.upload_converted_files(upload_key, unzip_dir)
 
         # TODO: Do we really need this now?
         # Now download the existing build_log.json file, update it and upload it back to S3 as convert_log
-        build_log_json = self.update_convert_log(s3_commit_key)
-        self.cdn_upload_contents({}, s3_commit_key + '/finished')  # flag finished
+        # NOTE: Do we need this -- disabled 25Feb2019
+        # build_log_json = self.update_convert_log(s3_commit_key)
+        # self.cdn_upload_contents({}, s3_commit_key + '/finished')  # flag finished
+        converter_build_log = self.make_our_build_log()
+        # print("Got ConPP converter_build_log", converter_build_log)
 
-        results = ClientLinterCallback.deploy_if_conversion_finished(s3_commit_key, self.identifier)
-        if results:
-            self.all_parts_completed = True
-            build_log_json = results
+        # NOTE: Disabled 4Mar2019 coz moved to callback.py
+        # results = ClientLinterCallback.deploy_if_conversion_finished(s3_commit_key, self.identifier)
+        # if results:
+        #     self.all_parts_completed = True
+        #     build_log_json = results
 
-        if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
-        else:
-            remove_tree(self.temp_dir)  # cleanup
-        return build_log_json
+        # if prefix and debug_mode_flag:
+        #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        # else:
+        #     remove_tree(self.temp_dir)  # cleanup
+        return unzip_dir, converter_build_log
     # end of do_post_processing()
 
 
     def unzip_converted_files(self, converted_zip_file):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.unzip_converted_files({converted_zip_file})…")
         unzip_dir = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
         try:
             GlobalSettings.logger.debug(f"Unzipping {converted_zip_file} …")
             unzip(converted_zip_file, unzip_dir)
         finally:
             GlobalSettings.logger.debug("Unzip finished.")
-
         return unzip_dir
+    # end of unzip_converted_files function
 
 
     @staticmethod
@@ -179,49 +190,84 @@ class ClientConverterCallback:
                 GlobalSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
 
 
-    def update_convert_log(self, s3_base_key, part=''):
-        build_log_json = self.get_build_log(s3_base_key, part)
-        self.upload_convert_log(build_log_json, s3_base_key, part)
-        return build_log_json
+    # NOTE: Do we need this -- disabled 25Feb2019
+    # def update_convert_log(self, s3_base_key, part=''):
+    #     build_log_json = self.get_build_log(s3_base_key, part)
+    #     self.upload_convert_log(build_log_json, s3_base_key, part)
+    #     return build_log_json
 
 
-    def upload_convert_log(self, build_log_json, s3_base_key, part=''):
+    def make_our_build_log(self):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
+        build_log_dict = {}
         if self.job.started_at:
-            build_log_json['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            build_log_dict['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ')
         else:
-            build_log_json['started_at'] = None
+            build_log_dict['started_at'] = None
         if self.job.ended_at:
-            build_log_json['ended_at'] = self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            build_log_dict['ended_at'] = self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')
         else:
-            build_log_json['ended_at'] = None
-        build_log_json['success'] = self.job.success
-        build_log_json['status'] = self.job.status
-        build_log_json['message'] = self.job.message
+            build_log_dict['ended_at'] = None
+        build_log_dict['success'] = self.job.success
+        build_log_dict['status'] = self.job.status
+        build_log_dict['message'] = self.job.message
         if self.job.log:
-            build_log_json['log'] = self.job.log
+            build_log_dict['log'] = self.job.log
         else:
-            build_log_json['log'] = []
+            build_log_dict['log'] = []
         if self.job.warnings:
-            build_log_json['warnings'] = self.job.warnings
+            build_log_dict['warnings'] = self.job.warnings
         else:
-            build_log_json['warnings'] = []
+            build_log_dict['warnings'] = []
         if self.job.errors:
-            build_log_json['errors'] = self.job.errors
+            build_log_dict['errors'] = self.job.errors
         else:
-            build_log_json['errors'] = []
-        build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
-        GlobalSettings.logger.debug(f"Uploading build log to S3:{GlobalSettings.cdn_bucket_name}/{build_log_key} …")
-        # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
-        self.cdn_upload_contents(build_log_json, build_log_key)
-        return build_log_json
+            build_log_dict['errors'] = []
+        return build_log_dict
+    # end of make_our_build_log()
+
+
+    # NOTE: Do we need this -- disabled 25Feb2019
+    # def upload_convert_log(self, build_log_json, s3_base_key, part=''):
+    #     if self.job.started_at:
+    #         build_log_json['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+    #     else:
+    #         build_log_json['started_at'] = None
+    #     if self.job.ended_at:
+    #         build_log_json['ended_at'] = self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+    #     else:
+    #         build_log_json['ended_at'] = None
+    #     build_log_json['success'] = self.job.success
+    #     build_log_json['status'] = self.job.status
+    #     build_log_json['message'] = self.job.message
+    #     if self.job.log:
+    #         build_log_json['log'] = self.job.log
+    #     else:
+    #         build_log_json['log'] = []
+    #     if self.job.warnings:
+    #         build_log_json['warnings'] = self.job.warnings
+    #     else:
+    #         build_log_json['warnings'] = []
+    #     if self.job.errors:
+    #         build_log_json['errors'] = self.job.errors
+    #     else:
+    #         build_log_json['errors'] = []
+    #     build_log_key = self.get_build_log_key(s3_base_key, part, name='convert_log.json')
+    #     GlobalSettings.logger.debug(f"Uploading build log to S3:{GlobalSettings.cdn_bucket_name}/{build_log_key} …")
+    #     # GlobalSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
+    #     self.cdn_upload_contents(build_log_json, build_log_key)
+    #     return build_log_json
 
     def cdn_upload_contents(self, contents, key):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.cdn_upload_contents({contents}, {key})…")
         file_name = os.path.join(self.temp_dir, 'contents.json')
         write_file(file_name, contents)
         GlobalSettings.logger.debug(f"Uploading file to S3:{GlobalSettings.cdn_bucket_name}/{key} …")
         GlobalSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
     def get_build_log(self, s3_base_key, part=''):
+        GlobalSettings.logger.debug(f"ClientConverterCallback.get_build_log({s3_base_key}, {part})…")
+        assert not part
         build_log_key = self.get_build_log_key(s3_base_key, part)
         # GlobalSettings.logger.debug('Reading build log from ' + build_log_key)
         build_log_json = GlobalSettings.cdn_s3_handler().get_json(build_log_key)
@@ -230,5 +276,7 @@ class ClientConverterCallback:
 
     @staticmethod
     def get_build_log_key(s3_base_key, part='', name='build_log.json'):
+        assert not part
+        GlobalSettings.logger.debug(f"ClientConverterCallback.get_build_log_key({s3_base_key}, {part}, {name})…")
         upload_key = f'{s3_base_key}/{part}{name}'
         return upload_key
