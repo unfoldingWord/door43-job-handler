@@ -34,7 +34,7 @@ class TestTqPreprocessor(unittest.TestCase):
         self.out_dir = tempfile.mkdtemp(prefix='test_output_')
 
         # when
-        do_preprocess('Translation_Questions', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Questions', 'dummyURL', rc, repo_dir, self.out_dir)
 
         # then
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))

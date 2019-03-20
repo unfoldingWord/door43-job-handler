@@ -71,6 +71,11 @@ class ProjectDeployer:
     def deploy_revision_to_door43(self, build_log):
         """
         Deploys a single revision of a project to door43.org
+
+        Templates the converted files
+            then uploads them and the build log to the S3 bucket
+            and creates a 'deployed' file there too.
+
         :param dict build_log:
         :return bool:
         """

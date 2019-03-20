@@ -603,7 +603,7 @@ def process_job(queued_json_payload, redis_connection):
     # Preprocess the files
     GlobalSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, rc, repo_dir, preprocess_dir)
+    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, commit_url, rc, repo_dir, preprocess_dir)
     if preprocessor_warning_list:
         GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
