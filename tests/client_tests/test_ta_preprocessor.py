@@ -33,7 +33,7 @@ class TestTaPreprocessor(unittest.TestCase):
         repo_name = 'en_ta'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='test_output_')
-        do_preprocess('Translation_Academy', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Academy', 'dummyURL', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '01-intro.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-process.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '03-translate.md')))
@@ -56,13 +56,13 @@ class TestTaPreprocessor(unittest.TestCase):
         self.assertTrue('../' not in translate)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '04-checking-toc.yaml')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '04-checking-config.yaml')))
-        preprocessor = TaPreprocessor(rc, repo_dir, self.out_dir)
+        preprocessor = TaPreprocessor('dummyURL', rc, repo_dir, self.out_dir)
         self.assertEqual(preprocessor.get_title(rc.project('checking'), 'fake-link', 'My Title'), 'My Title')
         self.assertEqual(preprocessor.get_title(rc.project('checking'), 'fake-link'), 'Fake Link')
 
     def test_fix_links(self):
         rc = RC(os.path.join(self.resources_dir, 'manifests', 'ta'))
-        ta = TaPreprocessor(rc, tempfile.gettempdir(), tempfile.gettempdir())
+        ta = TaPreprocessor('dummyURL', rc, tempfile.gettempdir(), tempfile.gettempdir())
         content = "This has [links](../section1/01.md) to the same [manual](../section2/01.md)"
         expected = "This has [links](#section1) to the same [manual](#section2)"
         converted = ta.fix_links(content)

@@ -12,31 +12,31 @@ from resource_container.ResourceContainer import RC
 
 
 
-def do_preprocess(repo_subject, rc, repo_dir, output_dir):
+def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
     if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions'):
         GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
-        preprocessor = ObsPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = ObsPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
         GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
-        preprocessor = BiblePreprocessor(rc, repo_dir, output_dir)
+        preprocessor = BiblePreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Academy':
         GlobalSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
-        preprocessor = TaPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = TaPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Questions':
         GlobalSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
-        preprocessor = TqPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = TqPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
         GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
-        preprocessor = TwPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = TwPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
         GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
-        preprocessor = TnPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = TnPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         GlobalSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
-        preprocessor = LexiconPreprocessor(rc, repo_dir, output_dir)
+        preprocessor = LexiconPreprocessor(commit_url, rc, repo_dir, output_dir)
     else:
         GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
-        preprocessor = Preprocessor(rc, repo_dir, output_dir)
+        preprocessor = Preprocessor(commit_url, rc, repo_dir, output_dir)
     return preprocessor.run()
 # end of do_preprocess()
 
@@ -47,12 +47,14 @@ class Preprocessor:
     ignoreDirectories = ['.git', '00']
     ignoreFiles = ['.DS_Store', 'reference.txt', 'title.txt', 'LICENSE.md', 'README.md', 'README.rst']
 
-    def __init__(self, rc, source_dir, output_dir):
+    def __init__(self, commit_url, rc, source_dir, output_dir):
         """
+        :param URLString commit_url:    URL of this commit on DCS
         :param RC rc:
         :param string source_dir:
         :param string output_dir:
         """
+        self.commit_url = commit_url
         self.rc = rc
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
@@ -282,142 +284,217 @@ class BiblePreprocessor(Preprocessor):
         # Clean the USFM
         B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
         needs_global_check = False
+        has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
 
-        # First do global fixes to bad tC USFM
-        # Hide good \q# markers
-        preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
-        # Invalid \q… markers
-        preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
-        # \q markers with following text but missing the space in-betweeb
-        preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
-        if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
-        # Restore good \q# markers
-        preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
+        if has_USFM3_line:
+            preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', r'', preadjusted_file_contents) # Remove \zaln start milestones
+            preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
 
-        # Hide empty \p markers
-        preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
-        # Invalid \p… markers
-        preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
-        if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
-        # Restore empty \p markers
-        preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
+            # Then do line-by-line changes
+            needs_new_line = False
+            adjusted_file_contents = ''
+            C = V = ''
+            for line in preadjusted_file_contents.split('\n'):
+                if not line: continue # Ignore blank lines
+                # GlobalSettings.logger.debug(f"Processing line: {line!r}")
 
-        # Find  and warn about (useless) paragraph formatting before a section break
-        #  (probably should be after break)
-        ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
-        if ps_count:
-            s_suffix = '' if ps_count==1 else 's'
-            self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
-        qs_count = len(re.findall(r'\\q1* *\n?\\s', preadjusted_file_contents))
-        if qs_count:
-            s_suffix = '' if qs_count==1 else 's'
-            self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
+                # Get C,V for debug messages
+                if line.startswith('\\c '):
+                    C = line[3:]
+                elif line.startswith('\\v '):
+                    V = line[3:].split(' ')[0]
 
-        # Then do other global clean-ups
-        ks_count = preadjusted_file_contents.count('\\k-s')
-        ke_count = preadjusted_file_contents.count('\\k-e')
-        zs_count = preadjusted_file_contents.count('\\zaln-s')
-        ze_count = preadjusted_file_contents.count('\\zaln-e')
-        if ks_count or zs_count: # Assume it's USFM3
-            if '\\usfm 3' not in preadjusted_file_contents:
-                self.warnings.append(f"{B} - '\\usfm 3.0' line seems missing")
-        close_count = preadjusted_file_contents.count('\\*')
-        expected_close_count = ks_count + ke_count + zs_count + ze_count
-        if close_count < expected_close_count:
-            self.warnings.append(f"{B} - {expected_close_count-close_count:,} unclosed \\k or \\zaln milestone markers")
-        preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
-        preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing alignment milestones
-        if preadjusted_file_contents != file_contents:
-            needs_global_check = True
+                adjusted_line = line
+                if '\\k' in adjusted_line: # Delete these fields
+                    # TODO: These milestone fields in the source texts should be self-closing
+                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    ix = adjusted_line.find('\\k-s')
+                    if ix != -1:
+                        adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+                assert '\\k-s' not in adjusted_line
+                assert '\\k-e' not in adjusted_line
+                # # HANDLE FAULTY USFM IN UGNT
+                # if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
+                #     GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
+                #     adjusted_line += '*' # Try a change to a closing marker
+
+                # Remove \w fields (just leaving the word)
+                ixW = adjusted_line.find('\\w ')
+                while ixW != -1:
+                    ixEnd = adjusted_line.find('\\w*', ixW)
+                    # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
+                    if ixEnd != -1:
+                        field = adjusted_line[ixW+3:ixEnd]
+                        # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
+                        bits = field.split('|')
+                        adjusted_field = bits[0]
+                        # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
+                        adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
+                        # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
+                    else:
+                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                        self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
+                        adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
+                    ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
+                assert '\\w' not in adjusted_line
+                # assert '\\w*' not in adjusted_line
+                if adjusted_line != line: # it's non-blank and it changed
+                    # if 'EPH' in file_name:
+                        #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
+                    adjusted_file_contents += ' ' + adjusted_line
+                    needs_new_line = True
+                    continue
+                assert adjusted_line == line # No \k \w or \z fields encountered
+
+                if needs_new_line:
+                    adjusted_file_contents += '\n'
+                    needs_new_line = False
+                    needs_global_check = True
+
+                # Copy across unchanged lines
+                adjusted_file_contents += line + '\n'
 
 
-        # Then do line-by-line changes
-        needs_new_line = False
-        adjusted_file_contents = ''
-        C = V = ''
-        for line in preadjusted_file_contents.split('\n'):
-            if not line: continue # Ignore blank lines
-            # GlobalSettings.logger.debug(f"Processing line: {line!r}")
+        else: # old code to handle bad tC USFM
+            # First do global fixes to bad tC USFM
+            # Hide good \q# markers
+            preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
+            # Invalid \q… markers
+            preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
+            # \q markers with following text but missing the space in-betweeb
+            preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
+            if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
+            # Restore good \q# markers
+            preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
 
-            # Get C,V for debug messages
-            if line.startswith('\\c '):
-                C = line[3:]
-            elif line.startswith('\\v '):
-                V = line[3:].split(' ')[0]
+            # Hide empty \p markers
+            preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
+            # Invalid \p… markers
+            preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+            if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
+            # Restore empty \p markers
+            preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
 
-            adjusted_line = line
-            if '\\k' in adjusted_line: # Delete these fields
-                # TODO: These milestone fields in the source texts should be self-closing
-                # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
-                ix = adjusted_line.find('\\k-s')
-                if ix != -1:
-                    adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
-            assert '\\k-s' not in adjusted_line
-            assert '\\k-e' not in adjusted_line
-            # HANDLE FAULTY USFM IN UGNT
-            if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
-                GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
-                adjusted_line += '*' # Try a change to a closing marker
+            # Find  and warn about (useless) paragraph formatting before a section break
+            #  (probably should be after break)
+            ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
+            if ps_count:
+                s_suffix = '' if ps_count==1 else 's'
+                self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
+            qs_count = len(re.findall(r'\\q1* *\n?\\s', preadjusted_file_contents))
+            if qs_count:
+                s_suffix = '' if qs_count==1 else 's'
+                self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
 
-            # Remove \w fields (just leaving the word)
-            ixW = adjusted_line.find('\\w ')
-            while ixW != -1:
-                ixEnd = adjusted_line.find('\\w*', ixW)
-                # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
-                if ixEnd != -1:
-                    field = adjusted_line[ixW+3:ixEnd]
-                    # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
-                    bits = field.split('|')
-                    adjusted_field = bits[0]
-                    # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
-                    adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
-                    # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
-                else:
-                    GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
-                    self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
-                    adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
-                ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
-            assert '\\w' not in adjusted_line
-            # assert '\\w*' not in adjusted_line
-            if '\\z' in adjusted_line: # Delete these user-defined fields
-                # TODO: These milestone fields in the source texts should be self-closing
-                # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
-                ix = adjusted_line.find('\\zaln-s')
-                if ix != -1:
-                    adjusted_line = adjusted_line[:ix] # Remove zaln-s field right up to end of line
-            if '\\z' in adjusted_line:
-                GlobalSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
-                self.warnings.append(f"{B} {C}:{V} - Remaining \\z field")
-            if not adjusted_line: # was probably just a \zaln-s milestone with nothing else
-                continue
-            if adjusted_line != line: # it's non-blank and it changed
-                # if 'EPH' in file_name:
-                    #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
-                adjusted_file_contents += ' ' + adjusted_line
-                needs_new_line = True
-                continue
-            assert adjusted_line == line # No \k \w or \z fields encountered
-
-            if needs_new_line:
-                adjusted_file_contents += '\n'
-                needs_new_line = False
+            # Then do other global clean-ups
+            ks_count = preadjusted_file_contents.count('\\k-s\\*')
+            if not ks_count:
+                ks_count = preadjusted_file_contents.count('\\k-s')
+            ke_count = preadjusted_file_contents.count('\\k-e\\*')
+            if not ke_count:
+                ke_count = preadjusted_file_contents.count('\\k-e')
+            zs_count = preadjusted_file_contents.count('\\zaln-s')
+            ze_count = preadjusted_file_contents.count('\\zaln-e')
+            if ks_count or zs_count or zs_count or ze_count: # Assume it's USFM3
+                if not has_USFM3_line:
+                    self.warnings.append(f"{B} - '\\usfm 3.0' line seems missing")
+            close_count = preadjusted_file_contents.count('\\*')
+            expected_close_count = ks_count + ke_count + zs_count + ze_count
+            if close_count < expected_close_count:
+                self.warnings.append(f"{B} - {expected_close_count-close_count:,} unclosed \\k or \\zaln milestone markers")
+            preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
+            preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*', '') # Remove self-closing alignment milestones
+            if preadjusted_file_contents != file_contents:
                 needs_global_check = True
 
-            # Copy across unchanged lines
-            adjusted_file_contents += line + '\n'
 
-        if needs_global_check: # Do some file-wide clean-up
-            # GlobalSettings.logger.debug(f"Doing global fixes for {B} …")
-            adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
-            adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
-            adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
-            while '\n\n' in adjusted_file_contents:
-                adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
-            adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC quotation punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC quotation punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC quotation punctuation mistake
-            adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
+            # Then do line-by-line changes
+            needs_new_line = False
+            adjusted_file_contents = ''
+            C = V = ''
+            for line in preadjusted_file_contents.split('\n'):
+                if not line: continue # Ignore blank lines
+                # GlobalSettings.logger.debug(f"Processing line: {line!r}")
+
+                # Get C,V for debug messages
+                if line.startswith('\\c '):
+                    C = line[3:]
+                elif line.startswith('\\v '):
+                    V = line[3:].split(' ')[0]
+
+                adjusted_line = line
+                if '\\k' in adjusted_line: # Delete these fields
+                    # TODO: These milestone fields in the source texts should be self-closing
+                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    ix = adjusted_line.find('\\k-s')
+                    if ix != -1:
+                        adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+                assert '\\k-s' not in adjusted_line
+                assert '\\k-e' not in adjusted_line
+                # HANDLE FAULTY USFM IN UGNT
+                if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
+                    GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
+                    adjusted_line += '*' # Try a change to a closing marker
+
+                # Remove \w fields (just leaving the word)
+                ixW = adjusted_line.find('\\w ')
+                while ixW != -1:
+                    ixEnd = adjusted_line.find('\\w*', ixW)
+                    # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
+                    if ixEnd != -1:
+                        field = adjusted_line[ixW+3:ixEnd]
+                        # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
+                        bits = field.split('|')
+                        adjusted_field = bits[0]
+                        # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
+                        adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
+                        # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
+                    else:
+                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                        self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
+                        adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
+                    ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
+                assert '\\w' not in adjusted_line
+                # assert '\\w*' not in adjusted_line
+                if '\\z' in adjusted_line: # Delete these user-defined fields
+                    # TODO: These milestone fields in the source texts should be self-closing
+                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    ix = adjusted_line.find('\\zaln-s')
+                    if ix != -1:
+                        adjusted_line = adjusted_line[:ix] # Remove zaln-s field right up to end of line
+                if '\\z' in adjusted_line:
+                    GlobalSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    self.warnings.append(f"{B} {C}:{V} - Remaining \\z field")
+                if not adjusted_line: # was probably just a \zaln-s milestone with nothing else
+                    continue
+                if adjusted_line != line: # it's non-blank and it changed
+                    # if 'EPH' in file_name:
+                        #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
+                    adjusted_file_contents += ' ' + adjusted_line
+                    needs_new_line = True
+                    continue
+                assert adjusted_line == line # No \k \w or \z fields encountered
+
+                if needs_new_line:
+                    adjusted_file_contents += '\n'
+                    needs_new_line = False
+                    needs_global_check = True
+
+                # Copy across unchanged lines
+                adjusted_file_contents += line + '\n'
+
+            if needs_global_check: # Do some file-wide clean-up
+                # GlobalSettings.logger.debug(f"Doing global fixes for {B} …")
+                adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
+                adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
+                adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
+                while '\n\n' in adjusted_file_contents:
+                    adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
+                adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC quotation punctuation mistake
+                adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC quotation punctuation mistake
+                adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC quotation punctuation mistake
+                adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
 
         # Write the modified USFM
         # if 'EPH' in file_name:
@@ -1225,13 +1302,15 @@ class LexiconPreprocessor(Preprocessor):
 
             GlobalSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
 
+            # Even though the .md files won't be converted, they still need to be copied
+            #   so they can be linted
             for something in sorted(os.listdir(project_path)):
                 # something can be a file or a folder containing the markdown file
                 if os.path.isdir(os.path.join(project_path, something)) \
                 and something not in LexiconPreprocessor.ignoreDirectories:
                     # Entries are in separate folders (like en_ugl)
                     entry_markdown = self.compile_lexicon_entry(project, something)
-                    entry_markdown = self.fix_entry_links(entry_markdown)
+                    # entry_markdown = self.fix_entry_links(entry_markdown)
                     write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
                     self.num_files_written += 1
                 elif os.path.isfile(os.path.join(project_path, something)) \
@@ -1242,17 +1321,38 @@ class LexiconPreprocessor(Preprocessor):
                     # entry_markdown = read_file(something)
                     with open(os.path.join(project_path, something), 'rt') as ef:
                         entry_markdown = ef.read()
-                    entry_markdown = self.fix_entry_links(entry_markdown)
+                    # entry_markdown = self.fix_entry_links(entry_markdown)
                     write_file(os.path.join(self.output_dir, f'{something}.md'), entry_markdown)
                     self.num_files_written += 1
 
-            # index_filepath = os.path.join(project_path, 'index.md')
-            # if os.path.isfile(index_filepath):
-            #     with open(index_filepath, 'rt') as ixf:
-            #         index_markdown = ixf.read()
-            #     index_markdown = self.fix_index_links(index_markdown)
-            #     write_file(os.path.join(self.output_dir, 'index.md'), index_markdown)
-            #     self.num_files_written += 1
+            # Now do the special stuff
+            # TODO: Ideally most of the English strings below should be translated for other lexicons
+            # Create two index files -- one by Strongs number (the original) and one by lemma
+            index_filepath = os.path.join(project_path, 'index.md')
+            if os.path.isfile(index_filepath):
+                with open(index_filepath, 'rt') as ixf:
+                    index_markdown = ixf.read()
+                index_markdown = self.fix_index_links(index_markdown)
+                number_index_markdown = f"# Number index\n\n{index_markdown}"
+                write_file(os.path.join(self.output_dir, 'number_index.md'), number_index_markdown)
+                self.num_files_written += 1
+                word_index_markdown = f"# Word/lemma index\n\n{self.change_index_entries(project_path, index_markdown)}"
+                write_file(os.path.join(self.output_dir, 'word_index.md'), word_index_markdown)
+                self.num_files_written += 1
+
+            # Copy the README as index.md, adding some extra links at top and bottom
+            readme_filepath = os.path.join(self.source_dir, 'README.md')
+            if os.path.isfile(readme_filepath):
+                with open(readme_filepath, 'rt') as rmf:
+                    readme_markdown = rmf.read()
+            else:
+                GlobalSettings.logger.error("Lexicon preprocessor cannot find README.md")
+                readme_markdown = "No README.md found\n"
+            link1 = "* [Lexicon entries (by number)](number_index.html)\n"
+            link2 = "* [Lexicon entries (by word)](word_index.html)\n"
+            readme_markdown = f"{link1}{link2}\n\n{readme_markdown}\n{link1}{link2}"
+            write_file(os.path.join(self.output_dir, 'index.md'), readme_markdown)
+            self.num_files_written += 1
 
         if self.num_files_written == 0:
             GlobalSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
@@ -1269,34 +1369,141 @@ class LexiconPreprocessor(Preprocessor):
 
 
     def fix_index_links(self, content):
-        # Point to .html file instead of to .md file (UHAL)
-        content = re.sub(r'\[(.+?).md\]\(', r'[\1](', content) # Remove .md from text
-        content = re.sub(r'\]\(\./(.+?).md\)', r'](\1.html)', content) # Change link from ./xyz.md to xyz.html
-        # Point to .html file instead of to folder (UGL)
-        content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content) # Change link from ./xyz to xyz.html
+        """
+        Changes the actual links to point to the original .md files.
+        """
+        # GlobalSettings.logger.debug("LexiconPreprocessor.fix_index_links(…)…")
+
+        newLines = []
+        for line in content.split('\n'):
+            # print("line:", line)
+            if '](' in line:
+                bits = line.split('](', 1)
+                # print("bits", bits)
+                assert bits[0][0]=='[' and bits[1][-1]==')'
+                strongs, filenameOrFolder = bits[0][1:], bits[1][:-1]
+                # print("strongs", strongs, "filenameOrFolder", filenameOrFolder)
+                assert filenameOrFolder.startswith('./')
+                filenameOrFolder = f"{self.commit_url}/content/{filenameOrFolder[2:]}" \
+                                    .replace('/commit/', '/raw/commit/') \
+                                    .replace('/commit/master/', '/branch/master/')
+                # print("filenameOrFolder", filenameOrFolder)
+                line = f"[{strongs[:-3] if strongs.endswith('.md') else strongs}]" \
+                       f"({filenameOrFolder}{'/01.md' if not filenameOrFolder.endswith('.md') else ''})"
+            newLines.append(line)
+        content = '\n'.join(newLines)
         return content
     # end of LexiconPreprocessor fix_index_links(content)
 
 
-    def fix_entry_links(self, content):
-        # Change link from (../G12345/01.md) to (G12345.html)
-        content = re.sub(r'\]\(\.\./(G\d{5})/01.md\)', r'](\1.html)', content)
-        # Change link from (//en-uhl/H4398) to (https://door43.org/u/unfoldingWord/en_uhal/master/H12345.html)
-        content = re.sub(r'\]\(//en-uhl/(H\d{4})\)', r'](https://{}door43.org/u/unfoldingWord/en_uhal/master/\1.html)'.format('dev.' if prefix=='dev-' else ''), content)
-        # Change link from (Exo 4:14) to (https://door43.org/u/unfoldingWord/en_ult/master/02-EXO.html#002-ch-004-v-014)
-        ult_link_re = r'\]\(([\d\w]{3}) (\d{1:3})\:(\d{1:3})\)'
-        while True:
-            match = re.search(ult_link_re, content)
-            if not match: break
-            print("Got re match", match.group(0), match.group(1), match.group(2), match.group(3))
-            BBB = match.group(1).upper()
-            nn = BOOK_NUMBERS[BBB.lower()] # two digit book number
-            ch = match.group(2).zfill(3)
-            vs = match.group(3).zfill(3)
-            content = re.subn(ult_link_re,
-                            r'](https://{}door43.org/u/unfoldingWord/en_ult/master/{}-{}.html#0{}-ch-{}-v-{})' \
-                                        .format('dev.' if prefix=='dev-' else '', nn, BBB, nn, ch, vs),
-                            content, count=1)
+    def change_index_entries(self, project_path, content):
+        """
+        """
+        # GlobalSettings.logger.debug(f"LexiconPreprocessor.change_index_entries({project_path}, …)…")
+
+        # Change Strongs numbers to lemma entries
+        newLines = []
+        for line in content.split('\n'):
+            # print("line:", line)
+            if '](' in line:
+                bits = line.split('](', 1)
+                # print("bits", bits)
+                assert bits[0][0]=='[' and bits[1][-1]==')'
+                strongs, fileURL = bits[0][1:], bits[1][:-1]
+                print("strongs", strongs, ' ', "fileURL", fileURL)
+                fileURLbits = fileURL.split('/')
+                filepath = os.path.join(project_path, fileURLbits[-1])
+                print("filepath1", filepath)
+                if not os.path.isfile(filepath):
+                    filepath = os.path.join(project_path, fileURLbits[-2], fileURLbits[-1])
+                    print("filepath2", filepath)
+                try:
+                    with open(filepath, 'rt') as lex_file:
+                        lex_content = lex_file.read()
+                except FileNotFoundError:
+                    GlobalSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find/read {filepath}")
+                    lex_content = None
+                title = None
+                if lex_content and lex_content[0]=='#' and lex_content[1]==' ':
+                    title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
+                # print("title", repr(title))
+                if title is None: # Why?
+                    GlobalSettings.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
+                    title = strongs
+                line = f"[{title:6}]({fileURL})"
+            newLines.append(line)
+        content = '\n'.join(newLines)
         return content
-    # end of LexiconPreprocessor fix_entry_links(content)
+    # end of LexiconPreprocessor change_index_entries(project_path, content)
+
+
+    # def fix_index_links(self, project_path, content):
+    #     """
+    #     """
+    #     GlobalSettings.logger.debug(f"LexiconPreprocessor.fix_index_links({project_path}, …)…")
+
+    #     # # Point to .html file instead of to .md file (UHAL)
+    #     # content = re.sub(r'\[(.+?).md\]\(', r'[\1](', content) # Remove .md from text
+    #     # content = re.sub(r'\]\(\./(.+?).md\)', r'](\1.html)', content) # Change link from ./xyz.md to xyz.html
+    #     # # Point to .html file instead of to folder (UGL)
+    #     # content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content) # Change link from ./xyz to xyz.html
+
+    #     # Append lemma to Strongs numbers
+
+    #     newLines = []
+    #     for line in content.split('\n'):
+    #         # print("line:", line)
+    #         if '](' in line:
+    #             bits = line.split('](', 1)
+    #             # print("bits", bits)
+    #             assert bits[0][0]=='[' and bits[1][-1]==')'
+    #             strongs, filenameOrFolder = bits[0][1:], bits[1][:-1]
+    #             # print("strongs", strongs, "filenameOrFolder", filenameOrFolder)
+    #             assert filenameOrFolder.startswith('./')
+    #             filepath = os.path.join(project_path, filenameOrFolder)
+    #             if not os.path.isfile(filepath):
+    #                 filepath = os.path.join(project_path, filenameOrFolder, '01.md')
+    #             # print("filepath", filepath)
+    #             try:
+    #                 with open(filepath, 'rt') as lex_file:
+    #                     lex_content = lex_file.read()
+    #             except FileNotFoundError:
+    #                 lex_content = None
+    #             title = None
+    #             if lex_content and lex_content[0]=='#' and lex_content[1]==' ':
+    #                 title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
+    #             # print("title", repr(title))
+    #             filenameOrFolder = f"{self.commit_url}/content/{filenameOrFolder[2:]}" \
+    #                                 .replace('/commit/', '/raw/commit/') \
+    #                                 .replace('/commit/master/', '/branch/master/')
+    #             # print("filenameOrFolder", filenameOrFolder)
+    #             line = f"[{strongs[:-3] if strongs.endswith('.md') else strongs} {title:6}]" \
+    #                    f"({filenameOrFolder}{'/01.md' if not filenameOrFolder.endswith('.md') else ''})"
+    #         newLines.append(line)
+    #     content = '\n'.join(newLines)
+    #     return content
+    # # end of LexiconPreprocessor fix_index_links(content)
+
+
+    # def fix_entry_links(self, content):
+    #     # Change link from (../G12345/01.md) to (G12345.html)
+    #     content = re.sub(r'\]\(\.\./(G\d{5})/01.md\)', r'](\1.html)', content)
+    #     # Change link from (//en-uhl/H4398) to (https://door43.org/u/unfoldingWord/en_uhal/master/H12345.html)
+    #     content = re.sub(r'\]\(//en-uhl/(H\d{4})\)', r'](https://{}door43.org/u/unfoldingWord/en_uhal/master/\1.html)'.format('dev.' if prefix=='dev-' else ''), content)
+    #     # Change link from (Exo 4:14) to (https://door43.org/u/unfoldingWord/en_ult/master/02-EXO.html#002-ch-004-v-014)
+    #     ult_link_re = r'\]\(([\d\w]{3}) (\d{1:3})\:(\d{1:3})\)'
+    #     while True:
+    #         match = re.search(ult_link_re, content)
+    #         if not match: break
+    #         print("Got re match", match.group(0), match.group(1), match.group(2), match.group(3))
+    #         BBB = match.group(1).upper()
+    #         nn = BOOK_NUMBERS[BBB.lower()] # two digit book number
+    #         ch = match.group(2).zfill(3)
+    #         vs = match.group(3).zfill(3)
+    #         content = re.subn(ult_link_re,
+    #                         r'](https://{}door43.org/u/unfoldingWord/en_ult/master/{}-{}.html#0{}-ch-{}-v-{})' \
+    #                                     .format('dev.' if prefix=='dev-' else '', nn, BBB, nn, ch, vs),
+    #                         content, count=1)
+    #     return content
+    # # end of LexiconPreprocessor fix_entry_links(content)
 # end of class LexiconPreprocessor

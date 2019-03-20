@@ -65,7 +65,7 @@ class TestObsPreprocessor(unittest.TestCase):
 
     def runObsPreprocessor(self, rc, repo_dir):
         self.out_dir = tempfile.mkdtemp(prefix='test_output_')
-        do_preprocess('Open_Bible_Stories', rc, repo_dir, self.out_dir)
+        do_preprocess('Open_Bible_Stories', 'dummyURL', rc, repo_dir, self.out_dir)
         return self.out_dir
 
     # def test_PackageResource(self):

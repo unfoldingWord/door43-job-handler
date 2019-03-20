@@ -37,7 +37,7 @@ class TestTwPreprocessor(unittest.TestCase):
     #     self.out_dir = tempfile.mkdtemp(prefix='output_')
 
     #     # when
-    #     results = do_preprocess('Translation_Words', rc, repo_dir, self.out_dir)
+    #     results = do_preprocess('Translation_Words', 'dummyURL', rc, repo_dir, self.out_dir)
 
     #     # then
     #     self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
@@ -71,7 +71,7 @@ class TestTwPreprocessor(unittest.TestCase):
         rc = RC()
         repo_name = 'Door43'
         current_category = 'names'
-        tw = TwPreprocessor(rc, tempfile.gettempdir(), tempfile.gettempdir())
+        tw = TwPreprocessor('dummyURL', rc, tempfile.gettempdir(), tempfile.gettempdir())
         tw.repo_name = repo_name
         content = "This has links to the same category: (See also: [titus](../names/titus.md), [timothy](../names/timothy.md)"
         expected = "This has links to the same category: (See also: [titus](#titus), [timothy](#timothy)"
