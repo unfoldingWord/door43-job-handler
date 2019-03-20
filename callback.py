@@ -296,7 +296,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
     # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
     # No need to download the build log since we have it here
-    deployer.deploy_revision_to_door43(final_build_log)
+    deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
 
     if prefix and debug_mode_flag:
         GlobalSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
