@@ -497,11 +497,10 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
 
         # Write the modified USFM
-        # if 'EPH' in file_name:
-            # GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents[:1000]} …")
-        if '\\w' in adjusted_file_contents:
-            GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
-        assert '\\w' not in adjusted_file_contents
+        if prefix and debug_mode_flag:
+            if '\\w' in adjusted_file_contents:
+                GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
+            assert '\\w' not in adjusted_file_contents
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
     # end of write_clean_file function
