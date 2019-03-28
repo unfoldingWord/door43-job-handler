@@ -1409,13 +1409,13 @@ class LexiconPreprocessor(Preprocessor):
                 # print("bits", bits)
                 assert bits[0][0]=='[' and bits[1][-1]==')'
                 strongs, fileURL = bits[0][1:], bits[1][:-1]
-                print("strongs", strongs, ' ', "fileURL", fileURL)
+                # print("strongs", strongs, ' ', "fileURL", fileURL)
                 fileURLbits = fileURL.split('/')
                 filepath = os.path.join(project_path, fileURLbits[-1])
-                print("filepath1", filepath)
+                # print("filepath1", filepath)
                 if not os.path.isfile(filepath):
                     filepath = os.path.join(project_path, fileURLbits[-2], fileURLbits[-1])
-                    print("filepath2", filepath)
+                    # print("filepath2", filepath)
                 try:
                     with open(filepath, 'rt') as lex_file:
                         lex_content = lex_file.read()
