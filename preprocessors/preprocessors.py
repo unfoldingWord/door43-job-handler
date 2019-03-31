@@ -290,6 +290,7 @@ class BiblePreprocessor(Preprocessor):
         if has_USFM3_line:
             preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', r'', preadjusted_file_contents) # Remove \zaln start milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
+            preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
 
             # Then do line-by-line changes
             needs_new_line = False
@@ -307,13 +308,21 @@ class BiblePreprocessor(Preprocessor):
 
                 adjusted_line = line
                 if '\\k' in adjusted_line: # Delete these fields
-                    # TODO: These milestone fields in the source texts should be self-closing
                     # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
-                    ix = adjusted_line.find('\\k-s')
+                    ix = adjusted_line.find('\\k-s\\*')
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
-                assert '\\k-s' not in adjusted_line
-                assert '\\k-e' not in adjusted_line
+                    ix = adjusted_line.find('\\k-s')
+                    if ix != -1:
+                        GlobalSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                        self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
+                        adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+                if '\\k-s' in adjusted_line:
+                    GlobalSettings.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    self.warnings.append(f"{B} {C}:{V} - Remaining \\k-s field")
+                if '\\k-e' in adjusted_line:
+                    GlobalSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    self.warnings.append(f"{B} {C}:{V} - Remaining \\k-e field")
                 # # HANDLE FAULTY USFM IN UGNT
                 # if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
                 #     GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
@@ -1409,13 +1418,13 @@ class LexiconPreprocessor(Preprocessor):
                 # print("bits", bits)
                 assert bits[0][0]=='[' and bits[1][-1]==')'
                 strongs, fileURL = bits[0][1:], bits[1][:-1]
-                print("strongs", strongs, ' ', "fileURL", fileURL)
+                # print("strongs", strongs, ' ', "fileURL", fileURL)
                 fileURLbits = fileURL.split('/')
                 filepath = os.path.join(project_path, fileURLbits[-1])
-                print("filepath1", filepath)
+                # print("filepath1", filepath)
                 if not os.path.isfile(filepath):
                     filepath = os.path.join(project_path, fileURLbits[-2], fileURLbits[-1])
-                    print("filepath2", filepath)
+                    # print("filepath2", filepath)
                 try:
                     with open(filepath, 'rt') as lex_file:
                         lex_content = lex_file.read()
