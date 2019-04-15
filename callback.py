@@ -8,6 +8,7 @@
 import os
 from datetime import datetime
 import time
+import json
 from ast import literal_eval
 import tempfile
 import traceback
@@ -28,7 +29,7 @@ from general_tools.file_utils import write_file, remove_tree
 
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    GlobalSettings.logger.critical(f"Unexpected prefix: {prefix!r} -- expected '' or 'dev-'")
+    GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
 stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
 
 
@@ -45,46 +46,47 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 
     Return the job dict or False
     """
-    GlobalSettings.logger.debug(f"verify_expected_job({vej_job_dict['job_id']})")
+    job_id = vej_job_dict['job_id']
+    # GlobalSettings.logger.debug(f"verify_expected_job({job_id})")
 
-    outstanding_jobs_list = vej_redis_connection.hkeys(REDIS_JOB_LIST) # Gets bytes!!!
-    if not outstanding_jobs_list:
-        GlobalSettings.logger.error("No expected jobs found")
+    outstanding_jobs_dict_bytes = vej_redis_connection.get(REDIS_JOB_LIST) # Gets bytes!!!
+    if not outstanding_jobs_dict_bytes:
+        GlobalSettings.logger.error("No expected jobs found in redis store")
         return False
-    # GlobalSettings.logger.debug(f"Got outstanding_jobs_list:"
-    #                             f" ({len(outstanding_jobs_list)}) {outstanding_jobs_list}")
-    # GlobalSettings.logger.debug(f"Currently have {len(outstanding_jobs_list)}"
-    #                             f" outstanding job(s) in {REDIS_JOB_LIST!r}")
-    job_id_bytes = vej_job_dict['job_id'].encode()
-    if job_id_bytes not in outstanding_jobs_list:
-        GlobalSettings.logger.error(f"Not expecting job with id of {vej_job_dict['job_id']}")
+    # GlobalSettings.logger.debug(f"Got outstanding_jobs_dict_bytes:"
+    #                             f" ({len(outstanding_jobs_dict_bytes)}) {outstanding_jobs_dict_bytes}")
+    assert isinstance(outstanding_jobs_dict_bytes,bytes)
+    outstanding_jobs_dict_json_string = outstanding_jobs_dict_bytes.decode() # bytes -> str
+    assert isinstance(outstanding_jobs_dict_json_string,str)
+    outstanding_jobs_dict = json.loads(outstanding_jobs_dict_json_string)
+    assert isinstance(outstanding_jobs_dict,dict)
+    GlobalSettings.logger.info(f"Currently have {len(outstanding_jobs_dict)}"
+                               f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store")
+    if job_id not in outstanding_jobs_dict:
+        GlobalSettings.logger.error(f"Not expecting job with id of {job_id}")
+        GlobalSettings.logger.debug(f"Only had job ids: {outstanding_jobs_dict.keys()}")
         return False
-    this_job_dict_bytes = vej_redis_connection.hget(REDIS_JOB_LIST, job_id_bytes)
+    this_job_dict = outstanding_jobs_dict[job_id]
 
     # We found a match -- delete that job from the outstanding list
-    GlobalSettings.logger.debug(f"Found job match for {job_id_bytes}")
-    if len(outstanding_jobs_list) > 1:
-        GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_list)-1}"
-                                    f" outstanding job(s) in {REDIS_JOB_LIST!r}")
-    #vej_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict) # Doesn't delete!!!
-    del_result = vej_redis_connection.hdel(REDIS_JOB_LIST, job_id_bytes)
-    #print("  Got delete result:", del_result)
-    assert del_result == 1
+    GlobalSettings.logger.debug(f"Found job match for {job_id}")
+    del outstanding_jobs_dict[job_id]
+    if outstanding_jobs_dict:
+        GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_dict)}"
+                                    f" outstanding job(s) in '{REDIS_JOB_LIST}'")
+        # Update the job dict in redis now that this job has been deleted from it
+        outstanding_jobs_json_string = json.dumps(outstanding_jobs_dict)
+        vej_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string)
+    else: # no outstanding jobs left
+        GlobalSettings.logger.info("Deleting the final outstanding job"
+                                  f" in '{REDIS_JOB_LIST}' redis store")
+        del_result = vej_redis_connection.delete(REDIS_JOB_LIST)
+        # print("  Got redis delete result:", del_result)
+        assert del_result == 1 # Should only have deleted one key
 
-    this_job_dict = literal_eval(this_job_dict_bytes.decode()) # bytes -> str -> dict
     #GlobalSettings.logger.debug(f"Returning {this_job_dict}")
     return this_job_dict
 # end of verify_expected_job
-
-
-# def upload_build_log(build_log, file_name, output_dir, s3_results_key, cache_time=0):
-#     GlobalSettings.logger.debug(f"ClientLinterCallback.upload_build_log(…, {file_name}, {output_dir}, {s3_results_key}, {cache_time})…")
-#     build_log_filepath = os.path.join(output_dir, file_name)
-#     write_file(build_log_filepath, build_log)
-#     upload_key = f'{s3_results_key}/{file_name}'
-#     GlobalSettings.logger.debug(f"Uploading build log to {GlobalSettings.cdn_bucket_name}/{upload_key} …")
-#     GlobalSettings.cdn_s3_handler().upload_file(build_log_filepath, upload_key, cache_time=cache_time)
-# # end of upload_build_log function
 
 
 def merge_results_logs(build_log, file_results, linter_file):
@@ -203,7 +205,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # NOTE: The above deletes the matched job entry,
     #   so this means callback cannot be successfully retried if it fails below
     if not verify_result:
-        error = f"No job found for {queued_json_payload}"
+        error = f"No waiting job found for {queued_json_payload}"
         GlobalSettings.logger.critical(error)
         raise Exception(error)
     matched_job_dict = verify_result
@@ -289,14 +291,19 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # NOTE: The following is disabled coz it's done (again) later by the deployer
     # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
 
-    # Now deploy the new pages (was previously a separate AWS Lambda call)
-    GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
-    deployer = ProjectDeployer(unzip_dir, our_temp_dir)
-    # build_log_key = f'{url_part2}/build_log.json'
-    # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
-    # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-    # No need to download the build log since we have it here
-    deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
+    if unzip_dir is None:
+        GlobalSettings.logger.critical("Unable to deploy because file download failed previously")
+        deployed = False
+    else:
+        # Now deploy the new pages (was previously a separate AWS Lambda call)
+        GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
+        deployer = ProjectDeployer(unzip_dir, our_temp_dir)
+        # build_log_key = f'{url_part2}/build_log.json'
+        # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
+        # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
+        # No need to download the build log since we have it here
+        deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
+        deployed = True
 
     if prefix and debug_mode_flag:
         GlobalSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
@@ -308,7 +315,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     str_final_build_log_adjusted = str_final_build_log if len(str_final_build_log)<1500 \
                             else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
-    GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
+    if deployed:
+        GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
     return job_descriptive_name
 #end of process_callback_job function

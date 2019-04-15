@@ -324,42 +324,47 @@ def remember_job(rj_job_dict, rj_redis_connection):
     """
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
+
+    The REDIS dict contains a string representation of a json dict
+        whose entries are job ids mapped to the full job info dict.
     """
     # GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
-    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
-    if outstanding_jobs_dict is None:
+    outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
+    if outstanding_jobs_dict_bytes is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    # else:
-    #    GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
-    #                                f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
+    else:
+        assert isinstance(outstanding_jobs_dict_bytes,bytes)
+        outstanding_jobs_dict_json_string = outstanding_jobs_dict_bytes.decode() # bytes -> str
+        assert isinstance(outstanding_jobs_dict_json_string,str)
+        outstanding_jobs_dict = json.loads(outstanding_jobs_dict_json_string)
+        assert isinstance(outstanding_jobs_dict,dict)
+        # GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+        #                            f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
-    if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
         # Remove any outstanding jobs more than two weeks old
-        for outstanding_job_id_bytes in outstanding_jobs_dict.copy():
-            # print(f"\nLooking at outstanding job {outstanding_job_id_bytes}")
-            outstanding_job_dict_bytes = rj_redis_connection.hget(REDIS_JOB_LIST, outstanding_job_id_bytes)
-            outstanding_job_dict = literal_eval(outstanding_job_dict_bytes.decode()) # bytes -> str -> dict
-            # print(f"Got outstanding_job_dict: {outstanding_job_dict!r}")
+        for outstanding_job_id, outstanding_job_dict in outstanding_jobs_dict.copy().items():
+            assert isinstance(outstanding_job_id,str)
+            assert isinstance(outstanding_job_dict,dict)
             outstanding_duration = datetime.utcnow() \
                                 - datetime.strptime(outstanding_job_dict['created_at'], '%Y-%m-%dT%H:%M:%SZ')
             if outstanding_duration >= timedelta(weeks=2):
                 GlobalSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
-                del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, outstanding_job_id_bytes) # Delete from Redis
-                # print("  Got delete result:", del_result)
-                assert del_result == 1
-                del outstanding_jobs_dict[outstanding_job_id_bytes] # Delete from our local copy also
-        # This new job shouldn't already be in the outstanding jobs dict
-        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict # bytes comparison
+                del outstanding_jobs_dict[outstanding_job_id] # Delete from our local copy
 
-    # Add this job to Redis
+    # This new job shouldn't already be in the outstanding jobs dict
+    assert rj_job_dict['job_id'] not in outstanding_jobs_dict
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
-    rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
+
+    # Write the updated job list to Redis
+    assert outstanding_jobs_dict # Should always contain at least one entry (the current new one)
+    outstanding_jobs_json_string = json.dumps(outstanding_jobs_dict)
+    rj_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string)
 # end of remember_job function
 
 
