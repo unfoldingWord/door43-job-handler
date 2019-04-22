@@ -255,7 +255,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     our_temp_dir = tempfile.mkdtemp(suffix='',
                      prefix='Door43_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
-    # We get the tx-manager existing calls to do our work for us
+    # We get the adapted tx-manager calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter post-processing…")
     url_part2 = f"u/{this_job_dict['user_name']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
