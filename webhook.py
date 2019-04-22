@@ -78,7 +78,6 @@ stats_prefix = f'{general_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
-# TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
@@ -581,6 +580,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
+    GlobalSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
     manifest_data = {
         'repo_name': repo_name,
         'user_name': repo_owner_username,

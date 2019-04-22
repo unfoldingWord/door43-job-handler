@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from glob import glob
 from json.decoder import JSONDecodeError
-from yaml.parser import ParserError
+from yaml.parser import ParserError, ScannerError
 
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
@@ -41,7 +41,7 @@ class RC:
             return get_manifest_from_repo_name(self.repo_name)
         try:
             manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
-        except ParserError as e:
+        except (ParserError, ScannerError) as e:
             GlobalSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
@@ -427,16 +427,30 @@ class Resource:
 
     @property
     def issued(self):
+        # Make sure a string is returned -- not a date object
         if 'issued' in self.resource and self.resource['issued']:
-            return self.resource.get('issued')
+            issued_result = self.resource.get('issued')
+            if isinstance(issued_result, str): return issued_result
+            GlobalSettings.logger.critical(f"RC issued={issued_result!r}")
+            return issued_result.strftime('%Y-%m-%d')
         elif 'pub_date' in self.resource.get('status', {}):
-            return self.resource['status']['pub_date']
+            issued_pub_date = self.resource['status']['pub_date']
+            if isinstance(issued_pub_date, str): return issued_pub_date
+            GlobalSettings.logger.critical(f"RC issued pub_date={issued_pub_date!r}")
+            return issued_pub_date.strftime('%Y-%m-%d')
         else:
             return datetime.utcnow().strftime('%Y-%m-%d')
 
     @property
     def modified(self):
-        return self.resource.get('modified', datetime.utcnow().strftime('%Y-%m-%d'))
+        # Make sure a string is returned -- not a date object
+        if 'modified' in self.resource and self.resource['modified']:
+            modified_result = self.resource.get('modified')
+            if isinstance(modified_result, str): return modified_result
+            GlobalSettings.logger.critical(f"RC modified={modified_result!r}")
+            return modified_result.strftime('%Y-%m-%d')
+        else:
+            return datetime.utcnow().strftime('%Y-%m-%d')
 
     @property
     def rights(self):
