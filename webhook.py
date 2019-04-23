@@ -428,6 +428,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
+project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
 def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
@@ -473,6 +474,7 @@ def process_job(queued_json_payload, redis_connection):
         by rq if an exception is thrown in this module.
     """
     # global user_projects_invoked_string
+    global project_types_invoked_string
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
@@ -539,7 +541,7 @@ def process_job(queued_json_payload, redis_connection):
     stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     # NOTE: following line removed as stats recording used too much disk space
-    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
+    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
 
 
     # Here's our programmed failure (for remotely testing failures)
@@ -559,6 +561,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Use the RC to set the resource_subject and input_format parameters for tX
     resource_subject = get_tX_subject(rc) # use the subject to set the resource type more intelligently
+    project_types_invoked_string = f'{general_stats_prefix}.types.invoked.{resource_subject}'
     input_format = rc.resource.file_ext
     if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
@@ -821,6 +824,7 @@ def job(queued_json_payload):
         watchtower_log_handler.close()
         # NOTE: following line removed as stats recording used too much disk space
         # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+        stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)

@@ -30,7 +30,7 @@ from general_tools.file_utils import write_file, remove_tree
 GlobalSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
-stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
+general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -177,6 +177,7 @@ def update_project_file(build_log, output_dir):
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
+project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
 def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     """
     The job info is retrieved from REDIS and matched/checked
@@ -190,6 +191,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         if an exception is thrown in this module.
     """
     # global user_projects_invoked_string
+    global project_types_invoked_string
     str_payload = str(queued_json_payload)
     str_payload_adjusted = str_payload if len(str_payload)<1500 \
                             else f'{str_payload[:1000]} …… {str_payload[-500:]}'
@@ -247,6 +249,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
     #                     if 'user_projects_invoked_string' in matched_job_dict \
     #                     else f'??{identifier}??'
+    project_types_invoked_string = f"{general_stats_prefix}.types.invoked.{matched_job_dict['resource_type']}"
 
     matched_job_dict['log'] = []
     matched_job_dict['warnings'] = []
@@ -333,7 +336,7 @@ def job(queued_json_payload):
     """
     GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time.time()
-    stats_client.incr(f'{stats_prefix}.callback.jobs.attempted')
+    stats_client.incr(f'{general_stats_prefix}.callback.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
@@ -380,10 +383,11 @@ def job(queued_json_payload):
         watchtower_log_handler.close()
         # NOTE: following line removed as stats recording used too much disk space
         # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+        stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time.time() - start_time) * 1000)
-    stats_client.timing(f'{stats_prefix}.callback.job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{general_stats_prefix}.callback.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
@@ -394,11 +398,12 @@ def job(queued_json_payload):
                          datetime.strptime(queued_json_payload['door43_webhook_received_at'],
                                            '%Y-%m-%dT%H:%M:%SZ')
     GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
-    stats_client.timing(f'{stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
+    stats_client.timing(f'{general_stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     # NOTE: following line removed as stats recording used too much disk space
     # stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
-    stats_client.incr(f'{stats_prefix}.callback.jobs.succeeded')
+    stats_client.gauge(project_types_invoked_string, 0) # Mark as 'succeeded'
+    stats_client.incr(f'{general_stats_prefix}.callback.jobs.succeeded')
     GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
