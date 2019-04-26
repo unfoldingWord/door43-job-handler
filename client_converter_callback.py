@@ -144,8 +144,6 @@ class ClientConverterCallback:
             # NOTE: Do we need this -- disabled 25Feb2019
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
             # self.upload_converted_files(upload_key, unzip_dir)
-        else:
-            unzip_dir = None # So we have something to return (fail later -- is that an advantage?)
 
         # TODO: Do we really need this now?
         # Now download the existing build_log.json file, update it and upload it back to S3 as convert_log

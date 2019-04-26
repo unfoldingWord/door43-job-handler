@@ -149,7 +149,7 @@ class TestTwPreprocessor(unittest.TestCase):
         file_path = os.path.join(TestTwPreprocessor.resources_dir, file_name)
 
         # 1) unzip the repo files
-        temp_dir = tempfile.mkdtemp(prefix='Door43_test_repo_')
+        temp_dir = tempfile.mkdtemp(prefix='test_repo_')
         unzip(file_path, temp_dir)
         repo_dir = os.path.join(temp_dir, repo_name)
         if not os.path.isdir(repo_dir):
