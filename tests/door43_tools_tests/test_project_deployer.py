@@ -25,7 +25,7 @@ class ProjectDeployerTests(unittest.TestCase):
         GlobalSettings(prefix=f'{self._testMethodName}-')
         GlobalSettings.cdn_s3_handler().create_bucket()
         GlobalSettings.door43_s3_handler().create_bucket()
-        self.temp_dir = tempfile.mkdtemp(prefix='Door43_test_project_deployer')
+        self.temp_dir = tempfile.mkdtemp(prefix='test_project_deployer')
         self.deployer = ProjectDeployer(self.temp_dir)
         TdLanguage.language_list = {
             'aa': TdLanguage({'gw': False, 'ld': 'ltr', 'ang': 'Afar', 'lc': 'aa', 'ln': 'Afaraf', 'lr': 'Africa',

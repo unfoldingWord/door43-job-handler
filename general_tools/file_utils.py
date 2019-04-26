@@ -96,9 +96,7 @@ def load_yaml_object(file_name, default=None):
     if not os.path.isfile(file_name):
         return default
     # return a deserialized object
-    # TODO: Check if full_load (less safe for untrusted input) is required
-    #       See https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation
-    return yaml.safe_load(read_file(file_name))
+    return yaml.load(read_file(file_name))
 
 
 def read_file(file_name, encoding='utf-8-sig'):
