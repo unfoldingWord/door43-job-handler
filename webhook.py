@@ -18,6 +18,7 @@ import traceback
 # Library (PyPi) imports
 import requests
 from rq import get_current_job
+from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
@@ -329,7 +330,15 @@ def remember_job(rj_job_dict, rj_redis_connection):
     """
     # GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
-    outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
+    try:
+        outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
+    # This can happen ONCE if the format has changed by code updates -- shouldn't normally happen
+    # NOTE: Actually this code
+    except redis_exceptions.ResponseError as e:
+        GlobalSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
+        GlobalSettings.logger.critical(f"Deleting former outstanding_jobs_dict from Redis…")
+        outstanding_jobs_dict_bytes = None # Error should self-correct
+        # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
