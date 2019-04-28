@@ -1425,17 +1425,19 @@ class LexiconPreprocessor(Preprocessor):
                 if not os.path.isfile(filepath):
                     filepath = os.path.join(project_path, fileURLbits[-2], fileURLbits[-1])
                     # print("filepath2", filepath)
+                title = None
                 try:
                     with open(filepath, 'rt') as lex_file:
                         lex_content = lex_file.read()
                 except FileNotFoundError:
-                    GlobalSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find/read {filepath}")
+                    GlobalSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find {filepath}")
+                    self.warnings.append(f"No lexicon entry file found for {strongs}")
                     lex_content = None
-                title = None
+                    title = "-BAD-"
                 if lex_content and lex_content[0]=='#' and lex_content[1]==' ':
                     title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
                 # print("title", repr(title))
-                if title is None: # Why?
+                if lex_content and title is None: # Why?
                     GlobalSettings.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
                     title = strongs
                 line = f"[{title:6}]({fileURL})"
@@ -1443,75 +1445,4 @@ class LexiconPreprocessor(Preprocessor):
         content = '\n'.join(newLines)
         return content
     # end of LexiconPreprocessor change_index_entries(project_path, content)
-
-
-    # def fix_index_links(self, project_path, content):
-    #     """
-    #     """
-    #     GlobalSettings.logger.debug(f"LexiconPreprocessor.fix_index_links({project_path}, …)…")
-
-    #     # # Point to .html file instead of to .md file (UHAL)
-    #     # content = re.sub(r'\[(.+?).md\]\(', r'[\1](', content) # Remove .md from text
-    #     # content = re.sub(r'\]\(\./(.+?).md\)', r'](\1.html)', content) # Change link from ./xyz.md to xyz.html
-    #     # # Point to .html file instead of to folder (UGL)
-    #     # content = re.sub(r'\]\(\./(.+?)\)', r'](\1.html)', content) # Change link from ./xyz to xyz.html
-
-    #     # Append lemma to Strongs numbers
-
-    #     newLines = []
-    #     for line in content.split('\n'):
-    #         # print("line:", line)
-    #         if '](' in line:
-    #             bits = line.split('](', 1)
-    #             # print("bits", bits)
-    #             assert bits[0][0]=='[' and bits[1][-1]==')'
-    #             strongs, filenameOrFolder = bits[0][1:], bits[1][:-1]
-    #             # print("strongs", strongs, "filenameOrFolder", filenameOrFolder)
-    #             assert filenameOrFolder.startswith('./')
-    #             filepath = os.path.join(project_path, filenameOrFolder)
-    #             if not os.path.isfile(filepath):
-    #                 filepath = os.path.join(project_path, filenameOrFolder, '01.md')
-    #             # print("filepath", filepath)
-    #             try:
-    #                 with open(filepath, 'rt') as lex_file:
-    #                     lex_content = lex_file.read()
-    #             except FileNotFoundError:
-    #                 lex_content = None
-    #             title = None
-    #             if lex_content and lex_content[0]=='#' and lex_content[1]==' ':
-    #                 title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
-    #             # print("title", repr(title))
-    #             filenameOrFolder = f"{self.commit_url}/content/{filenameOrFolder[2:]}" \
-    #                                 .replace('/commit/', '/raw/commit/') \
-    #                                 .replace('/commit/master/', '/branch/master/')
-    #             # print("filenameOrFolder", filenameOrFolder)
-    #             line = f"[{strongs[:-3] if strongs.endswith('.md') else strongs} {title:6}]" \
-    #                    f"({filenameOrFolder}{'/01.md' if not filenameOrFolder.endswith('.md') else ''})"
-    #         newLines.append(line)
-    #     content = '\n'.join(newLines)
-    #     return content
-    # # end of LexiconPreprocessor fix_index_links(content)
-
-
-    # def fix_entry_links(self, content):
-    #     # Change link from (../G12345/01.md) to (G12345.html)
-    #     content = re.sub(r'\]\(\.\./(G\d{5})/01.md\)', r'](\1.html)', content)
-    #     # Change link from (//en-uhl/H4398) to (https://door43.org/u/unfoldingWord/en_uhal/master/H12345.html)
-    #     content = re.sub(r'\]\(//en-uhl/(H\d{4})\)', r'](https://{}door43.org/u/unfoldingWord/en_uhal/master/\1.html)'.format('dev.' if prefix=='dev-' else ''), content)
-    #     # Change link from (Exo 4:14) to (https://door43.org/u/unfoldingWord/en_ult/master/02-EXO.html#002-ch-004-v-014)
-    #     ult_link_re = r'\]\(([\d\w]{3}) (\d{1:3})\:(\d{1:3})\)'
-    #     while True:
-    #         match = re.search(ult_link_re, content)
-    #         if not match: break
-    #         print("Got re match", match.group(0), match.group(1), match.group(2), match.group(3))
-    #         BBB = match.group(1).upper()
-    #         nn = BOOK_NUMBERS[BBB.lower()] # two digit book number
-    #         ch = match.group(2).zfill(3)
-    #         vs = match.group(3).zfill(3)
-    #         content = re.subn(ult_link_re,
-    #                         r'](https://{}door43.org/u/unfoldingWord/en_ult/master/{}-{}.html#0{}-ch-{}-v-{})' \
-    #                                     .format('dev.' if prefix=='dev-' else '', nn, BBB, nn, ch, vs),
-    #                         content, count=1)
-    #     return content
-    # # end of LexiconPreprocessor fix_entry_links(content)
 # end of class LexiconPreprocessor

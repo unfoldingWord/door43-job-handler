@@ -53,7 +53,9 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
 
 class Templater:
     NO_NAV_TITLES = ['', 'Conversion requested…', 'Conversion started…', 'Conversion successful',
-                     'Conversion successful with warnings', 'Index']
+                     'Conversion successful with warnings', 'Index',
+                     'View lexicon entry', # For Hebrew and Greek lexicons
+                     ]
 
     def __init__(self, repo_subject, source_dir, output_dir, template_file):
         # GlobalSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
