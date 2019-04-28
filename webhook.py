@@ -78,7 +78,6 @@ stats_prefix = f'{general_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
-# TX_POST_URL = f'https://git.door43.org/{prefix}tx/'
 DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
@@ -324,42 +323,47 @@ def remember_job(rj_job_dict, rj_redis_connection):
     """
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
+
+    The REDIS dict contains a string representation of a json dict
+        whose entries are job ids mapped to the full job info dict.
     """
     # GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
-    outstanding_jobs_dict = rj_redis_connection.hgetall(REDIS_JOB_LIST) # Gets bytes!!!
-    if outstanding_jobs_dict is None:
+    outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
+    if outstanding_jobs_dict_bytes is None:
         GlobalSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
-    # else:
-    #    GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
-    #                                f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
+    else:
+        assert isinstance(outstanding_jobs_dict_bytes,bytes)
+        outstanding_jobs_dict_json_string = outstanding_jobs_dict_bytes.decode() # bytes -> str
+        assert isinstance(outstanding_jobs_dict_json_string,str)
+        outstanding_jobs_dict = json.loads(outstanding_jobs_dict_json_string)
+        assert isinstance(outstanding_jobs_dict,dict)
+        # GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+        #                            f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
-    if outstanding_jobs_dict:
         GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
         # Remove any outstanding jobs more than two weeks old
-        for outstanding_job_id_bytes in outstanding_jobs_dict.copy():
-            # print(f"\nLooking at outstanding job {outstanding_job_id_bytes}")
-            outstanding_job_dict_bytes = rj_redis_connection.hget(REDIS_JOB_LIST, outstanding_job_id_bytes)
-            outstanding_job_dict = literal_eval(outstanding_job_dict_bytes.decode()) # bytes -> str -> dict
-            # print(f"Got outstanding_job_dict: {outstanding_job_dict!r}")
+        for outstanding_job_id, outstanding_job_dict in outstanding_jobs_dict.copy().items():
+            assert isinstance(outstanding_job_id,str)
+            assert isinstance(outstanding_job_dict,dict)
             outstanding_duration = datetime.utcnow() \
                                 - datetime.strptime(outstanding_job_dict['created_at'], '%Y-%m-%dT%H:%M:%SZ')
             if outstanding_duration >= timedelta(weeks=2):
                 GlobalSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
-                del_result = rj_redis_connection.hdel(REDIS_JOB_LIST, outstanding_job_id_bytes) # Delete from Redis
-                # print("  Got delete result:", del_result)
-                assert del_result == 1
-                del outstanding_jobs_dict[outstanding_job_id_bytes] # Delete from our local copy also
-        # This new job shouldn't already be in the outstanding jobs dict
-        assert rj_job_dict['job_id'].encode() not in outstanding_jobs_dict # bytes comparison
+                del outstanding_jobs_dict[outstanding_job_id] # Delete from our local copy
 
-    # Add this job to Redis
+    # This new job shouldn't already be in the outstanding jobs dict
+    assert rj_job_dict['job_id'] not in outstanding_jobs_dict
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
     GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
-    rj_redis_connection.hmset(REDIS_JOB_LIST, outstanding_jobs_dict)
+
+    # Write the updated job list to Redis
+    assert outstanding_jobs_dict # Should always contain at least one entry (the current new one)
+    outstanding_jobs_json_string = json.dumps(outstanding_jobs_dict)
+    rj_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string)
 # end of remember_job function
 
 
@@ -424,6 +428,7 @@ def upload_to_BDB(job_name, BDB_zip_filepath):
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
+project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
 def process_job(queued_json_payload, redis_connection):
     """
     Parameters:
@@ -469,6 +474,7 @@ def process_job(queued_json_payload, redis_connection):
         by rq if an exception is thrown in this module.
     """
     # global user_projects_invoked_string
+    global project_types_invoked_string
     GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
@@ -535,7 +541,7 @@ def process_job(queued_json_payload, redis_connection):
     stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     # NOTE: following line removed as stats recording used too much disk space
-    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name }'
+    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
 
 
     # Here's our programmed failure (for remotely testing failures)
@@ -555,6 +561,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Use the RC to set the resource_subject and input_format parameters for tX
     resource_subject = get_tX_subject(rc) # use the subject to set the resource type more intelligently
+    project_types_invoked_string = f'{general_stats_prefix}.types.invoked.{resource_subject}'
     input_format = rc.resource.file_ext
     if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
@@ -576,6 +583,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
+    GlobalSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
     manifest_data = {
         'repo_name': repo_name,
         'user_name': repo_owner_username,
@@ -816,6 +824,7 @@ def job(queued_json_payload):
         watchtower_log_handler.close()
         # NOTE: following line removed as stats recording used too much disk space
         # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+        stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)

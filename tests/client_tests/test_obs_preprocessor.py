@@ -64,7 +64,7 @@ class TestObsPreprocessor(unittest.TestCase):
         self.verifyTransform(folder, missing_chapters)
 
     def runObsPreprocessor(self, rc, repo_dir):
-        self.out_dir = tempfile.mkdtemp(prefix='test_output_')
+        self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
         do_preprocess('Open_Bible_Stories', 'dummyURL', rc, repo_dir, self.out_dir)
         return self.out_dir
 
@@ -88,7 +88,7 @@ class TestObsPreprocessor(unittest.TestCase):
 
     def packageResource(self, resource, repo_name):
         source_folder = os.path.join(TestObsPreprocessor.resources_dir, resource, repo_name)
-        self.temp_dir = tempfile.mkdtemp(prefix='test_repo_')
+        self.temp_dir = tempfile.mkdtemp(prefix='Door43_test_repo_')
         zip_filepath = TestObsPreprocessor.createZipFile(repo_name + '.zip', self.temp_dir, source_folder)
         return zip_filepath
 
@@ -97,7 +97,7 @@ class TestObsPreprocessor(unittest.TestCase):
         file_path = os.path.join(TestObsPreprocessor.resources_dir, file_name)
 
         # 1) unzip the repo files
-        temp_dir = tempfile.mkdtemp(prefix='test_repo_')
+        temp_dir = tempfile.mkdtemp(prefix='Door43_test_repo_')
         unzip(file_path, temp_dir)
         repo_dir = os.path.join(temp_dir, repo_name)
         if not os.path.isdir(repo_dir):
