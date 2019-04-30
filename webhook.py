@@ -336,7 +336,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
     # NOTE: Actually this code
     except redis_exceptions.ResponseError as e:
         GlobalSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
-        GlobalSettings.logger.critical(f"Deleting former outstanding_jobs_dict from Redis…")
+        GlobalSettings.logger.critical(f"Losing former outstanding_jobs_dict from Redis…")
         outstanding_jobs_dict_bytes = None # Error should self-correct
         # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
