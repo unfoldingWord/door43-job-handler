@@ -228,9 +228,8 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
+    GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
     try:
-        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
-
         # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
@@ -239,8 +238,8 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     finally:
         GlobalSettings.logger.debug('Downloading finished.')
 
+    GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
     try:
-        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
