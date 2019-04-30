@@ -213,7 +213,7 @@ class ObsPreprocessor(Preprocessor):
     def run(self):
         GlobalSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}'")
+            GlobalSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
             project_path = os.path.join(self.source_dir, project.path)
             # Copy all the markdown files in the project root directory to the output directory
             for file_path in glob(os.path.join(project_path, '*.md')):
