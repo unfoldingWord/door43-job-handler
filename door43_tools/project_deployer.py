@@ -100,7 +100,7 @@ class ProjectDeployer:
 
         #     prefix = download_key + '/'
         #     undeployed = self.get_undeployed_parts(prefix)
-        #     if len(undeployed) > 0:
+        #     if undeployed:
         #         GlobalSettings.logger.debug(f"Exiting, Parts not yet deployed: {undeployed}")
         #         return False
 
@@ -153,7 +153,7 @@ class ProjectDeployer:
             # Copy first HTML file to index.html if index.html doesn't exist
             html_files = sorted(glob(os.path.join(output_dir, '*.html')))
             index_file = os.path.join(output_dir, 'index.html')
-            if len(html_files) > 0 and not os.path.isfile(index_file):
+            if html_files and not os.path.isfile(index_file):
                 copyfile(os.path.join(output_dir, html_files[0]), index_file)
 
         # Copy all other files over that don't already exist in output_dir, like css files
@@ -176,7 +176,7 @@ class ProjectDeployer:
 
         # Upload all files to the door43.org bucket
         GlobalSettings.logger.info(f"Uploading all files to the website bucket: {GlobalSettings.door43_bucket_name} …")
-        for root, dirs, files in os.walk(output_dir):
+        for root, _dirs, files in os.walk(output_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
                 if os.path.isdir(filepath):
