@@ -44,7 +44,7 @@ def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
 
 class Preprocessor:
     # NOTE: Both of these lists are used for case-sensitive comparisons
-    ignoreDirectories = ['.git', '00']
+    ignoreDirectories = ['.apps', '.git', '.github', '00']
     ignoreFiles = ['.DS_Store', 'reference.txt', 'title.txt', 'LICENSE.md', 'README.md', 'README.rst']
 
     def __init__(self, commit_url, rc, source_dir, output_dir):
@@ -98,7 +98,7 @@ class Preprocessor:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
                 GlobalSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
                 files = glob(os.path.join(project_path, f'*.{self.rc.resource.file_ext}'))
-                if len(files):
+                if files:
                     for file_path in files:
                         output_file_path = os.path.join(self.output_dir, os.path.basename(file_path))
                         if os.path.isfile(file_path) and not os.path.exists(output_file_path) \
@@ -346,7 +346,8 @@ class BiblePreprocessor(Preprocessor):
                         self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
                         adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
                     ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
-                assert '\\w' not in adjusted_line
+                # Be careful not to mess up on \wj
+                assert '\\w ' not in adjusted_line and '\\w\t' not in adjusted_line and '\\w\n' not in adjusted_line
                 # assert '\\w*' not in adjusted_line
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
@@ -354,7 +355,7 @@ class BiblePreprocessor(Preprocessor):
                     adjusted_file_contents += ' ' + adjusted_line
                     needs_new_line = True
                     continue
-                assert adjusted_line == line # No \k \w or \z fields encountered
+                #unneeded: assert adjusted_line == line # No \k \w or \z fields encountered
 
                 if needs_new_line:
                     adjusted_file_contents += '\n'
@@ -464,7 +465,10 @@ class BiblePreprocessor(Preprocessor):
                         self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
                         adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
                     ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
-                assert '\\w' not in adjusted_line
+                # Don't mess up on \wj
+                if '\\w ' in adjusted_line or '\\w\t' in adjusted_line or '\\w\n' in adjusted_line:
+                    GlobalSettings.logger.error(f"Remaining \\w in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    self.warnings.append(f"{B} {C}:{V} - Remaining \\w field")
                 # assert '\\w*' not in adjusted_line
                 if '\\z' in adjusted_line: # Delete these user-defined fields
                     # TODO: These milestone fields in the source texts should be self-closing
@@ -507,9 +511,9 @@ class BiblePreprocessor(Preprocessor):
 
         # Write the modified USFM
         if prefix and debug_mode_flag:
-            if '\\w' in adjusted_file_contents:
+            if '\\w ' in adjusted_file_contents or '\\w\t' in adjusted_file_contents or '\\w\n' in adjusted_file_contents:
                 GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
-            assert '\\w' not in adjusted_file_contents
+            assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
     # end of write_clean_file function
@@ -552,7 +556,7 @@ class BiblePreprocessor(Preprocessor):
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
                 GlobalSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
                 usfm_files = glob(os.path.join(project_path, '*.usfm'))
-                if len(usfm_files):
+                if usfm_files:
                     for usfm_path in usfm_files:
                         book_code = os.path.splitext(os.path.basename(usfm_path))[0].split('-')[-1].lower()
                         if book_code in BOOK_NUMBERS:
@@ -570,7 +574,7 @@ class BiblePreprocessor(Preprocessor):
                     GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
                     # print("chapters", chapters)
-                    if len(chapters):
+                    if chapters:
                         #          Piece the USFM file together
                         title_file = os.path.join(project_path, chapters[0], 'title.txt')
                         if os.path.isfile(title_file):
