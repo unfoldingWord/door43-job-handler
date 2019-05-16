@@ -319,7 +319,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                             else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if deployed:
-        GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
+        GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
     return job_descriptive_name
 #end of process_callback_job function

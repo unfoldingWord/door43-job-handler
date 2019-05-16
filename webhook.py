@@ -228,9 +228,8 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
+    GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
     try:
-        GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
-
         # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
@@ -239,8 +238,8 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     finally:
         GlobalSettings.logger.debug('Downloading finished.')
 
+    GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
     try:
-        GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
@@ -262,6 +261,7 @@ def get_tX_subject(grs_rc):
 
     Can return None if we can't determine one.
     """
+    GlobalSettings.logger.debug("get_tX_subject(rc)…")
     GlobalSettings.logger.debug(f"grs_rc.resource.identifier={grs_rc.resource.identifier}")
     GlobalSettings.logger.debug(f"grs_rc.resource.file_ext={grs_rc.resource.file_ext}")
     GlobalSettings.logger.debug(f"grs_rc.resource.type={grs_rc.resource.type}")
@@ -275,22 +275,22 @@ def get_tX_subject(grs_rc):
         GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
         repo_subject = adjusted_subject
     elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject")
         repo_subject = 'Bible'
+        GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject to '{repo_subject}'")
     else:
-        GlobalSettings.logger.debug(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
+        GlobalSettings.logger.warning(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
-            GlobalSettings.logger.info(f"Using rc.resource.format to set repo_subject='{grs_rc.resource.format}'")
             repo_subject = 'Bible'
+            GlobalSettings.logger.info(f"Using rc.resource.format='{grs_rc.resource.format}' to set repo_subject='{repo_subject}'")
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
 
     if not repo_subject:
         if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            GlobalSettings.logger.info(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]}'")
             repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
+            GlobalSettings.logger.info(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{repo_subject}'")
         else:
             GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
 
@@ -298,23 +298,23 @@ def get_tX_subject(grs_rc):
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
             or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
-                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{RESOURCE_SUBJECT_MAP[resource_subject_string]}'")
                 repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
+                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{repo_subject}'")
                 break
         else: # if didn't match/break above
             GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
 
     if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        GlobalSettings.logger.info(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject='{RESOURCE_SUBJECT_MAP[grs_rc.resource.type]}'")
         repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
+        GlobalSettings.logger.info(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject='{repo_subject}'")
 
     if grs_rc.resource.format=='tsv' and repo_subject=='Translation_Notes':
-        GlobalSettings.logger.info(f"Using rc.resource.format={grs_rc.resource.format} to change repo_subject from '{repo_subject}' to 'TSV_Translation_Notes'")
         repo_subject = 'TSV_Translation_Notes'
+        GlobalSettings.logger.info(f"Using rc.resource.format='{grs_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
 
     if not repo_subject:
-            GlobalSettings.logger.info("Trying setting repo_subject='Generic_Markdown'")
-            repo_subject = 'Generic_Markdown'
+        repo_subject = 'Generic_Markdown'
+        GlobalSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
     return repo_subject
 # end of get_tX_subject function
@@ -336,7 +336,7 @@ def remember_job(rj_job_dict, rj_redis_connection):
     # NOTE: Actually this code
     except redis_exceptions.ResponseError as e:
         GlobalSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
-        GlobalSettings.logger.critical(f"Deleting former outstanding_jobs_dict from Redis…")
+        GlobalSettings.logger.critical(f"Losing former outstanding_jobs_dict from Redis…")
         outstanding_jobs_dict_bytes = None # Error should self-correct
         # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
@@ -592,7 +592,7 @@ def process_job(queued_json_payload, redis_connection):
 
     # Save manifest to manifest table
     # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
-    GlobalSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
+    # GlobalSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
     manifest_data = {
         'repo_name': repo_name,
         'user_name': repo_owner_username,
