@@ -68,6 +68,7 @@ BOOK_NAMES = {
 }
 
 BOOK_NUMBERS = {
+    'frt': '00', # RJH added May 2019
     'gen': '01',
     'exo': '02',
     'lev': '03',
