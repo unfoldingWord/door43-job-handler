@@ -9,6 +9,7 @@ from global_settings.global_settings import GlobalSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir
 from resource_container.ResourceContainer import RC
+from preprocessors.converters import txt2md
 
 
 
@@ -840,39 +841,65 @@ class TqPreprocessor(Preprocessor):
                 chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                 markdown += f'# <a id="tq-{book}"/> {name}\n\n'
                 index_json['chapters'][html_file] = []
-                for chapter_dir in chapter_dirs:
-                    chapter = os.path.basename(chapter_dir)
-                    link = f'tq-chapter-{book}-{chapter.zfill(3)}'
-                    index_json['chapters'][html_file].append(link)
-                    markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
-                    chunk_files = sorted(glob(os.path.join(chapter_dir, '*.md')))
-                    for chunk_idx, chunk_file in enumerate(chunk_files):
-                        start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
-                        if chunk_idx < len(chunk_files)-1:
-                            try:
-                                end_verse = str(int(os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0])-1)
-                            except ValueError:
-                                # Can throw a ValueError if chunk is not an integer, e.g., '5&8' or contains \u00268 (ɨ)
-                                initial_string = os.path.splitext(os.path.basename(chunk_files[chunk_idx+1]))[0]
-                                GlobalSettings.logger.critical(f"{book} {chapter} had a problem handling '{initial_string}'")
-                                self.warnings.append(f"{book} {chapter} had a problem handling '{initial_string}'")
-                                # TODO: The following is probably not the best/right thing to do???
-                                end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
-                        else:
-                            try:
-                                end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
-                            except KeyError:
-                                GlobalSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
-                                self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
-                                # TODO: The following is probably not the best/right thing to do???
-                                end_verse = '199'
-                        link = f'tq-chunk-{book}-{str(chapter).zfill(3)}-{str(start_verse).zfill(3)}'
-                        markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
-                            format(link, name, chapter.lstrip('0'), start_verse,
-                                   '-'+end_verse if start_verse != end_verse else '')
-                        text = read_file(chunk_file) + '\n\n'
-                        text = headers_re.sub(r'\1### \2', text)  # This will bump any header down 3 levels
-                        markdown += text
+                if chapter_dirs:
+                    for chapter_dir in chapter_dirs:
+                        # GlobalSettings.logger.debug(f"tQ preprocessor: Processing {chapter_dir} for '{project.identifier}' {book} …")
+                        chapter = os.path.basename(chapter_dir)
+                        if chapter in self.ignoreFiles or chapter == 'manifest.json':
+                            # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
+                            continue
+
+                        chunk_txt_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
+                        # If there are JSON txt files in chapter folders, convert them to md format (and delete the original)
+                        #   (These are created by tS)
+                        if chunk_txt_filepaths:
+                            txt2md(chapter_dir)
+                            # convertedCount = txt2md(chapter_dir)
+                            # if convertedCount:
+                            #     GlobalSettings.logger.debug(f"tQ preprocessor: Converted {convertedCount} txt files in {chapter} to JSON")
+
+                        link = f'tq-chapter-{book}-{chapter.zfill(3)}'
+                        index_json['chapters'][html_file].append(link)
+                        markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
+                        chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
+                        if chunk_filepaths:
+                            for chunk_idx, chunk_file in enumerate(chunk_filepaths):
+                                # GlobalSettings.logger.debug(f"tQ preprocessor: Processing {chunk_file} in {chapter_dir} for '{project.identifier}' {book} …")
+                                start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
+                                if chunk_idx < len(chunk_filepaths)-1:
+                                    try:
+                                        end_verse = str(int(os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx+1]))[0])-1)
+                                    except ValueError:
+                                        # Can throw a ValueError if chunk is not an integer, e.g., '5&8' or contains \u00268 (ɨ)
+                                        initial_string = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx+1]))[0]
+                                        msg = f"{book} {chapter} had a problem handling '{initial_string}'"
+                                        GlobalSettings.logger.critical(msg)
+                                        self.warnings.append(msg)
+                                        # TODO: The following is probably not the best/right thing to do???
+                                        end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
+                                else:
+                                    try:
+                                        end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
+                                    except KeyError:
+                                        GlobalSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
+                                        self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
+                                        # TODO: The following is probably not the best/right thing to do???
+                                        end_verse = '199'
+                                link = f'tq-chunk-{book}-{str(chapter).zfill(3)}-{str(start_verse).zfill(3)}'
+                                markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
+                                    format(link, name, chapter.lstrip('0'), start_verse,
+                                        '-'+end_verse if start_verse != end_verse else '')
+                                text = read_file(chunk_file) + '\n\n'
+                                text = headers_re.sub(r'\1### \2', text)  # This will bump any header down 3 levels
+                                markdown += text
+                        else: # no chunk files
+                            msg = f"No .md chunk files found in {book} {chapter} folder"
+                            GlobalSettings.logger.warning(msg)
+                            self.warnings.append(msg)
+                else: # no chapter dirs
+                    msg = f"No chapter folders found in {book} folder"
+                    GlobalSettings.logger.warning(msg)
+                    self.warnings.append(msg)
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
                 self.num_files_written += 1
