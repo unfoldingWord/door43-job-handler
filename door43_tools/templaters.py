@@ -52,10 +52,11 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
 
 
 class Templater:
-    NO_NAV_TITLES = ['', 'Conversion requested…', 'Conversion started…', 'Conversion successful',
-                     'Conversion successful with warnings', 'Index',
-                     'View lexicon entry', # For Hebrew and Greek lexicons
-                     ]
+    NO_NAV_TITLES = ['',
+                    'Conversion requested…', 'Conversion started…', 'Conversion successful',
+                    'Conversion successful with warnings', 'Index',
+                    'View lexicon entry', # For Hebrew and Greek lexicons
+                    ]
 
     def __init__(self, repo_subject, source_dir, output_dir, template_file):
         # GlobalSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
@@ -76,6 +77,7 @@ class Templater:
         self.rc = None
         self.template_html = ''
         self.already_converted = []
+        # The following three dictionaries will be used by the deployer to build the right-side Navigation bar
         self.titles = {}
         self.chapters = {}
         self.book_codes = {}
@@ -118,26 +120,37 @@ class Templater:
 
 
     def build_page_nav(self, filename=None):
+        # GlobalSettings.logger.debug(f"Template.build_page_nav({filename})")
+        # GlobalSettings.logger.debug(f"Have self.titles={self.titles}")
         html = """
             <nav class="affix-top hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
               <ul id="sidebar-nav" class="nav nav-stacked">
                 <li><h1>Navigation</h1></li>
             """
         for fname in self.files:
-            key = os.path.basename(fname)
+            # GlobalSettings.logger.debug(f"build_page_nav: {fname}")
+            base_name = os.path.basename(fname)
             title = ""
-            if key in self.titles:
-                title = self.titles[key]
+            if base_name in self.titles:
+                title = self.titles[base_name]
             if title in self.NO_NAV_TITLES:
                 continue
-            if filename != fname:
-                html += f'<li><a href="{os.path.basename(fname)}">{title}</a></li>'
-            else:
-                html += f'<li>{title}</li>'
+            # Add OBS story numbers to OBS tN and OBS tQ navigation links
+            if self.repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions') \
+            and not title[0].isdigit():
+                root_name = os.path.splitext(base_name)[0]
+                if root_name.isdigit(): # presumably it's a story number -- prepend it
+                    # GlobalSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
+                    title = f"{int(root_name)}. {title if len(title)<35 else title[:35]+'…'}"
+            # GlobalSettings.logger.debug(f"build_page_nav adding title='{title}'")
+            # Link to other pages but not to myself
+            html += f'<li>{title}</li>' if filename == fname \
+                    else f'<li><a href="{os.path.basename(fname)}">{title}</a></li>'
         html += """
                 </ul>
             </nav>
             """
+        # GlobalSettings.logger.debug(f"Template.build_page_nav returning {html}")
         return html
 
 
@@ -189,7 +202,7 @@ class Templater:
         # Loop through the html files
         for filepath in self.files:
             if filepath not in self.already_converted:
-                GlobalSettings.logger.debug(f"Applying template to {filepath.rsplit('/',1)[-1]}…")
+                GlobalSettings.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the downloaded file into a dom abject
                 with open(filepath, 'r') as f:
@@ -263,6 +276,8 @@ class Templater:
                 write_file(out_file, html)
 
             else:  # if already templated, need to update navigation bar
+                GlobalSettings.logger.debug(f"Applying2 template to {filepath.rsplit('/',1)[-1]}…")
+
                 # Read the templated file into a dom abject
                 with open(filepath, 'r') as f:
                     soup = BeautifulSoup(f, 'html.parser')

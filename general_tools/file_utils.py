@@ -7,6 +7,7 @@ import yaml
 from mimetypes import MimeTypes
 
 from general_tools.data_utils import json_serial
+from global_settings.global_settings import GlobalSettings
 
 
 def unzip(source_file, destination_dir):
@@ -38,7 +39,7 @@ def add_contents_to_zip(zip_file, path, include_root=False):
     else:
         path_start_index = len(path)+1
     with zipfile.ZipFile(zip_file, 'a') as zf:
-        for root, dirs, files in os.walk(path):
+        for root, _dirs, files in os.walk(path):
             for f in files:
                 file_path = os.path.join(root, f)
                 zf.write(file_path, file_path[path_start_index:])
@@ -101,15 +102,24 @@ def load_yaml_object(file_name, default=None):
     return yaml.safe_load(read_file(file_name))
 
 
-def read_file(file_name, encoding='utf-8-sig'):
-    with open(file_name, 'r', encoding=encoding) as f:
+def read_file(filepath, encoding='utf-8'): # RJH changed from 'utf-8-sig' 4June2019
+    """
+    Read a UTF-8 text file,
+        remove the optional BOM prefix,
+        convert Windows line endings to Linux line endings,
+        and remove the text
+    """
+    with open(filepath, 'r', encoding=encoding) as f:
         content = f.read()
-    # convert Windows line endings to Linux line endings
-    content = content.replace('\r\n', '\n')
+    if content.startswith(chr(65279)): # U+FEFF or \ufeff
+        GlobalSettings.logger.info(f"Detected Unicode Byte Order Marker (BOM) in {filepath}")
+        content = content[1:] # remove (optional) BOM prefix
+    content = content.replace('\r\n', '\n') # convert Windows line endings to Linux line endings
     return content
+# end of read_file function
 
 
-def write_file(file_name, file_contents, indent=None):
+def write_file(filepath, file_contents, indent=None):
     """
     Writes the <file_contents> to <file_name>.
 
@@ -120,17 +130,17 @@ def write_file(file_name, file_contents, indent=None):
     :param int indent: Specify a value if you want the output formatted to be more easily readable
     """
     # Make sure the directory exists
-    make_dir(os.path.dirname(file_name))
+    make_dir(os.path.dirname(filepath))
 
     if isinstance(file_contents, str):
         text_to_write = file_contents
     else:
-        if os.path.splitext(file_name)[1] == '.yaml':
+        if os.path.splitext(filepath)[1] == '.yaml':
             text_to_write = yaml.safe_dump(file_contents)
         else:
             text_to_write = json.dumps(file_contents, sort_keys=True, indent=indent, default=json_serial)
 
-    with open(file_name, 'w', encoding='utf-8') as out_file:
+    with open(filepath, 'w', encoding='utf-8') as out_file:
         out_file.write(text_to_write)
 
 
@@ -165,7 +175,7 @@ def get_files(directory, relative_paths=False, include_directories=False, topdow
 
 def get_subdirs(dir, relative_paths=False, topdown=False):
     dir_list = []
-    for root, dirs, files in os.walk(dir, topdown=topdown):
+    for root, dirs, _files in os.walk(dir, topdown=topdown):
         if relative_paths:
             path = os.path.relpath(root, dir)
         else:

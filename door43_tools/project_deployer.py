@@ -316,11 +316,11 @@ class ProjectDeployer:
             # Update index of templated files
             index_json_fname = 'index.json'
             index_json = self.get_templater_index(s3_commit_key, index_json_fname)
-            GlobalSettings.logger.debug("initial 'index.json': " + json.dumps(index_json)[:256])
+            # GlobalSettings.logger.debug(f"Initial 'index.json': {json.dumps(index_json)[:256]}")
             self.update_index_key(index_json, templater, 'titles')
             self.update_index_key(index_json, templater, 'chapters')
             self.update_index_key(index_json, templater, 'book_codes')
-            GlobalSettings.logger.debug("final 'index.json': " + json.dumps(index_json)[:256])
+            # GlobalSettings.logger.debug(f"Final 'index.json': {json.dumps(index_json)[:256]} …")
             self.write_data_to_file_and_upload(output_dir, s3_commit_key, index_json_fname, index_json)
         return source_dir, success
 
@@ -338,10 +338,18 @@ class ProjectDeployer:
 
 
     @staticmethod
-    def update_index_key(index_json, templater, key):
-        data = index_json[key]
-        data.update(getattr(templater, key))
-        index_json[key] = data
+    def update_index_key(index_json_dict, templater_object, key_string):
+        """
+        key_string is one of 'titles', chapters', 'book_codes'
+
+        Adds entries to the index_json_dict
+        """
+        # GlobalSettings.logger.debug(f"ProjectDeployer.update_index_key({index_json_dict}, , '{key_string}')")
+        data = index_json_dict[key_string]
+        data.update(getattr(templater_object, key_string))
+        index_json_dict[key_string] = data
+        # GlobalSettings.logger.debug(f"ProjectDeployer.update_index_key now has {index_json_dict}")
+    # end of update_index_key function
 
 
     @staticmethod
@@ -352,3 +360,5 @@ class ProjectDeployer:
             index_json['chapters'] = {}
             index_json['book_codes'] = {}
         return index_json
+    # end of get_templater_index function
+# end of ProjectDeployer class
