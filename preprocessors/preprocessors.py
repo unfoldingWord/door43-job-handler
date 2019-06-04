@@ -165,6 +165,7 @@ class ObsPreprocessor(Preprocessor):
                 })
         return chapters
 
+
     @staticmethod
     def get_chapter_title(project_path, chapter):
         """
@@ -179,6 +180,7 @@ class ObsPreprocessor(Preprocessor):
             title = chapter.lstrip('0') + '. '
         return title
 
+
     @staticmethod
     def get_chapter_reference(project_path, chapter):
         """Get the chapters reference text"""
@@ -188,6 +190,7 @@ class ObsPreprocessor(Preprocessor):
             contents = read_file(reference_file)
             reference = contents.strip()
         return reference
+
 
     @staticmethod
     def get_chapter_frames(project_path, chapter):
@@ -609,9 +612,12 @@ class BiblePreprocessor(Preprocessor):
                                 continue
                             chapter_num = chapter.lstrip('0')
                             chunks = self.rc.chunks(project.identifier, chapter)
-                            if not len(chunks):
+                            if chunks:
                                 continue
-                            first_chunk = read_file(os.path.join(project_path, chapter, chunks[0]))
+                            try: first_chunk = read_file(os.path.join(project_path, chapter, chunks[0]))
+                            except Exception as e:
+                                self.warnings.append(f"Error reading {chapter}/{chunks[0]}: {e}")
+                                continue
                             usfm += '\n\n'
                             if f'\\c {chapter_num}' not in first_chunk:
                                 usfm += f'\\c {chapter_num}\n'
@@ -624,7 +630,10 @@ class BiblePreprocessor(Preprocessor):
                                 if chunk in self.ignoreFiles:
                                     continue
                                 chunk_num = os.path.splitext(chunk)[0].lstrip('0')
-                                chunk_content = read_file(os.path.join(project_path, chapter, chunk))
+                                try: chunk_content = read_file(os.path.join(project_path, chapter, chunk))
+                                except Exception as e:
+                                    self.warnings.append(f"Error reading {chapter}/{chunk}: {e}")
+                                    continue
                                 if f'\\v {chunk_num} ' not in chunk_content:
                                     chunk_content = f'\\v {chunk_num} ' + chunk_content
                                 usfm += chunk_content+"\n"
@@ -889,7 +898,10 @@ class TqPreprocessor(Preprocessor):
                                 markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
-                                text = read_file(chunk_file) + '\n\n'
+                                try: text = read_file(chunk_file) + '\n\n'
+                                except Exception as e:
+                                    self.warnings.append(f"Error reading {chunk_file}: {e}")
+                                    continue
                                 text = headers_re.sub(r'\1### \2', text)  # This will bump any header down 3 levels
                                 markdown += text
                         else: # no chunk files
@@ -960,7 +972,10 @@ class TwPreprocessor(Preprocessor):
                 # These .txt files actually contain JSON (which contains markdown)
                 GlobalSettings.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
                 term = os.path.splitext(os.path.basename(term_filepath))[0]
-                text = read_file(term_filepath)
+                try: text = read_file(term_filepath)
+                except Exception as e:
+                    self.warnings.append(f"Error reading {term_filepath}: {e}")
+                    continue
                 try:
                     json_data = json.loads(text)
                 except json.decoder.JSONDecodeError as e:
@@ -1019,7 +1034,7 @@ class TwPreprocessor(Preprocessor):
             title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
             headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
             for project in self.rc.projects:
-                GlobalSettings.logger.debug(f"tW preprocessor: Copying files for '{project.identifier}' …")
+                GlobalSettings.logger.debug(f"tW preprocessor 02: Copying files for '{project.identifier}' …")
                 term_text = {}
                 section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                 for section_dir in section_dirs:
@@ -1032,8 +1047,12 @@ class TwPreprocessor(Preprocessor):
                     index_json['book_codes'][key] = section
                     term_files = sorted(glob(os.path.join(section_dir, '*.md')))
                     for term_filepath in term_files:
+                        GlobalSettings.logger.debug(f"tW preprocessor 02: processing '{term_filepath}' …")
                         term = os.path.splitext(os.path.basename(term_filepath))[0]
-                        text = read_file(term_filepath)
+                        try: text = read_file(term_filepath)
+                        except Exception as e:
+                            self.warnings.append(f"Error reading {term_filepath}: {e}")
+                            continue
                         if title_re.search(text):
                             title = title_re.search(text).group(1)
                             text = title_re.sub(r'# <a id="{0}"/>\1 #'.format(term), text)  # inject the term by the title
@@ -1193,7 +1212,10 @@ class TnPreprocessor(Preprocessor):
                                 markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'. \
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
-                                text = read_file(chunk_filepath) + '\n\n'
+                                try: text = read_file(chunk_filepath) + '\n\n'
+                                except Exception as e:
+                                    self.warnings.append(f"Error reading {chunk_filepath}: {e}")
+                                    continue
                                 text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
                                 markdown += text
                         else: # See if there's .txt files (as no .md files found)
@@ -1320,7 +1342,12 @@ class LexiconPreprocessor(Preprocessor):
         markdown = "" # f"# {folder}\n" # Not needed coz Strongs number is included inside the file
         content_file = os.path.join(content_folderpath, '01.md')
         if os.path.isfile(content_file):
-            content = read_file(content_file)
+            try: content = read_file(content_file)
+            except Exception as e:
+                msg = f"Error reading {content_file}: {e}"
+                GlobalSettings.logger.error(msg)
+                self.warnings.append(msg)
+                content = None
         else:
             msg = f"compile_lexicon_entry couldn't find any files for {folder}"
             GlobalSettings.logger.error(msg)

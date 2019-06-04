@@ -4,8 +4,6 @@ import boto3
 import botocore
 from boto3.session import Session
 
-from general_tools.file_utils import get_mime_type
-
 
 
 class S3Handler:
@@ -153,6 +151,7 @@ class S3Handler:
         :param string path: file to upload
         :param string key: name of the object in the bucket
         """
+        from general_tools.file_utils import get_mime_type
         #from global_settings.global_settings import GlobalSettings
         #GlobalSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
         assert 'http' not in key.lower()
