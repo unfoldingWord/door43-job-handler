@@ -137,14 +137,18 @@ class Preprocessor:
     def mark_chapter(self, ident, chapter, text):
         return text  # default does nothing to text
 
+
     def mark_chunk(self, ident, chapter, chunk, text):
         return text  # default does nothing to text
+
 
     def is_multiple_jobs(self):
         return False
 
+
     def get_book_list(self):
         return None
+# end of Preprocessor class
 
 
 
@@ -205,6 +209,7 @@ class ObsPreprocessor(Preprocessor):
                 })
         return frames
 
+
     def is_chunked(self, project):
         chapters = self.rc.chapters(project.identifier)
         if chapters and len(chapters):
@@ -213,6 +218,7 @@ class ObsPreprocessor(Preprocessor):
                 if os.path.basename(chunk) in ['title.txt', 'reference.txt', '01.txt']:
                     return True
         return False
+
 
     def run(self):
         GlobalSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
@@ -257,17 +263,21 @@ class ObsPreprocessor(Preprocessor):
 # end of class ObsPreprocessor
 
 
+
 class BiblePreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs):
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
         self.book_filenames = []
 
+
     def is_multiple_jobs(self):
         return len(self.book_filenames) > 1
+
 
     def get_book_list(self):
         self.book_filenames.sort()
         return self.book_filenames
+
 
     def write_clean_file(self, file_name, file_contents):
         """
