@@ -882,9 +882,9 @@ class TqPreprocessor(Preprocessor):
                         markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths:
-                            for chunk_idx, chunk_file in enumerate(chunk_filepaths):
+                            for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
                                 # GlobalSettings.logger.debug(f"tQ preprocessor: Processing {chunk_file} in {chapter_dir} for '{project.identifier}' {book} …")
-                                start_verse = os.path.splitext(os.path.basename(chunk_file))[0].lstrip('0')
+                                start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
                                 if chunk_idx < len(chunk_filepaths)-1:
                                     try:
                                         end_verse = str(int(os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx+1]))[0])-1)
@@ -908,9 +908,9 @@ class TqPreprocessor(Preprocessor):
                                 markdown += '### <a id="{0}"/>{1} {2}:{3}{4}\n\n'.\
                                     format(link, name, chapter.lstrip('0'), start_verse,
                                         '-'+end_verse if start_verse != end_verse else '')
-                                try: text = read_file(chunk_file) + '\n\n'
+                                try: text = read_file(chunk_filepath) + '\n\n'
                                 except Exception as e:
-                                    self.warnings.append(f"Error reading {chunk_file}: {e}")
+                                    self.warnings.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
                                     continue
                                 text = headers_re.sub(r'\1### \2', text)  # This will bump any header down 3 levels
                                 markdown += text
@@ -984,7 +984,7 @@ class TwPreprocessor(Preprocessor):
                 term = os.path.splitext(os.path.basename(term_filepath))[0]
                 try: text = read_file(term_filepath)
                 except Exception as e:
-                    self.warnings.append(f"Error reading {term_filepath}: {e}")
+                    self.warnings.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
                     continue
                 try:
                     json_data = json.loads(text)
@@ -1061,7 +1061,7 @@ class TwPreprocessor(Preprocessor):
                         term = os.path.splitext(os.path.basename(term_filepath))[0]
                         try: text = read_file(term_filepath)
                         except Exception as e:
-                            self.warnings.append(f"Error reading {term_filepath}: {e}")
+                            self.warnings.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
                             continue
                         if title_re.search(text):
                             title = title_re.search(text).group(1)
@@ -1224,7 +1224,7 @@ class TnPreprocessor(Preprocessor):
                                         '-'+end_verse if start_verse != end_verse else '')
                                 try: text = read_file(chunk_filepath) + '\n\n'
                                 except Exception as e:
-                                    self.warnings.append(f"Error reading {chunk_filepath}: {e}")
+                                    self.warnings.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
                                     continue
                                 text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
                                 markdown += text
@@ -1350,11 +1350,11 @@ class LexiconPreprocessor(Preprocessor):
         if len(file_list) != 1: # expecting '01.md'
             GlobalSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
         markdown = "" # f"# {folder}\n" # Not needed coz Strongs number is included inside the file
-        content_file = os.path.join(content_folderpath, '01.md')
-        if os.path.isfile(content_file):
-            try: content = read_file(content_file)
+        content_filepath = os.path.join(content_folderpath, '01.md')
+        if os.path.isfile(content_filepath):
+            try: content = read_file(content_filepath)
             except Exception as e:
-                msg = f"Error reading {content_file}: {e}"
+                msg = f"Error reading {os.path.basename(content_folderpath)}/01.md: {e}"
                 GlobalSettings.logger.error(msg)
                 self.warnings.append(msg)
                 content = None
