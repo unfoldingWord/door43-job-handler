@@ -288,7 +288,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         final_build_log['status'] = 'warnings'
     else:
         final_build_log['status'] = 'success'
-        final_build_log['success'] = True
+    final_build_log['success'] = queued_json_payload['converter_success']
     final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     update_project_file(final_build_log, our_temp_dir)
     # NOTE: The following is disabled coz it's done (again) later by the deployer
