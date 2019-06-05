@@ -89,13 +89,12 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
 # end of verify_expected_job
 
 
-def merge_results_logs(build_log, file_results, linter_file):
+def merge_results_logs(build_log, file_results, converter_flag):
     """
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
     """
-    assert not linter_file
-    GlobalSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {linter_file})…")
+    GlobalSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {converter_flag})…")
     if not build_log:
         return file_results
     if file_results:
@@ -103,7 +102,9 @@ def merge_results_logs(build_log, file_results, linter_file):
         merge_dicts_lists(build_log, file_results, 'log')
         merge_dicts_lists(build_log, file_results, 'warnings')
         merge_dicts_lists(build_log, file_results, 'errors')
-        if not linter_file and ('success' in file_results) and (file_results['success'] is False):
+        if converter_flag \
+        and ('success' in file_results) \
+        and (file_results['success'] is False):
             build_log['success'] = file_results['success']
     return build_log
 # end of merge_results_logs function
@@ -270,7 +271,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                                 )
                             #    s3_results_key=url_part2)
     linter_log = clc.do_post_processing()
-    build_log = merge_results_logs(matched_job_dict, linter_log, linter_file=False) # What is the last parameter for?
+    build_log = merge_results_logs(matched_job_dict, linter_log, converter_flag=False)
     GlobalSettings.logger.info("Running converter post-processing…")
     ccc = ClientConverterCallback(this_job_dict, identifier,
                                   queued_json_payload['converter_success'],
@@ -279,8 +280,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                                   queued_json_payload['converter_errors'],
                                   our_temp_dir)
     unzip_dir, converter_log = ccc.do_post_processing()
-    # deploy_if_conversion_finished(url_part2, identifier)
-    final_build_log = merge_results_logs(build_log, converter_log, linter_file=False) # What is the last parameter for?
+    final_build_log = merge_results_logs(build_log, converter_log, converter_flag=True)
 
     if final_build_log['errors']:
         final_build_log['status'] = 'errors'
@@ -301,10 +301,6 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         # Now deploy the new pages (was previously a separate AWS Lambda call)
         GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
         deployer = ProjectDeployer(unzip_dir, our_temp_dir)
-        # build_log_key = f'{url_part2}/build_log.json'
-        # GlobalSettings.logger.debug(f"Got {GlobalSettings.cdn_bucket_name} build_log_key={build_log_key}")
-        # deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
-        # No need to download the build log since we have it here
         deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
         deployed = True
 
