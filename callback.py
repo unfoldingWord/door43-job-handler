@@ -120,7 +120,7 @@ def merge_dicts_lists(build_log, file_results, key):
 
     Alters first parameter build_log in place.
     """
-    GlobalSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
+    # GlobalSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
     if key in file_results:
         value = file_results[key]
         if value:

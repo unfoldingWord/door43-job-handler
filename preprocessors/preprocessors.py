@@ -2,7 +2,7 @@ import os
 import re
 import json
 from glob import glob
-from shutil import copy
+from shutil import copy, copytree
 
 from rq_settings import prefix, debug_mode_flag
 from global_settings.global_settings import GlobalSettings
@@ -14,9 +14,12 @@ from preprocessors.converters import txt2md
 
 
 def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
-    if repo_subject in ('Open_Bible_Stories','OBS_Translation_Notes','OBS_Translation_Questions'):
+    if repo_subject == 'Open_Bible_Stories':
         GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_dir, output_dir)
+    elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
+        GlobalSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
+        preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
         GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
         preprocessor = BiblePreprocessor(commit_url, rc, repo_dir, output_dir)
@@ -261,6 +264,82 @@ class ObsPreprocessor(Preprocessor):
         return self.num_files_written, self.warnings
     # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
+
+
+
+class ObsNotesPreprocessor(Preprocessor):
+    def __init__(self, *args, **kwargs):
+        super(ObsNotesPreprocessor, self).__init__(*args, **kwargs)
+        self.section_container_id = 1
+
+
+    def run(self):
+        GlobalSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        for idx, project in enumerate(self.rc.projects):
+            GlobalSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
+            for story_number in range(1, 50+1):
+                story_number_string = str(story_number).zfill(2)
+                story_folder_path = os.path.join(self.source_dir, 'content/', f'{story_number_string}/')
+                if not os.path.isdir(story_folder_path):
+                    self.warnings.append(f"Unable to find folder 'content/{story_number_string}/'")
+                    continue
+                markdown = toc_contents = ""
+                for filename in sorted(os.listdir(story_folder_path)):
+                    filepath = os.path.join(story_folder_path, filename)
+                    if filename.endswith('.md'):
+                        file_contents = read_file(filepath)
+                        file_basename = filename[:-3] # Remove the .md
+                        markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {file_basename}\n\n' + file_contents
+                        toc_contents += f'  - title: "Segment {file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
+                    else:
+                        self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")
+                if markdown:
+                    # markdown = self.fix_links(markdown)
+                    write_file(os.path.join(self.output_dir,f'{story_number_string}.md'), markdown)
+                    self.num_files_written += 1
+
+                # OBSNotes: Create a toc.yaml file and write it to output dir so they can be used to
+                #       generate the ToC on door43.org
+                if toc_contents:
+                    toc_contents = "title: Table of Contents\nsections:\n" + toc_contents
+                    toc_filepath = os.path.join(self.output_dir, f'{story_number_string}-toc.yaml')
+                    write_file(toc_filepath,toc_contents)
+
+        if self.num_files_written == 0:
+            GlobalSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
+            self.warnings.append("No OBSNotes source files discovered")
+        else:
+            GlobalSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files")
+        GlobalSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        return self.num_files_written, self.warnings
+    # end of ObsNotesPreprocessor run()
+
+
+    # def fix_links(self, content):
+    #     # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
+    #     content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
+    #                      r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
+    #     # fix links to other sections within the same manual (only one ../ and a section name)
+    #     # e.g. [Section 2](../section2/01.md) => [Section 2](#section2)
+    #     content = re.sub(r'\]\(\.\./([^/)]+)/01.md\)', r'](#\1)', content)
+    #     # fix links to other manuals (two ../ and a manual name and a section name)
+    #     # e.g. [how to translate](../../translate/accurate/01.md) => [how to translate](translate.html#accurate)
+    #     for idx, project in enumerate(self.rc.projects):
+    #         pattern = re.compile(r'\]\(\.\./\.\./{0}/([^/)]+)/01.md\)'.format(project.identifier))
+    #         replace = r']({0}-{1}.html#\1)'.format(str(idx+1).zfill(2), project.identifier)
+    #         content = re.sub(pattern, replace, content)
+    #     # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
+    #     # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
+    #     content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
+    #     # convert URLs to links if not already
+    #     content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+    #                      content, flags=re.IGNORECASE)
+    #     # URLS wth just www at the start, no http
+    #     content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
+    #                      content, flags=re.IGNORECASE)
+    #     return content
+    # # end of ObsNotesPreprocessor fix_links(content)
+# end of class ObsNotesPreprocessor
 
 
 
@@ -587,7 +666,7 @@ class BiblePreprocessor(Preprocessor):
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
                     GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    # print("chapters", chapters)
+                    # print("chapters:", chapters)
                     if chapters:
                         #          Piece the USFM file together
                         title_file = os.path.join(project_path, chapters[0], 'title.txt')
@@ -617,12 +696,13 @@ class BiblePreprocessor(Preprocessor):
 \\toc2 {title}
 \\mt {title}
 """
+                        # print("chapters:", chapters)
                         for chapter in chapters:
                             if chapter in self.ignoreDirectories:
                                 continue
                             chapter_num = chapter.lstrip('0')
                             chunks = self.rc.chunks(project.identifier, chapter)
-                            if chunks:
+                            if not chunks:
                                 continue
                             try: first_chunk = read_file(os.path.join(project_path, chapter, chunks[0]))
                             except Exception as e:
@@ -791,7 +871,7 @@ class TaPreprocessor(Preprocessor):
             self.num_files_written += 1
 
             # tA: Copy the toc and config.yaml file to the output dir so they can be used to
-            # generate the ToC on live.door43.org
+            #       generate the ToC on door43.org
             toc_file = os.path.join(self.source_dir, project.path, 'toc.yaml')
             if os.path.isfile(toc_file):
                 copy(toc_file, os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}-toc.yaml'))

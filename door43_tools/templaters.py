@@ -25,10 +25,12 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
     """
     # GlobalSettings.logger.debug(f"init_template({repo_subject})")
     if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
-                        'OBS_Translation_Notes','OBS_Translation_Questions',
                         'Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         GlobalSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
+        GlobalSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
+        templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
         GlobalSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
         templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
@@ -64,7 +66,7 @@ class Templater:
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
         assert self.templater_CSS_class # Must be set by subclass
-        GlobalSettings.logger.debug(f"Using '{self.templater_CSS_class}' templater…")
+        GlobalSettings.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
             GlobalSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
         self.classes = [] # These get appended to the templater_CSS_class
@@ -135,13 +137,13 @@ class Templater:
                 title = self.titles[base_name]
             if title in self.NO_NAV_TITLES:
                 continue
-            # Add OBS story numbers to OBS tN and OBS tQ navigation links
-            if self.repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions') \
-            and not title[0].isdigit():
-                root_name = os.path.splitext(base_name)[0]
-                if root_name.isdigit(): # presumably it's a story number -- prepend it
-                    # GlobalSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
-                    title = f"{int(root_name)}. {title if len(title)<35 else title[:35]+'…'}"
+            # # Add OBS story numbers to OBS tN and OBS tQ navigation links
+            # if self.repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions') \
+            # and not title[0].isdigit():
+            #     root_name = os.path.splitext(base_name)[0]
+            #     if root_name.isdigit(): # presumably it's a story number -- prepend it
+            #         # GlobalSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
+            #         title = f"{int(root_name)}. {title if len(title)<35 else title[:35]+'…'}"
             # GlobalSettings.logger.debug(f"build_page_nav adding title='{title}'")
             # Link to other pages but not to myself
             html += f'<li>{title}</li>' if filename == fname \
@@ -300,14 +302,94 @@ class Templater:
 # end of class Templater
 
 
+
 class ObsTemplater(Templater):
     def __init__(self, *args, **kwargs):
         self.templater_CSS_class = 'obs'
         super(ObsTemplater, self).__init__(*args, **kwargs)
+# end of class ObsTemplater
+
+
+
+class ObsNotesTemplater(Templater):
+    def __init__(self, *args, **kwargs):
+        self.templater_CSS_class = 'obs'
+        super(ObsNotesTemplater, self).__init__(*args, **kwargs)
         if self.repo_subject == 'OBS_Translation_Notes':
             self.classes=['tn']
         elif self.repo_subject == 'OBS_Translation_Questions':
             self.classes=['tq']
+
+
+    def build_section_toc(self, section):
+        """
+        Recursive section toc builder
+        :param dict section:
+        :return:
+        """
+        if 'link' in section:
+            link = section['link']
+        else:
+            link = f'section-container-{self.section_container_id}'
+            self.section_container_id = self.section_container_id + 1
+        html = f"""
+            <li>
+                <a href="#{link}">{section['title']}</a>
+            """
+        if 'sections' in section:
+            html += f"""
+                <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
+                <ul id="{link}-sub" class="collapse">
+            """
+            for subsection in section['sections']:
+                html += self.build_section_toc(subsection)
+            html += """
+                </ul>
+            """
+        html += """
+            </li>
+        """
+        return html
+
+
+    def build_page_nav(self, filename=None):
+        self.section_container_id = 1
+        html = """
+            <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
+                <ul class="nav nav-stacked">
+        """
+        for fname in self.files:
+            with open(fname, 'r') as f:
+                soup = BeautifulSoup(f.read(), 'html.parser')
+            # if soup.select('div#content h1'):
+            #     title = soup.select('div#content h1')[0].text.strip()
+            #     print(f"Got title1='{title}'")
+            # else:
+            title = os.path.splitext(os.path.basename(fname))[0].title()
+            #     print(f"Got title2='{title}'")
+            if title in self.NO_NAV_TITLES:
+                continue
+            if fname != filename:
+                html += f"""
+                <h4><a href="{os.path.basename(fname)}">{title}</a></h4>
+                """
+            else:
+                html += f"""
+                <h4>{title}</h4>
+                """
+                toc = load_yaml_object(os.path.join(f'{os.path.splitext(fname)[0]}-toc.yaml'))
+                if toc:
+                    for section in toc['sections']:
+                        html += self.build_section_toc(section)
+                html += """
+                """
+        html += """
+                </ul>
+            </nav>
+        """
+        return html
+# end of class ObsNotesTemplater
+
 
 
 class TqTemplater(Templater):
