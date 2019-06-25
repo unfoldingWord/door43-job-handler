@@ -275,7 +275,7 @@ class ObsNotesPreprocessor(Preprocessor):
 
     def run(self):
         GlobalSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
-        for idx, project in enumerate(self.rc.projects):
+        for project in self.rc.projects:
             GlobalSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
             for story_number in range(1, 50+1):
                 story_number_string = str(story_number).zfill(2)
@@ -294,7 +294,14 @@ class ObsNotesPreprocessor(Preprocessor):
                     else:
                         self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")
                 if markdown:
-                    # markdown = self.fix_links(markdown)
+                    # rc_count = markdown.count('rc://')
+                    # if rc_count: print(f"Story number {story_number_string} has {rc_count} 'rc://' links")
+                    # double_bracket_count = markdown.count('[[')
+                    # if double_bracket_count: print(f"Story number {story_number_string} has {double_bracket_count} '[[…]]' links")
+                    markdown = self.fix_links(markdown)
+                    rc_count = markdown.count('rc://')
+                    if rc_count:
+                        GlobalSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
                     write_file(os.path.join(self.output_dir,f'{story_number_string}.md'), markdown)
                     self.num_files_written += 1
 
@@ -315,30 +322,20 @@ class ObsNotesPreprocessor(Preprocessor):
     # end of ObsNotesPreprocessor run()
 
 
-    # def fix_links(self, content):
-    #     # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
-    #     content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
-    #                      r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
-    #     # fix links to other sections within the same manual (only one ../ and a section name)
-    #     # e.g. [Section 2](../section2/01.md) => [Section 2](#section2)
-    #     content = re.sub(r'\]\(\.\./([^/)]+)/01.md\)', r'](#\1)', content)
-    #     # fix links to other manuals (two ../ and a manual name and a section name)
-    #     # e.g. [how to translate](../../translate/accurate/01.md) => [how to translate](translate.html#accurate)
-    #     for idx, project in enumerate(self.rc.projects):
-    #         pattern = re.compile(r'\]\(\.\./\.\./{0}/([^/)]+)/01.md\)'.format(project.identifier))
-    #         replace = r']({0}-{1}.html#\1)'.format(str(idx+1).zfill(2), project.identifier)
-    #         content = re.sub(pattern, replace, content)
-    #     # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
-    #     # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
-    #     content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
-    #     # convert URLs to links if not already
-    #     content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
-    #                      content, flags=re.IGNORECASE)
-    #     # URLS wth just www at the start, no http
-    #     content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
-    #                      content, flags=re.IGNORECASE)
-    #     return content
-    # # end of ObsNotesPreprocessor fix_links(content)
+    def fix_links(self, content):
+        """
+        OBS Translation Notes contain links to translationAcademy
+
+        (OBS Translation Questions don't seem to have any links)
+        """
+        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
+        #   => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
+        content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
+                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md',
+                         content,
+                         flags=re.IGNORECASE)
+        return content
+    # end of ObsNotesPreprocessor fix_links(content)
 # end of class ObsNotesPreprocessor
 
 
@@ -891,9 +888,9 @@ class TaPreprocessor(Preprocessor):
 
 
     def fix_links(self, content):
-        # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
+        # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
-                         r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
+                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
         # fix links to other sections within the same manual (only one ../ and a section name)
         # e.g. [Section 2](../section2/01.md) => [Section 2](#section2)
         content = re.sub(r'\]\(\.\./([^/)]+)/01.md\)', r'](#\1)', content)
@@ -1183,13 +1180,13 @@ class TwPreprocessor(Preprocessor):
 
 
     def fix_links(self, content, section):
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/Door43/en_ta/translate/figs-euphemism/01.md
+        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/Door43/\1_ta/src/master/\3/01.md', content,
+                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
                          flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
+        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content,
+                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content,
                          flags=re.IGNORECASE)
         # fix links to other sections within the same manual (only one ../ and a section name that matches section_link)
         # e.g. [covenant](../kt/covenant.md) => [covenant](#covenant)
@@ -1387,13 +1384,13 @@ class TnPreprocessor(Preprocessor):
 
 
     def fix_links(self, content):
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/Door43/en_ta/translate/figs-euphemism/01.md
+        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/Door43/\1_ta/src/master/\3/01.md', content,
+                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
                          flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/Door43/en_tn/1sa/16/02.md
+        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/Door43/\1_\2/src/master/\4.md', content,
+                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content,
                          flags=re.IGNORECASE)
         # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)

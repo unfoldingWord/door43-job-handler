@@ -89,7 +89,7 @@ class TestTaPreprocessor(unittest.TestCase):
 
         content = """This [link](rc://en/tw/dict/bible/other/dream) is a rc link that should go to
             other/dream.md in the en_tw repo"""
-        expected = """This [link](https://git.door43.org/Door43/en_tw/src/master/bible/other/dream.md) is a rc link that should go to
+        expected = """This [link](https://git.door43.org/unfoldingWord/en_tw/src/master/bible/other/dream.md) is a rc link that should go to
             other/dream.md in the en_tw repo"""
         converted = ta.fix_links(content)
         self.assertEqual(converted, expected)
@@ -98,7 +98,7 @@ class TestTaPreprocessor(unittest.TestCase):
         expected = """This url should be made into a link: [http://example.com/somewhere/outthere](http://example.com/somewhere/outthere) and so should [www.example.com/asdf.html?id=5&view=dashboard#report](http://www.example.com/asdf.html?id=5&view=dashboard#report)."""
         converted = ta.fix_links(content)
         self.assertEqual(converted, expected)
-        # Tests https://git.door43.org/Door43/en_ta/raw/master/translate/translate-source-text/01.md
+        # Tests https://git.door43.org/unfoldingWord/en_ta/raw/master/translate/translate-source-text/01.md
         content = """
 ### Factors to Consider for a Source Text
 
