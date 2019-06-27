@@ -290,7 +290,7 @@ class ObsNotesPreprocessor(Preprocessor):
                         file_contents = read_file(filepath)
                         file_basename = filename[:-3] # Remove the .md
                         markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {file_basename}\n\n' + file_contents
-                        toc_contents += f'  - title: "Segment {file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
+                        toc_contents += f'  - title: "{story_number_string}-{file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
                     else:
                         self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")
                 if markdown:
