@@ -81,6 +81,8 @@ class ProjectDeployer:
         """
         start = time.time()
         GlobalSettings.logger.debug(f"Deploying, build log: {json.dumps(build_log)[:256]} …")
+        assert 'multiple' not in build_log
+        assert 'part' not in build_log
 
         user = build_log['repo_owner']
         repo_name = build_log['repo_name']
@@ -90,58 +92,23 @@ class ProjectDeployer:
         s3_repo_key = f'u/{user}/{repo_name}'
         # download_key = s3_commit_key
 
-        do_part_template_only = False
-        do_multipart_merge = False
-        assert 'multiple' not in build_log
-        assert 'part' not in build_log
-        # if 'multiple' in build_log:
-        #     do_multipart_merge = build_log['multiple']
-        #     GlobalSettings.logger.debug(f"Found multi-part merge: {download_key}")
-
-        #     prefix = download_key + '/'
-        #     undeployed = self.get_undeployed_parts(prefix)
-        #     if undeployed:
-        #         GlobalSettings.logger.debug(f"Exiting, Parts not yet deployed: {undeployed}")
-        #         return False
-
-        #     key_deployed_ = download_key + '/final_deployed'
-        #     if GlobalSettings.cdn_s3_handler().key_exists(key_deployed_):
-        #         GlobalSettings.logger.debug(f"Exiting, Already merged parts: {download_key}")
-        #         return False
-        #     self.write_data_to_file(self.temp_dir, key_deployed_, 'final_deployed', ' ')  # flag that deploy has begun
-        #     GlobalSettings.logger.debug(f"Continuing with merge: {download_key}")
-
-        # elif 'part' in build_log:
-        #     part = build_log['part']
-        #     download_key += '/' + part
-        #     do_part_template_only = True
-        #     GlobalSettings.logger.debug(f"Found partial: {download_key}")
-
-        #     if not GlobalSettings.cdn_s3_handler().key_exists(download_key + '/finished'):
-        #         GlobalSettings.logger.debug("Exiting, Not ready to process partial")
-        #         return False
-
         source_dir = tempfile.mkdtemp(prefix='source_', dir=self.temp_dir)
-        output_dir = tempfile.mkdtemp(prefix='output_', dir=self.temp_dir)
         template_dir = tempfile.mkdtemp(prefix='template_', dir=self.temp_dir)
+        output_dir = tempfile.mkdtemp(prefix='output_', dir=self.temp_dir)
 
+
+        # Do the templating first
         resource_type = build_log['resource_type']
         template_key = 'templates/project-page.html'
         template_file = os.path.join(template_dir, 'project-page.html')
         GlobalSettings.logger.debug(f"Downloading {template_key} to {template_file} …")
         GlobalSettings.door43_s3_handler().download_file(template_key, template_file)
+        source_dir, success = self.template_converted_files(build_log, output_dir, repo_name,
+                                            resource_type, s3_commit_key, source_dir, start,
+                                            template_file)
+        if not success:
+            return False
 
-        if not do_multipart_merge:
-            source_dir, success = self.template_converted_files(build_log, output_dir, repo_name,
-                                                                resource_type, s3_commit_key, source_dir, start,
-                                                                template_file)
-            if not success:
-                return False
-        # else:
-        #     source_dir, success = self.multipart_master_merge(s3_commit_key, resource_type, download_key, output_dir,
-        #                                                       source_dir, start, template_file)
-        #     if not success:
-        #         return False
 
         #######################
         #
@@ -149,14 +116,14 @@ class ProjectDeployer:
         #
         #######################
 
-        if not do_part_template_only or do_multipart_merge:
-            # Copy first HTML file to index.html if index.html doesn't exist
-            html_files = sorted(glob(os.path.join(output_dir, '*.html')))
-            index_file = os.path.join(output_dir, 'index.html')
-            if html_files and not os.path.isfile(index_file):
-                copyfile(os.path.join(output_dir, html_files[0]), index_file)
+        # Copy first HTML file to index.html if index.html doesn't exist
+        html_files = sorted(glob(os.path.join(output_dir, '*.html')))
+        index_file = os.path.join(output_dir, 'index.html')
+        if html_files and not os.path.isfile(index_file):
+            copyfile(os.path.join(output_dir, html_files[0]), index_file)
 
         # Copy all other files over that don't already exist in output_dir, like css files
+        #   Copying from source_dir to output_dir (both are folders inside main temp folder)
         for filename in sorted(glob(os.path.join(source_dir, '*'))):
             output_file = os.path.join(output_dir, os.path.basename(filename))
             if not os.path.exists(output_file) and not os.path.isdir(filename):
@@ -166,15 +133,17 @@ class ProjectDeployer:
             #     basename = os.path.basename(filename)
             #     if basename not in ['finished', 'build_log.json', 'index.html', 'merged.json', 'lint_log.json']:
             #         GlobalSettings.logger.debug(f"Moving {basename} to common area…")
-            #         GlobalSettings.cdn_s3_handler().upload_file(filename, s3_commit_key + '/' + basename, cache_time=0)
-            #         GlobalSettings.cdn_s3_handler().delete_file(download_key + '/' + basename)
+            #         GlobalSettings.logger.debug(f"Uploading {filename} to {s3_commit_key}/{basename}…")
+            #         GlobalSettings.cdn_s3_handler().upload_file(filename, f'{s3_commit_key}/{basename}', cache_time=0)
+            #         GlobalSettings.logger.debug(f"Deleting {download_key}/{basename}…")
+            #         GlobalSettings.cdn_s3_handler().delete_file(f'{download_key}/{basename}')
 
         # Save master build_log.json
         build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         file_utils.write_file(os.path.join(output_dir, 'build_log.json'), build_log)
         GlobalSettings.logger.debug(f"Final build_log.json: {json.dumps(build_log)[:256]} …")
 
-        # Upload all files to the door43.org bucket
+        # Upload all files to the S3 door43.org bucket
         GlobalSettings.logger.info(f"Uploading all files to the website bucket: {GlobalSettings.door43_bucket_name} …")
         for root, _dirs, files in os.walk(output_dir):
             for filename in sorted(files):
@@ -182,10 +151,9 @@ class ProjectDeployer:
                 if os.path.isdir(filepath):
                     continue
                 key = s3_commit_key + filepath.replace(output_dir, '').replace(os.path.sep, '/')
-                GlobalSettings.logger.debug(f"Uploading {filename} to {key} …")
+                GlobalSettings.logger.debug(f"Uploading {filename} to {GlobalSettings.door43_bucket_name} bucket {key} …")
                 GlobalSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
-        # if not do_part_template_only:
         # Now we place json files and redirect index.html for the whole repo to this index.html file
         try:
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=GlobalSettings.cdn_bucket_name)
@@ -193,7 +161,7 @@ class ProjectDeployer:
                                             to_key=f'{s3_repo_key}/manifest.json')
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key, '/' + s3_commit_key)
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key + '/index.html', '/' + s3_commit_key)
-            self.write_data_to_file_and_upload(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
+            self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except:
             pass
 
@@ -206,10 +174,11 @@ class ProjectDeployer:
         #                                   to_key=s3_commit_key + '/build_log.json')
 
         elapsed_seconds = int(time.time() - start)
-        GlobalSettings.logger.debug(f"Deploy type partial={do_part_template_only}, multi_merge={do_multipart_merge}")
+        # GlobalSettings.logger.debug(f"Deploy type partial={do_part_template_only}, multi_merge={do_multipart_merge}")
         GlobalSettings.logger.debug(f"Deploy completed in {elapsed_seconds} seconds.")
         self.close()
         return True
+    # end of ProjectDeployer.deploy_revision_to_door43(build_log)
 
 
     # def multipart_master_merge(self, s3_commit_key, resource_type, download_key, output_dir, source_dir, start,
@@ -321,20 +290,23 @@ class ProjectDeployer:
             self.update_index_key(index_json, templater, 'chapters')
             self.update_index_key(index_json, templater, 'book_codes')
             # GlobalSettings.logger.debug(f"Final 'index.json': {json.dumps(index_json)[:256]} …")
-            self.write_data_to_file_and_upload(output_dir, s3_commit_key, index_json_fname, index_json)
+            self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, index_json_fname, index_json)
         return source_dir, success
+    # end of ProjectDeployer.template_converted_files function
 
 
-    def write_data_to_file_and_upload(self, output_dir, s3_commit_key, fname, data):
+    def write_data_to_file_and_upload_to_CDN(self, output_dir, s3_commit_key, fname, data):
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
         GlobalSettings.logger.debug(f"Uploading {fname} to {key} …")
         GlobalSettings.cdn_s3_handler().upload_file(out_file, key, cache_time=0)
+    # end of ProjectDeployer.write_data_to_file_and_upload_to_CDN function
 
 
     def run_templater(self, templater):  # for test purposes
         templater.run()
+    # end of ProjectDeployer.run_templater(templater)
 
 
     @staticmethod
@@ -349,7 +321,7 @@ class ProjectDeployer:
         data.update(getattr(templater_object, key_string))
         index_json_dict[key_string] = data
         # GlobalSettings.logger.debug(f"ProjectDeployer.update_index_key now has {index_json_dict}")
-    # end of update_index_key function
+    # end of ProjectDeployer.update_index_key function
 
 
     @staticmethod
@@ -360,5 +332,5 @@ class ProjectDeployer:
             index_json['chapters'] = {}
             index_json['book_codes'] = {}
         return index_json
-    # end of get_templater_index function
+    # end of ProjectDeployer.get_templater_index function
 # end of ProjectDeployer class

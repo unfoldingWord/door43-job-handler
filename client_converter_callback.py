@@ -105,9 +105,8 @@ class ClientConverterCallback:
         self.job.log_message(f"Finished job {self.job.job_id} at {self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')}")
 
         s3_commit_key = f'u/{self.job.user_name}/{self.job.repo_name}/{self.job.commit_id}'
-        # NOTE: Disabled 4Mar2019 coz unused
-        # upload_key = s3_commit_key
-        GlobalSettings.logger.debug(f"Callback for commit {s3_commit_key} …")
+        # GlobalSettings.logger.debug(f"Callback for commit = '{s3_commit_key}'")
+        upload_key = s3_commit_key
 
         # Download the ZIP file of the converted files
         converted_zip_url = self.job.output
@@ -140,10 +139,9 @@ class ClientConverterCallback:
             # Unzip the archive
             unzip_dir = self.unzip_converted_files(converted_zip_file)
 
-            # TODO: Do we really need this now?
-            # NOTE: Do we need this -- disabled 25Feb2019
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
-            # self.upload_converted_files(upload_key, unzip_dir)
+            # This is required for the print function to work
+            self.upload_converted_files_to_CDN(upload_key, unzip_dir)
         else:
             unzip_dir = None # So we have something to return (fail later -- is that an advantage?)
 
@@ -166,7 +164,7 @@ class ClientConverterCallback:
         # else:
         #     remove_tree(self.temp_dir)  # cleanup
         return unzip_dir, converter_build_log
-    # end of do_post_processing()
+    # end of ClientConverterCallback.do_post_processing()
 
 
     def unzip_converted_files(self, converted_zip_file):
@@ -178,18 +176,24 @@ class ClientConverterCallback:
         finally:
             GlobalSettings.logger.debug("Unzip finished.")
         return unzip_dir
-    # end of unzip_converted_files function
+    # end of ClientConverterCallback.unzip_converted_files function
 
 
     @staticmethod
-    def upload_converted_files(s3_commit_key, unzip_dir):
-        GlobalSettings.logger.debug(f"Uploading converted files from {unzip_dir} to {s3_commit_key} …")
-        for root, dirs, files in os.walk(unzip_dir):
+    def upload_converted_files_to_CDN(s3_commit_key, unzip_dir):
+        """
+        Uploads the converted (but not templated) files to the cdn.door43.org bucket
+
+        NOTE: These are used from there by the Print button/function.
+        """
+        GlobalSettings.logger.info(f"Uploading converted files from {unzip_dir} to CDN {s3_commit_key} …")
+        for root, _dirs, files in os.walk(unzip_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
                 key = s3_commit_key + filepath.replace(unzip_dir, '')
-                # GlobalSettings.logger.debug(f"Uploading {filename} to {key} …")
+                GlobalSettings.logger.debug(f"Uploading {filename} to CDN {key} …")
                 GlobalSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
+    # end of ClientConverterCallback.upload_converted_files_to_CDN function
 
 
     # NOTE: Do we need this -- disabled 25Feb2019
@@ -226,7 +230,7 @@ class ClientConverterCallback:
         else:
             build_log_dict['errors'] = []
         return build_log_dict
-    # end of make_our_build_log()
+    # end of ClientConverterCallback.make_our_build_log()
 
 
     # NOTE: Do we need this -- disabled 25Feb2019
@@ -282,3 +286,4 @@ class ClientConverterCallback:
         GlobalSettings.logger.debug(f"ClientConverterCallback.get_build_log_key({s3_base_key}, {part}, {name})…")
         upload_key = f'{s3_base_key}/{part}{name}'
         return upload_key
+# end of ClientConverterCallback class
