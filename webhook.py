@@ -753,14 +753,15 @@ def process_job(queued_json_payload, redis_connection):
         raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
-    if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BDB
-        if prefix and not debug_mode_flag: # Only for dev- chain
-            GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-            original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-            upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-            # Not using the preprocessed files (only the originals above)
-            # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-            # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+    # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BibleDropBox
+    #     if prefix and not debug_mode_flag: # Only for dev- chain
+    #         # This was intended for comparing USFM linting during development of that area of code
+    #         GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+    #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+    #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
+    #         # Not using the preprocessed files (only the originals above)
+    #         # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+    #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
