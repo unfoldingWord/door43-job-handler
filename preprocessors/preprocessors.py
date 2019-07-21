@@ -399,7 +399,7 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_line = line
                 if '\\k' in adjusted_line: # Delete these fields
                     # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
-                    ix = adjusted_line.find('\\k-s\\*')
+                    ix = adjusted_line.find('\\k-s ')
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                     ix = adjusted_line.find('\\k-s')
@@ -434,7 +434,7 @@ class BiblePreprocessor(Preprocessor):
                     else:
                         GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
                         self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
-                        adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
+                        adjusted_line = adjusted_line.replace('\\w ', '', 1) # Attempt to limp on
                     ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
                 # Be careful not to mess up on \wj
                 assert '\\w ' not in adjusted_line and '\\w\t' not in adjusted_line and '\\w\n' not in adjusted_line
