@@ -2,7 +2,7 @@ from unittest import TestCase, skip
 from unittest.mock import Mock, patch
 import json
 
-import sqlalchemy
+# import sqlalchemy
 from rq import get_current_job
 
 from rq_settings import prefix, webhook_queue_name
