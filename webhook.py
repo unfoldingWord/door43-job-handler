@@ -306,7 +306,7 @@ def get_tX_subject(gts_repo_name, gts_rc):
         else:
             GlobalSettings.logger.warning("No resource.identifier in RC manifest")
 
-    if rc_resource_identifier and not repo_subject:
+    if (not repo_subject) and rc_resource_identifier:
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if rc_resource_identifier.endswith('_'+resource_subject_string) \
             or rc_resource_identifier.endswith('-'+resource_subject_string):
