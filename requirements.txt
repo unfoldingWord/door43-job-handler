@@ -1,7 +1,7 @@
 # redis is specified here before rq to prevent rq downloading a later, incompatible version (3.0.1)
 #redis==2.10.6
 # rq and statsd/Graphite and requests are used by the job handler
-rq==1.0
+rq==1.1.0
 statsd==3.3.0
 requests==2.22.0
 watchtower==0.6.0
@@ -12,15 +12,15 @@ pyyaml==5.1.1
 # dateutil is used by file_utils used by ResourceContainer
 py-dateutil==2.2
 
-# sqlalchemy is used by manifest
-sqlalchemy==1.3.5
+# sqlalchemy is used by manifest and pymysql must be used by sqlalchemy
+sqlalchemy==1.3.6
 pymysql==0.9.3
 
 # boto3 is used by aws_tools
-boto3==1.9.174
+boto3==1.9.196
 
 #gogs_client is used by gogs_tools
 gogs_client==1.0.6
 
 # For templating
-beautifulsoup4==4.7.1
+beautifulsoup4==4.8.0

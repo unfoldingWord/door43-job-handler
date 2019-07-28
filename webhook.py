@@ -252,65 +252,86 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
 # end of download_repo function
 
 
-def get_tX_subject(grs_rc):
+def get_tX_subject(gts_repo_name, gts_rc):
     """
-    Given a resource container, try to determine the subject
+    Given a resource container, try to determine the repo subject
         even if the manifest has no subject field.
 
     https://api.door43.org/v3/subjects specifies 12 subjects (as of Feb 2019)
 
     Can return None if we can't determine one.
     """
-    GlobalSettings.logger.debug("get_tX_subject(rc)…")
-    GlobalSettings.logger.debug(f"grs_rc.resource.identifier={grs_rc.resource.identifier}")
-    GlobalSettings.logger.debug(f"grs_rc.resource.file_ext={grs_rc.resource.file_ext}")
-    GlobalSettings.logger.debug(f"grs_rc.resource.type={grs_rc.resource.type}")
-    GlobalSettings.logger.debug(f"grs_rc.resource.subject={grs_rc.resource.subject}")
-    GlobalSettings.logger.debug(f"grs_rc.resource.format={grs_rc.resource.format}")
+    GlobalSettings.logger.debug(f"get_tX_subject('{gts_repo_name}', rc)…")
+    # GlobalSettings.logger.debug(f"gts_rc.resource.identifier={gts_rc.resource.identifier}")
+    # GlobalSettings.logger.debug(f"gts_rc.resource.file_ext={gts_rc.resource.file_ext}")
+    # GlobalSettings.logger.debug(f"gts_rc.resource.type={gts_rc.resource.type}")
+    # GlobalSettings.logger.debug(f"gts_rc.resource.subject={gts_rc.resource.subject}")
+    # GlobalSettings.logger.debug(f"gts_rc.resource.format={gts_rc.resource.format}")
 
     repo_subject = None
 
-    adjusted_subject = grs_rc.resource.subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
-    if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
-        repo_subject = adjusted_subject
-    elif 'bible' in adjusted_subject.lower() and grs_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
-        repo_subject = 'Bible'
-        GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject to '{repo_subject}'")
-    else:
-        GlobalSettings.logger.warning(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
-
-    if not repo_subject:
-        if grs_rc.resource.format in ('usfm','usfm3','text/usfm','text/usfm3'):
+    adjusted_subject = gts_rc.resource.subject
+    if adjusted_subject:
+        adjusted_subject = adjusted_subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
+        if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
+            GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
+            repo_subject = adjusted_subject
+        elif 'bible' in adjusted_subject.lower() and gts_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
             repo_subject = 'Bible'
-            GlobalSettings.logger.info(f"Using rc.resource.format='{grs_rc.resource.format}' to set repo_subject='{repo_subject}'")
+            GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject to '{repo_subject}'")
         else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{grs_rc.resource.format}' to set repo_subject")
+            GlobalSettings.logger.warning(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
+    else:
+        GlobalSettings.logger.warning("No subject or title in RC manifest")
 
     if not repo_subject:
-        if grs_rc.resource.identifier in RESOURCE_SUBJECT_MAP:
-            repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.identifier]
-            GlobalSettings.logger.info(f"Using rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{repo_subject}'")
+        rc_resource_format = gts_rc.resource.format
+        if rc_resource_format:
+            if rc_resource_format in ('usfm','usfm3','text/usfm','text/usfm3'):
+                repo_subject = 'Bible'
+                GlobalSettings.logger.info(f"Using rc.resource.format='{rc_resource_format}' to set repo_subject='{repo_subject}'")
+            else:
+                GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{rc_resource_format}' to set repo_subject")
         else:
-            GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+            GlobalSettings.logger.warning("No resource.format in RC manifest")
 
     if not repo_subject:
+        rc_resource_identifier = gts_rc.resource.identifier
+        if rc_resource_identifier:
+            if rc_resource_identifier in RESOURCE_SUBJECT_MAP:
+                repo_subject = RESOURCE_SUBJECT_MAP[rc_resource_identifier]
+                GlobalSettings.logger.info(f"Using rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
+            else:
+                GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
+        else:
+            GlobalSettings.logger.warning("No resource.identifier in RC manifest")
+
+    if (not repo_subject) and rc_resource_identifier:
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
-            if grs_rc.resource.identifier.endswith('_'+resource_subject_string) \
-            or grs_rc.resource.identifier.endswith('-'+resource_subject_string):
+            if rc_resource_identifier.endswith('_'+resource_subject_string) \
+            or rc_resource_identifier.endswith('-'+resource_subject_string):
                 repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
-                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject='{repo_subject}'")
+                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
                 break
         else: # if didn't match/break above
-            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{grs_rc.resource.identifier}' to set repo_subject")
+            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
 
-    if not repo_subject and grs_rc.resource.type in RESOURCE_SUBJECT_MAP: # e.g., help, man
-        repo_subject = RESOURCE_SUBJECT_MAP[grs_rc.resource.type]
-        GlobalSettings.logger.info(f"Using rc.resource.type='{grs_rc.resource.type}' to set repo_subject='{repo_subject}'")
+    if not repo_subject:
+        rc_resource_type = gts_rc.resource.type
+        if rc_resource_type:
+            if rc_resource_type in RESOURCE_SUBJECT_MAP: # e.g., help, man
+                repo_subject = RESOURCE_SUBJECT_MAP[rc_resource_type]
+                GlobalSettings.logger.info(f"Using rc.resource.type='{rc_resource_type}' to set repo_subject='{repo_subject}'")
+        else:
+            GlobalSettings.logger.warning("No resource.type in RC manifest")
 
-    if grs_rc.resource.format=='tsv' and repo_subject=='Translation_Notes':
+    if repo_subject=='Translation_Notes' and gts_rc.resource.format=='tsv':
         repo_subject = 'TSV_Translation_Notes'
-        GlobalSettings.logger.info(f"Using rc.resource.format='{grs_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
+        GlobalSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
+
+    if not repo_subject and '-obs' in gts_repo_name or '_obs' in gts_repo_name:
+        repo_subject = 'Open_Bible_Stories'
+        GlobalSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
     if not repo_subject:
         repo_subject = 'Generic_Markdown'
@@ -569,7 +590,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Use the RC to set the resource_subject and input_format parameters for tX
-    resource_subject = get_tX_subject(rc) # use the subject to set the resource type more intelligently
+    resource_subject = get_tX_subject(repo_name, rc) # use the subject to set the resource type more intelligently
     project_types_invoked_string = f'{general_stats_prefix}.types.invoked.{resource_subject}'
     input_format = rc.resource.file_ext
     if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
@@ -597,9 +618,9 @@ def process_job(queued_json_payload, redis_connection):
         'repo_name': repo_name,
         'user_name': repo_owner_username,
         'lang_code': rc.resource.language.identifier,
-        'resource_id': rc.resource.identifier,
+        'resource_id': rc.resource.identifier if rc.resource.identifier else 'UnknownID',
         'resource_type': resource_subject, # This used to be rc.resource.type
-        'title': rc.resource.title,
+        'title': rc.resource.title if rc.resource.title else 'UnknownTitle',
         'manifest': json.dumps(rc.as_dict()),
         'last_updated': datetime.utcnow()
     }

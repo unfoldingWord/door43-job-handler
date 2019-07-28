@@ -131,8 +131,11 @@ def merge_dicts_lists(build_log, file_results, key):
 # end of merge_dicts_lists function
 
 
-# TODO: Is this really needed? What uses it?
 def update_project_file(build_log, output_dir):
+    """
+    project.json is read by the Javascript in door43.org/js/project-page-functions.js
+        The commits are used to update the Revision list in the left side-bar.
+    """
     GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dir})…")
     # if not output_dir:
     #     output_dir = tempfile.mkdtemp(suffix='',
