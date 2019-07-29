@@ -84,7 +84,7 @@ class ProjectDeployer:
         assert 'multiple' not in build_log
         assert 'part' not in build_log
 
-        user = build_log['repo_owner']
+        user = build_log['repo_owner_username'] # was 'repo_owner'
         repo_name = build_log['repo_name']
         commit_id = build_log['commit_id'][:10]
 

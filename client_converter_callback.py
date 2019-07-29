@@ -18,7 +18,7 @@ class LocalJob:
         # self.job_dict = job_dict
         self.job_id = job_dict['job_id']
         self.convert_module = job_dict['convert_module']
-        self.user_name = job_dict['user_name']
+        self.repo_owner_username = job_dict['repo_owner_username']
         self.repo_name = job_dict['repo_name']
         self.commit_id = job_dict['commit_id']
         self.output = job_dict['output']
@@ -104,7 +104,7 @@ class ClientConverterCallback:
         self.job.log_message(message)
         self.job.log_message(f"Finished job {self.job.job_id} at {self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')}")
 
-        s3_commit_key = f'u/{self.job.user_name}/{self.job.repo_name}/{self.job.commit_id}'
+        s3_commit_key = f'u/{self.job.repo_owner_username}/{self.job.repo_name}/{self.job.commit_id}'
         # GlobalSettings.logger.debug(f"Callback for commit = '{s3_commit_key}'")
         upload_key = s3_commit_key
 

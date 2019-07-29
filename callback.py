@@ -39,15 +39,15 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
-def verify_expected_job(vej_job_dict, vej_redis_connection):
+def verify_expected_job(vej_job_id, vej_redis_connection):
     """
     Check that we have this outstanding job in a REDIS dict
         and delete it once we make a match.
 
     Return the job dict or False
     """
-    job_id = vej_job_dict['job_id']
-    # GlobalSettings.logger.debug(f"verify_expected_job({job_id})")
+    # vej_job_id = vej_job_dict['job_id']
+    # GlobalSettings.logger.debug(f"verify_expected_job({vej_job_id})")
 
     outstanding_jobs_dict_bytes = vej_redis_connection.get(REDIS_JOB_LIST) # Gets bytes!!!
     if not outstanding_jobs_dict_bytes:
@@ -62,15 +62,15 @@ def verify_expected_job(vej_job_dict, vej_redis_connection):
     assert isinstance(outstanding_jobs_dict,dict)
     GlobalSettings.logger.info(f"Currently have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store")
-    if job_id not in outstanding_jobs_dict:
-        GlobalSettings.logger.error(f"Not expecting job with id of {job_id}")
+    if vej_job_id not in outstanding_jobs_dict:
+        GlobalSettings.logger.error(f"Not expecting job with id of {vej_job_id}")
         GlobalSettings.logger.debug(f"Only had job ids: {outstanding_jobs_dict.keys()}")
         return False
-    this_job_dict = outstanding_jobs_dict[job_id]
+    this_job_dict = outstanding_jobs_dict[vej_job_id]
 
     # We found a match -- delete that job from the outstanding list
-    GlobalSettings.logger.debug(f"Found job match for {job_id}")
-    del outstanding_jobs_dict[job_id]
+    GlobalSettings.logger.debug(f"Found job match for {vej_job_id}")
+    del outstanding_jobs_dict[vej_job_id]
     if outstanding_jobs_dict:
         GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_dict)}"
                                     f" outstanding job(s) in '{REDIS_JOB_LIST}'")
@@ -142,13 +142,13 @@ def update_project_file(build_log, output_dir):
     #                  prefix='Door43_callback_update_project_file_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
     commit_id = build_log['commit_id']
-    user_name = build_log['repo_owner']
+    repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
     repo_name = build_log['repo_name']
-    project_json_key = f'u/{user_name}/{repo_name}/project.json'
+    project_json_key = f'u/{repo_owner_username}/{repo_name}/project.json'
     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
-    project_json['user'] = user_name
+    project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{user_name}/{repo_name}'
+    project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{repo_owner_username}/{repo_name}'
     commit = {
         'id': commit_id,
         'created_at': build_log['created_at'],
@@ -206,8 +206,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         error = "Callback job has no 'job_id' field"
         GlobalSettings.logger.critical(error)
         raise Exception(error)
-    job_id = queued_json_payload['job_id']
-    verify_result = verify_expected_job(queued_json_payload, redis_connection)
+    # job_id = queued_json_payload['job_id']
+    verify_result = verify_expected_job(queued_json_payload['job_id'], redis_connection)
     # NOTE: The above deletes the matched job entry,
     #   so this means callback cannot be successfully retried if it fails below
     if not verify_result:
@@ -216,15 +216,17 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         raise Exception(error)
     matched_job_dict = verify_result
     GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
-    job_descriptive_name = f"{queued_json_payload['resource_type']}({queued_json_payload['input_format']})"
-    if 'repo_owner' not in matched_job_dict: # Why did we have to add this?
-        matched_job_dict['repo_owner'] = matched_job_dict['user_name'] # Where did it used to be done/gotten from?
+    job_descriptive_name = f"{matched_job_dict['resource_type']}({matched_job_dict['input_format']})"
 
     this_job_dict = queued_json_payload.copy()
-    # Get needed fields that we saved but didn't submit to tX
-    for fieldname in ('user_name', 'repo_name', 'commit_id'):
-        assert fieldname not in this_job_dict
+    # Get needed fields that we saved but didn't submit to or receive back from tX
+    for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'input_format', 'door43_webhook_received_at'):
+        if prefix and debug_mode_flag: assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
+    # Remove unneeded fields that we saved or received back from tX
+    for fieldname in ('callback',):
+        if fieldname in this_job_dict:
+            del this_job_dict[fieldname]
 
     if 'preprocessor_warnings' in matched_job_dict:
         # GlobalSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
@@ -247,7 +249,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         identifier = matched_job_dict['identifier']
         GlobalSettings.logger.debug(f"Got identifier from matched_job_dict: {identifier}.")
     else:
-        identifier = job_id
+        identifier = queued_json_payload['job_id']
         GlobalSettings.logger.debug(f"Got identifier from job_id: {identifier}.")
     # NOTE: following line removed as stats recording used too much disk space
     # user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
@@ -265,7 +267,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # We get the adapted tx-manager calls to do our work for us
     # It doesn't actually matter which one we do first I think
     GlobalSettings.logger.info("Running linter post-processing…")
-    url_part2 = f"u/{this_job_dict['user_name']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
+    url_part2 = f"u/{this_job_dict['repo_owner_username']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
     clc = ClientLinterCallback(this_job_dict, identifier,
                                queued_json_payload['linter_success'],
                                queued_json_payload['linter_info'] if 'linter_info' in queued_json_payload else None,
@@ -320,7 +322,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     if deployed:
         GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
-    return job_descriptive_name
+    return job_descriptive_name, matched_job_dict['door43_webhook_received_at']
 #end of process_callback_job function
 
 
@@ -348,7 +350,8 @@ def job(queued_json_payload):
     #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
     #assert queue_prefix == prefix
     try:
-        job_descriptive_name = process_callback_job(prefix, queued_json_payload, current_job.connection)
+        job_descriptive_name, door43_webhook_received_at = \
+                process_callback_job(prefix, queued_json_payload, current_job.connection)
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
         prefixed_name = f"{prefix}Door43_Callback"
@@ -394,7 +397,7 @@ def job(queued_json_payload):
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \
-                         datetime.strptime(queued_json_payload['door43_webhook_received_at'],
+                         datetime.strptime(door43_webhook_received_at,
                                            '%Y-%m-%dT%H:%M:%SZ')
     GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
     stats_client.timing(f'{general_stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))

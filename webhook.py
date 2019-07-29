@@ -681,13 +681,12 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict = {}
     pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-    pj_job_dict['user_name'] = repo_owner_username
+    pj_job_dict['repo_owner_username'] = repo_owner_username
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
+    pj_job_dict['door43_webhook_received_at'] = queued_json_payload['door43_webhook_received_at']
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    # Seems never used (RJH)
-    #pj_job_dict['user = user.username  # Username of the token, not necessarily the repo's owner
     pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
     pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = f'{source_url_base}/{file_key}'
@@ -713,7 +712,7 @@ def process_job(queued_json_payload, redis_connection):
     remember_job(pj_job_dict, redis_connection)
 
     # Get S3 cdn bucket/dir and empty it
-    s3_commit_key = f"u/{pj_job_dict['user_name']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
+    s3_commit_key = f"u/{pj_job_dict['repo_owner_username']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Create a build log
@@ -744,7 +743,7 @@ def process_job(queued_json_payload, redis_connection):
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
         'user_token': gogs_user_token, # Checked by tX enqueue job
-        'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
+        #'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:
         GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
