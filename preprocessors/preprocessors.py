@@ -842,8 +842,13 @@ class TaPreprocessor(Preprocessor):
                 markdown += f'<div class="bottom-box box" markdown="1">\n{bottom_box}\n</div>\n\n'
             markdown += '---\n\n'  # horizontal rule
         if 'sections' in section:
-            for subsection in section['sections']:
-                markdown += self.compile_ta_section(project, subsection, level + 1)
+            if section['sections']:
+                for subsection in section['sections']:
+                    markdown += self.compile_ta_section(project, subsection, level + 1)
+            else: # why's it empty?
+                msg = f"Why is 'sections' empty for {section['title']}?"
+                GlobalSettings.logger.warning(msg)
+                self.warnings.append(msg)
         return markdown
     # end of compile_ta_section(self, project, section, level)
 
