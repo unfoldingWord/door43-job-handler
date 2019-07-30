@@ -845,8 +845,8 @@ class TaPreprocessor(Preprocessor):
             if section['sections']:
                 for subsection in section['sections']:
                     markdown += self.compile_ta_section(project, subsection, level + 1)
-            else: # why's it empty?
-                msg = f"Why is 'sections' empty for {section['title']}?"
+            else: # why is it empty? probably user error
+                msg = f"Why is 'sections' empty for '{section['title']}'?"
                 GlobalSettings.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown

@@ -719,8 +719,9 @@ class TaTemplater(Templater):
                 <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
                 <ul id="{link}-sub" class="collapse">
             """
-            for subsection in section['sections']:
-                html += self.build_section_toc(subsection)
+            if section['sections']: # covers case of user leaving it empty = None
+                for subsection in section['sections']:
+                    html += self.build_section_toc(subsection)
             html += """
                 </ul>
             """
