@@ -538,15 +538,56 @@ def process_job(queued_json_payload, redis_connection):
     #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
 
+
+
+
+
     # Get the commit_id, commit_url
+    for fieldname in queued_json_payload: # Display interesting fields given in payload
+        if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
+            GlobalSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
+
+    try:
+        commit_branch = queued_json_payload['ref'].split('/')[2]
+    except (IndexError, AttributeError):
+        GlobalSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
+        commit_branch = 'UnknownCommitBranch'
+    except KeyError:
+        GlobalSettings.logger.critical("No commit branch specified")
+        commit_branch = 'NoCommitBranch'
+    try:
+        default_branch = queued_json_payload['repository']['default_branch']
+        if commit_branch != default_branch:
+            err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
+            GlobalSettings.logger.critical(err_msg)
+            return False, {'error': f"{err_msg}."}
+    except KeyError:
+        GlobalSettings.logger.critical("No default branch specified")
+        default_branch = 'NoDefaultBranch'
+    GlobalSettings.logger.debug(f"Got commit_branch='{commit_branch}' default_branch='{default_branch}'")
+
+
     commit_id = queued_json_payload['after']
     commit = None
     for commit in queued_json_payload['commits']:
         if commit['id'] == commit_id:
             break
     commit_id = commit_id[:10]  # Only use the short form
+    GlobalSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+
+
+    if commit_branch == default_branch:
+        commit_id = 'latest'
+    elif commit_branch not in ('UnknownCommitBranch','NoCommitBranch'):
+        commit_id = commit_branch
+    GlobalSettings.logger.debug(f"Got new commit_id='{commit_id}'")
+
     commit_url = commit['url']
-    #print("commit_id", repr(commit_id), "commit_url", repr(commit_url))
+    GlobalSettings.logger.debug(f"Got commit_url='{commit_url}'")
+
+
+
+
 
 
     # Gather other details from the commit that we will note for the job(s)
@@ -707,27 +748,12 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
 
-
     # Save the job info in Redis for the callback to use
     remember_job(pj_job_dict, redis_connection)
 
     # Get S3 cdn bucket/dir and empty it
     s3_commit_key = f"u/{pj_job_dict['repo_owner_username']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
     clear_commit_directory_in_cdn(s3_commit_key)
-
-    # Create a build log
-    # NOTE: Do we need this -- disabled 25Feb2019
-    # build_log_dict = create_build_log(commit_id, commit_message, commit_url, compare_url, pj_job_dict,
-    #                                 pusher_username, repo_name, repo_owner_username)
-    # Upload an initial build_log
-    # NOTE: Do we need this -- disabled 25Feb2019
-    # upload_build_log_to_s3(base_temp_dir_name, build_log_dict, s3_commit_key)
-
-    # Update the project.json file
-    # NOTE: Do we need this -- disabled 25Feb2019
-    # update_project_json(base_temp_dir_name, commit_id, pj_job_dict, repo_name, repo_owner_username)
-
-
 
     # Pass the work request onto the tX system
     GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
@@ -755,7 +781,6 @@ def process_job(queued_json_payload, redis_connection):
     except requests.exceptions.ConnectionError as e:
         GlobalSettings.logger.critical(f"Callback connection error: {e}")
         response = None
-
     if response:
         #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
         #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
