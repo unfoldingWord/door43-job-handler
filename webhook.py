@@ -225,7 +225,8 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
     :param str repo_dir:   The directory where the downloaded file should be unzipped
     :return: None
     """
-    repo_zip_url = commit_url.replace('commit', 'archive') + '.zip'
+    repo_zip_url = commit_url if commit_url.endswith('.zip') \
+                        else commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
     GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
@@ -542,47 +543,86 @@ def process_job(queued_json_payload, redis_connection):
 
 
 
-    # Get the commit_id, commit_url
     for fieldname in queued_json_payload: # Display interesting fields given in payload
         if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
             GlobalSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
 
-    try:
-        commit_branch = queued_json_payload['ref'].split('/')[2]
-    except (IndexError, AttributeError):
-        GlobalSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
-        commit_branch = 'UnknownCommitBranch'
-    except KeyError:
-        GlobalSettings.logger.critical("No commit branch specified")
-        commit_branch = 'NoCommitBranch'
+
+    # Get the commit_id, commit_url
     try:
         default_branch = queued_json_payload['repository']['default_branch']
-        if commit_branch != default_branch:
-            err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
-            GlobalSettings.logger.critical(err_msg)
-            return False, {'error': f"{err_msg}."}
     except KeyError:
         GlobalSettings.logger.critical("No default branch specified")
         default_branch = 'NoDefaultBranch'
-    GlobalSettings.logger.debug(f"Got commit_branch='{commit_branch}' default_branch='{default_branch}'")
+    GlobalSettings.logger.debug(f"Got default_branch='{default_branch}'")
 
+    # Gather other details from the commit that we will note for the job(s)
+    repo_owner_username = queued_json_payload['repository']['owner']['username']
+    repo_name = queued_json_payload['repository']['name']
 
-    commit_id = queued_json_payload['after']
-    commit = None
-    for commit in queued_json_payload['commits']:
-        if commit['id'] == commit_id:
-            break
-    commit_id = commit_id[:10]  # Only use the short form
-    GlobalSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+    commit_branch = tag_name = None
+    if queued_json_payload['DCS_event'] == 'push':
+        try:
+            commit_branch = queued_json_payload['ref'].split('/')[2]
+        except (IndexError, AttributeError):
+            GlobalSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
+            commit_branch = 'UnknownCommitBranch'
+        except KeyError:
+            GlobalSettings.logger.critical("No commit branch specified")
+            commit_branch = 'NoCommitBranch'
+        # if commit_branch != default_branch:
+        #     err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
+        #     GlobalSettings.logger.critical(err_msg)
+        #     return False, {'error': f"{err_msg}."}
+        GlobalSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
+        commit_id = queued_json_payload['after']
+        commit = None
+        for commit in queued_json_payload['commits']:
+            if commit['id'] == commit_id:
+                break
+        commit_id = commit_id[:10]  # Only use the short form
+        GlobalSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+        commit_url = commit['url']
+        commit_message = commit['message'].strip() # Seems to always end with a newline
+
+        if 'pusher' in queued_json_payload:
+            pusher_dict = queued_json_payload['pusher']
+        else:
+            pusher_dict = {'username': commit['author']['username']}
+        pusher_username = pusher_dict['username']
+        our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
+
+    elif queued_json_payload['DCS_event'] == 'release':
+        try:
+            tag_name = queued_json_payload['release']['tag_name']
+        except (IndexError, AttributeError):
+            GlobalSettings.logger.critical(f"Could not determine tag name from '{queued_json_payload['release']}'")
+            tag_name = 'UnknownTagName'
+        except KeyError:
+            GlobalSettings.logger.critical("No tag name specified")
+            tag_name = 'NoTagName'
+        commit_url = queued_json_payload['release']['zipball_url']
+        commit_message = queued_json_payload['release']['name']
+
+        if 'author' in queued_json_payload['release']:
+            pusher_dict = queued_json_payload['release']['author']
+        # else:
+            # pusher_dict = {'username': commit['author']['username']}
+        pusher_username = pusher_dict['username']
+        our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
+    else:
+        GlobalSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
         commit_id = 'latest'
-    elif commit_branch not in ('UnknownCommitBranch','NoCommitBranch'):
+    elif tag_name:
+        commit_id = tag_name
+    elif commit_branch not in (None, 'UnknownCommitBranch', 'NoCommitBranch'):
         commit_id = commit_branch
+    else:
+        commit_id = 'OhDear'
     GlobalSettings.logger.debug(f"Got new commit_id='{commit_id}'")
-
-    commit_url = commit['url']
     GlobalSettings.logger.debug(f"Got commit_url='{commit_url}'")
 
 
@@ -590,19 +630,8 @@ def process_job(queued_json_payload, redis_connection):
 
 
 
-    # Gather other details from the commit that we will note for the job(s)
-    repo_owner_username = queued_json_payload['repository']['owner']['username']
-    repo_name = queued_json_payload['repository']['name']
-    # compare_url = queued_json_payload['compare_url']
-    commit_message = commit['message'].strip() # Seems to always end with a newline
 
-    if 'pusher' in queued_json_payload:
-        pusher = queued_json_payload['pusher']
-    else:
-        pusher = {'username': commit['author']['username']}
-    pusher_username = pusher['username']
 
-    our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
     GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
     ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
@@ -616,7 +645,7 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # Here's our programmed failure (for remotely testing failures)
-    if pusher_username=='Failure' and 'full_name' in pusher and pusher['full_name']=='Push Test':
+    if pusher_username=='Failure' and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
         deliberateFailureForTesting
 
 
