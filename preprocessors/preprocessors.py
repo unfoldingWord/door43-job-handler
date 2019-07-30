@@ -53,7 +53,7 @@ class Preprocessor:
 
     def __init__(self, commit_url, rc, source_dir, output_dir):
         """
-        :param URLString commit_url:    URL of this commit on DCS
+        :param URLString commit_url:    URL of this commit on DCS -- used for fixing links
         :param RC rc:
         :param string source_dir:
         :param string output_dir:
@@ -846,7 +846,7 @@ class TaPreprocessor(Preprocessor):
                 for subsection in section['sections']:
                     markdown += self.compile_ta_section(project, subsection, level + 1)
             else: # why is it empty? probably user error
-                msg = f"Why is 'sections' empty for '{section['title']}'?"
+                msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['title']}'"
                 GlobalSettings.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown
