@@ -30,42 +30,7 @@ class ProjectDeployer:
 
 
     def close(self):
-        """
-        Delete temp files (except in debug mode) -- no longer required!!!
-        """
         pass
-        # if prefix and debug_mode_flag:
-        #     GlobalSettings.logger.debug(f"Temp deployer folder '{self.temp_dir}' has been left on disk for debugging!")
-        # else:
-        #     remove_tree(self.temp_dir)
-
-
-    # def __del__(self):
-    #     self.close()
-
-
-    # def download_buildlog_and_deploy_revision_to_door43(self, build_log_key):
-    #     """
-    #     Deploys a single revision of a project to door43.org
-    #     :param string build_log_key:
-    #     :return bool:
-
-    #     Was used by Lambda function
-    #         but now only called by test routines.
-    #     """
-    #     build_log = None
-    #     try:
-    #         build_log = GlobalSettings.cdn_s3_handler().get_json(build_log_key, catch_exception=False)
-    #     except Exception as e:
-    #         GlobalSettings.logger.debug(f"Deploying error could not access {build_log_key}: {e}")
-    #         pass
-
-    #     if not build_log or 'commit_id' not in build_log or 'repo_owner' not in build_log \
-    #             or 'repo_name' not in build_log:
-    #         GlobalSettings.logger.debug(f"Exiting, Invalid build log at {build_log_key}: {build_log}")
-    #         return False
-
-    #     return self.deploy_revision_to_door43(build_log)
 
 
     def deploy_revision_to_door43(self, build_log):
@@ -90,7 +55,6 @@ class ProjectDeployer:
 
         s3_commit_key = f'u/{user}/{repo_name}/{commit_id}'
         s3_repo_key = f'u/{user}/{repo_name}'
-        # download_key = s3_commit_key
 
         source_dir = tempfile.mkdtemp(prefix='source_', dir=self.temp_dir)
         template_dir = tempfile.mkdtemp(prefix='template_', dir=self.temp_dir)
@@ -129,15 +93,6 @@ class ProjectDeployer:
             if not os.path.exists(output_file) and not os.path.isdir(filename):
                 copyfile(filename, output_file)
 
-            # if do_part_template_only:  # move files to common area
-            #     basename = os.path.basename(filename)
-            #     if basename not in ['finished', 'build_log.json', 'index.html', 'merged.json', 'lint_log.json']:
-            #         GlobalSettings.logger.debug(f"Moving {basename} to common area…")
-            #         GlobalSettings.logger.debug(f"Uploading {filename} to {s3_commit_key}/{basename}…")
-            #         GlobalSettings.cdn_s3_handler().upload_file(filename, f'{s3_commit_key}/{basename}', cache_time=0)
-            #         GlobalSettings.logger.debug(f"Deleting {download_key}/{basename}…")
-            #         GlobalSettings.cdn_s3_handler().delete_file(f'{download_key}/{basename}')
-
         # Save master build_log.json
         build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         file_utils.write_file(os.path.join(output_dir, 'build_log.json'), build_log)
@@ -165,67 +120,11 @@ class ProjectDeployer:
         except:
             pass
 
-        # else:  # if processing part of multi-part merge
-        #     self.write_data_to_file(output_dir, download_key, 'deployed', ' ')  # flag that deploy has finished
-        #     if GlobalSettings.cdn_s3_handler().key_exists(s3_commit_key + '/final_build_log.json'):
-        #         GlobalSettings.logger.debug("final build detected")
-        #         GlobalSettings.logger.debug("conversions all finished, trigger final merge")
-        #         GlobalSettings.cdn_s3_handler().copy(from_key=s3_commit_key + '/final_build_log.json',
-        #                                   to_key=s3_commit_key + '/build_log.json')
-
         elapsed_seconds = int(time.time() - start)
-        # GlobalSettings.logger.debug(f"Deploy type partial={do_part_template_only}, multi_merge={do_multipart_merge}")
         GlobalSettings.logger.debug(f"Deploy completed in {elapsed_seconds} seconds.")
         self.close()
         return True
     # end of ProjectDeployer.deploy_revision_to_door43(build_log)
-
-
-    # def multipart_master_merge(self, s3_commit_key, resource_type, download_key, output_dir, source_dir, start,
-    #                            template_file):
-    #     prefix = download_key + '/'
-    #     GlobalSettings.door43_s3_handler().download_dir(prefix, source_dir)  # get previous templated files
-    #     source_dir = os.path.join(source_dir, download_key)
-    #     files = sorted(glob(os.path.join(source_dir, '*.*')))
-    #     for f in files:
-    #         GlobalSettings.logger.debug("Downloaded: " + f)
-    #     fname = os.path.join(source_dir, 'index.html')
-    #     if os.path.isfile(fname):
-    #         os.remove(fname)  # remove index if already exists
-    #     elapsed_seconds = int(time.time() - start)
-    #     GlobalSettings.logger.debug("deploy download completed in " + str(elapsed_seconds) + " seconds")
-    #     templater = init_template(resource_type, source_dir, output_dir, template_file)
-    #     # restore index from previous passes
-    #     index_json = self.get_templater_index(s3_commit_key, 'index.json')
-    #     templater.titles = index_json['titles']
-    #     templater.chapters = index_json['chapters']
-    #     templater.book_codes = index_json['book_codes']
-    #     templater.already_converted = templater.files  # do not reconvert files
-    #     # merge the source files with the template
-    #     try:
-    #         self.run_templater(templater)
-    #         success = True
-    #     # except Exception as e:
-    #     except:
-    #         GlobalSettings.logger.error(f"Error multi-part applying template {template_file} to resource type {resource_type}")
-    #         self.close()
-    #         success = False
-    #     return source_dir, success
-
-
-    # def get_undeployed_parts(self, prefix):
-    #     unfinished = []
-    #     for o in GlobalSettings.cdn_s3_handler().get_objects(prefix=prefix, suffix='/build_log.json'):
-    #         parts = o.key.split(prefix)
-    #         if len(parts) == 2:
-    #             parts = parts[1].split('/')
-    #             if len(parts) > 1:
-    #                 part_num = parts[0]
-    #                 deployed_key = prefix + part_num + '/deployed'
-    #                 if not GlobalSettings.cdn_s3_handler().key_exists(deployed_key):
-    #                     GlobalSettings.logger.debug(f"Part {part_num} unfinished")
-    #                     unfinished.append(part_num)
-    #     return unfinished
 
 
     def template_converted_files(self, build_log, output_dir, repo_name, resource_type, s3_commit_key,
@@ -236,10 +135,6 @@ class ProjectDeployer:
         assert 'errors' in build_log
         assert 'message' in build_log
         assert repo_name
-        # GlobalSettings.cdn_s3_handler().download_dir(download_key + '/', source_dir)
-        # source_dir = os.path.join(source_dir, download_key.replace('/', os.path.sep))
-        # elapsed_seconds = int(time.time() - start_time)
-        # GlobalSettings.logger.debug(f"Deploy download completed in {elapsed_seconds} seconds")
         source_dir = self.unzip_dir
         html_files = sorted(glob(os.path.join(source_dir, '*.html')))
         if len(html_files) < 1:
