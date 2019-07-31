@@ -51,7 +51,7 @@ class ProjectDeployer:
 
         user = build_log['repo_owner_username'] # was 'repo_owner'
         repo_name = build_log['repo_name']
-        commit_id = build_log['commit_id'][:10]
+        commit_id = build_log['commit_id'] # Hashes should already be reduced to 10 characters
 
         s3_commit_key = f'u/{user}/{repo_name}/{commit_id}'
         s3_repo_key = f'u/{user}/{repo_name}'

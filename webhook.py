@@ -536,16 +536,11 @@ def process_job(queued_json_payload, redis_connection):
         os.makedirs(base_temp_dir_name)
     except:
         pass
-    #print("source_url_base", repr(source_url_base), "base_temp_dir_name", repr(base_temp_dir_name))
 
 
-
-
-
-
-    for fieldname in queued_json_payload: # Display interesting fields given in payload
-        if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
-            GlobalSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
+    # for fieldname in queued_json_payload: # Display interesting fields given in payload
+    #     if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
+    #         GlobalSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
 
 
     # Get the commit_id, commit_url
@@ -624,12 +619,6 @@ def process_job(queued_json_payload, redis_connection):
         commit_id = 'OhDear'
     GlobalSettings.logger.debug(f"Got new commit_id='{commit_id}'")
     GlobalSettings.logger.debug(f"Got commit_url='{commit_url}'")
-
-
-
-
-
-
 
 
     GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
