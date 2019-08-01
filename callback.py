@@ -256,6 +256,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     #                     else f'??{identifier}??'
     project_types_invoked_string = f"{general_stats_prefix}.types.invoked.{matched_job_dict['resource_type']}"
 
+    # NOTE: matched_job_dict gets merged into build_log below
     matched_job_dict['log'] = []
     matched_job_dict['warnings'] = []
     matched_job_dict['errors'] = []

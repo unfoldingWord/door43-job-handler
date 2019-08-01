@@ -736,6 +736,8 @@ def process_job(queued_json_payload, redis_connection):
 
 
     # We no longer use txJob class but just create our own Python dict
+    #   This gets saved in Redis so it can be recalled by the callback function
+    #       (only a very small subset gets posted to the tX-enqueue-job)
     GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
     pj_job_dict['job_id'] = our_job_id
@@ -744,7 +746,6 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
-    pj_job_dict['door43_webhook_received_at'] = queued_json_payload['door43_webhook_received_at']
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
     pj_job_dict['input_format'] = input_format
@@ -761,8 +762,11 @@ def process_job(queued_json_payload, redis_connection):
         'rel': 'self',
         'method': 'GET'
     }
+    pj_job_dict['door43_webhook_received_at'] = queued_json_payload['door43_webhook_received_at']
     if preprocessor_warning_list:
         pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
+    if 'echoed_from_production' in queued_json_payload:
+        pj_job_dict['echoed_from_production'] = queued_json_payload['echoed_from_production']
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
 
@@ -787,7 +791,6 @@ def process_job(queued_json_payload, redis_connection):
                         if prefix and debug_mode_flag and ':8090' in tx_post_url \
                     else DOOR43_CALLBACK_URL,
         'user_token': gogs_user_token, # Checked by tX enqueue job
-        #'door43_webhook_received_at': queued_json_payload['door43_webhook_received_at'],
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:
         GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
