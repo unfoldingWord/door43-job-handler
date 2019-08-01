@@ -355,6 +355,32 @@ class BiblePreprocessor(Preprocessor):
         return self.book_filenames
 
 
+    def remove_closed_w_field(self, B, C, V, line, marker, text):
+        """
+        Extract words out of \w or \+w fields
+        """
+        assert marker in ('w', '+w')
+
+        ixW = text.find(f'\\{marker} ')
+        while ixW != -1:
+            ixEnd = text.find(f'\\{marker}*', ixW)
+            # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
+            if ixEnd != -1:
+                field = text[ixW+len(marker)+2:ixEnd]
+                # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
+                bits = field.split('|')
+                adjusted_field = bits[0]
+                # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
+                text = text[:ixW] + adjusted_field + text[ixEnd+len(marker)+2:]
+                # GlobalSettings.logger.debug(f"Adjusted line to: '{text}'")
+            else:
+                GlobalSettings.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
+                self.warnings.append(f"{B} {C}:{V} - Missing \\{marker}* closure")
+                text = text.replace(f'\\{marker} ', '', 1) # Attempt to limp on
+            ixW = text.find(f'\\{marker} ', ixW) # Might be another one
+        return text
+
+
     def write_clean_file(self, file_name, file_contents):
         """
         Cleans the USFM text as it writes it.
@@ -413,32 +439,20 @@ class BiblePreprocessor(Preprocessor):
                 if '\\k-e' in adjusted_line:
                     GlobalSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-e field")
-                # # HANDLE FAULTY USFM IN UGNT
-                # if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
-                #     GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
-                #     adjusted_line += '*' # Try a change to a closing marker
 
                 # Remove \w fields (just leaving the word)
-                ixW = adjusted_line.find('\\w ')
-                while ixW != -1:
-                    ixEnd = adjusted_line.find('\\w*', ixW)
-                    # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
-                    if ixEnd != -1:
-                        field = adjusted_line[ixW+3:ixEnd]
-                        # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
-                        bits = field.split('|')
-                        adjusted_field = bits[0]
-                        # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
-                        adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
-                        # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
-                    else:
-                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
-                        self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
-                        adjusted_line = adjusted_line.replace('\\w ', '', 1) # Attempt to limp on
-                    ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
+                adjusted_line = self.remove_closed_w_field(B, C, V, line, 'w', adjusted_line)
+                # Remove \+w fields (just leaving the word)
+                adjusted_line = self.remove_closed_w_field(B, C, V, line, '+w', adjusted_line)
                 # Be careful not to mess up on \wj
-                assert '\\w ' not in adjusted_line and '\\w\t' not in adjusted_line and '\\w\n' not in adjusted_line
+                # assert '\\w ' not in adjusted_line and '\\w\t' not in adjusted_line and '\\w\n' not in adjusted_line
                 # assert '\\w*' not in adjusted_line
+                for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
+                                         '\\+w ', '\\+w\t', '\\+w\n', ):
+                    if illegal_sequence in adjusted_line:
+                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                        self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
+                        adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
                         #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
@@ -456,7 +470,8 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_file_contents += line + '\n'
 
 
-        else: # old code to handle bad tC USFM
+        else: # Not USFM3
+            # old code to handle bad tC USFM
             # First do global fixes to bad tC USFM
             # Hide good \q# markers
             preadjusted_file_contents = re.sub(r'\\q([1234acdmrs]?)\n', r'\\QQQ\1\n', preadjusted_file_contents) # Hide valid \q# markers
@@ -476,7 +491,7 @@ class BiblePreprocessor(Preprocessor):
             # Restore empty \p markers
             preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
 
-            # Find  and warn about (useless) paragraph formatting before a section break
+            # Find and warn about (useless) paragraph formatting before a section break
             #  (probably should be after break)
             ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
             if ps_count:
@@ -538,27 +553,17 @@ class BiblePreprocessor(Preprocessor):
                     adjusted_line += '*' # Try a change to a closing marker
 
                 # Remove \w fields (just leaving the word)
-                ixW = adjusted_line.find('\\w ')
-                while ixW != -1:
-                    ixEnd = adjusted_line.find('\\w*', ixW)
-                    # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
-                    if ixEnd != -1:
-                        field = adjusted_line[ixW+3:ixEnd]
-                        # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
-                        bits = field.split('|')
-                        adjusted_field = bits[0]
-                        # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
-                        adjusted_line = adjusted_line[:ixW] + adjusted_field + adjusted_line[ixEnd+3:]
-                        # GlobalSettings.logger.debug(f"Adjusted line to: '{adjusted_line}'")
-                    else:
-                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
-                        self.warnings.append(f"{B} {C}:{V} - Missing \\w* closure")
-                        adjusted_line = adjusted_line.replace('\\w ','') # Attempt to continue
-                    ixW = adjusted_line.find('\\w ', ixW+1) # Might be another one
+                adjusted_line = self.remove_closed_w_field(B, C, V, line, 'w', adjusted_line)
+                # Remove \+w fields (just leaving the word)
+                adjusted_line = self.remove_closed_w_field(B, C, V, line, '+w', adjusted_line)
                 # Don't mess up on \wj
-                if '\\w ' in adjusted_line or '\\w\t' in adjusted_line or '\\w\n' in adjusted_line:
-                    GlobalSettings.logger.error(f"Remaining \\w in {B} {C}:{V} adjusted line: '{adjusted_line}'")
-                    self.warnings.append(f"{B} {C}:{V} - Remaining \\w field")
+                for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
+                                         '\\+w ', '\\+w\t', '\\+w\n', ):
+                    if illegal_sequence in adjusted_line:
+                        GlobalSettings.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
+                        self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
+                        adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
+                        halt
                 # assert '\\w*' not in adjusted_line
                 if '\\z' in adjusted_line: # Delete these user-defined fields
                     # TODO: These milestone fields in the source texts should be self-closing
