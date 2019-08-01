@@ -207,14 +207,13 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         GlobalSettings.logger.critical(error)
         raise Exception(error)
     # job_id = queued_json_payload['job_id']
-    verify_result = verify_expected_job(queued_json_payload['job_id'], redis_connection)
+    matched_job_dict = verify_expected_job(queued_json_payload['job_id'], redis_connection)
     # NOTE: The above deletes the matched job entry,
     #   so this means callback cannot be successfully retried if it fails below
-    if not verify_result:
+    if not matched_job_dict:
         error = f"No waiting job found for {queued_json_payload}"
         GlobalSettings.logger.critical(error)
         raise Exception(error)
-    matched_job_dict = verify_result
     GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
     job_descriptive_name = f"{matched_job_dict['resource_type']}({matched_job_dict['input_format']})"
 
@@ -319,6 +318,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     str_final_build_log_adjusted = str_final_build_log if len(str_final_build_log)<1500 \
                             else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
+    if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
+        GlobalSettings.logger.info("This job was echoed from production (for testing)!")
     if deployed:
         GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
