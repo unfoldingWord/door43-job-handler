@@ -216,7 +216,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
         raise Exception(error)
     matched_job_dict = verify_result
     GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
-    job_descriptive_name = f"{queued_json_payload['resource_type']}({queued_json_payload['input_format']})"
+    job_descriptive_name = f"{matched_job_dict['resource_type']}({matched_job_dict['input_format']})"
     if 'repo_owner' not in matched_job_dict: # Why did we have to add this?
         matched_job_dict['repo_owner'] = matched_job_dict['user_name'] # Where did it used to be done/gotten from?
 
