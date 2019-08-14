@@ -32,7 +32,7 @@ def reset_class(cls):
         try:
             if key != '_resetable_cache_':
                 setattr(cls, key, value)
-        except AttributeError: # When/Why would we get this
+        except AttributeError: # When/Why would we get this?
             pass
     cls.dirty = False
 
@@ -114,9 +114,6 @@ class GlobalSettings:
     _cdn_s3_handler = None
     _door43_s3_handler = None
     _pre_convert_s3_handler = None
-    # _language_stats_db_handler = None
-    # _lambda_handler = None
-    # _gogs_handler = None
 
     # Logger
     logger = logging.getLogger(name)

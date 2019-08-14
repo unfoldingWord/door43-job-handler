@@ -71,6 +71,7 @@ class ProjectDeployer:
                                             resource_type, s3_commit_key, source_dir, start,
                                             template_file)
         if not success:
+            GlobalSettings.logger.critical("Templating failed -- returning False")
             return False
 
 
@@ -110,6 +111,7 @@ class ProjectDeployer:
                 GlobalSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
+        GlobalSettings.logger.info("Copying files and setting up redirect…")
         try:
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=GlobalSettings.cdn_bucket_name)
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
@@ -117,8 +119,8 @@ class ProjectDeployer:
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key, '/' + s3_commit_key)
             GlobalSettings.door43_s3_handler().redirect(s3_repo_key + '/index.html', '/' + s3_commit_key)
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
-        except:
-            pass
+        except Exception as e:
+            GlobalSettings.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")
 
         elapsed_seconds = int(time.time() - start)
         GlobalSettings.logger.debug(f"Deploy completed in {elapsed_seconds} seconds.")
@@ -129,7 +131,7 @@ class ProjectDeployer:
 
     def template_converted_files(self, build_log, output_dir, repo_name, resource_type, s3_commit_key,
                                  source_dir, start_time, template_filepath):
-        GlobalSettings.logger.debug(f"template_converted_files({build_log}, od={output_dir}, '{repo_name}'," \
+        GlobalSettings.logger.debug(f"template_converted_files(…, od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
         assert 'errors' in build_log
