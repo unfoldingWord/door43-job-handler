@@ -91,95 +91,99 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
-def update_project_json(base_temp_dir_name, commit_id, upj_job_dict, repo_name, repo_owner):
-    """
-    :param string commit_id:
-    :param dict upj_job_dict:
-    :param string repo_name:
-    :param string repo_owner:
-    :return:
-    """
-    project_json_key = f'u/{repo_owner}/{repo_name}/project.json'
-    project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
-    project_json['user'] = repo_owner
-    project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://git.door43.org/{repo_owner}/{repo_name}'
-    commit = {
-        'id': commit_id,
-        'created_at': upj_job_dict['created_at'],
-        'status': upj_job_dict['status'],
-        'success': upj_job_dict['success'],
-        'started_at': None,
-        'ended_at': None
-    }
-    # Get all other previous commits, and then add this one
-    if 'commits' in project_json:
-        commits = [c for c in project_json['commits'] if c['id'] != commit_id]
-        commits.append(commit)
-    else:
-        commits = [commit]
-    project_json['commits'] = commits
-    project_file = os.path.join(base_temp_dir_name, 'project.json')
-    write_file(project_file, project_json)
-    GlobalSettings.logger.debug(f'Saving project.json to {GlobalSettings.cdn_bucket_name}/{project_json_key}')
-    GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
-# end of update_project_json function
+# def update_project_json(base_temp_dir_name:str, commit_type:str, commit_id:str, upj_job_dict:dict, repo_name:str, repo_owner:str) -> None:
+#     """
+#     :param string commit_id:
+#     :param dict upj_job_dict:
+#     :param string repo_name:
+#     :param string repo_owner:
+#     :return:
+#     """
+#     project_json_key = f'u/{repo_owner}/{repo_name}/project.json'
+#     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
+#     project_json['user'] = repo_owner
+#     project_json['repo'] = repo_name
+#     project_json['repo_url'] = f'https://git.door43.org/{repo_owner}/{repo_name}'
+#     commit = {
+#         'id': commit_id,
+#         'created_at': upj_job_dict['created_at'],
+#         'status': upj_job_dict['status'],
+#         'success': upj_job_dict['success'],
+#         'started_at': None,
+#         'ended_at': None
+#     }
+#     # Get all other previous commits, and then add this one
+#     if 'commits' in project_json:
+#         commits = [c for c in project_json['commits'] if c['id'] != commit_id]
+#         commits.append(commit)
+#     else:
+#         commits = [commit]
+#     project_json['commits'] = commits
+#     project_file = os.path.join(base_temp_dir_name, 'project.json')
+#     write_file(project_file, project_json)
+#     GlobalSettings.logger.debug(f'Saving project.json to {GlobalSettings.cdn_bucket_name}/{project_json_key}')
+#     GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
+# # end of update_project_json function
 
 
-def upload_build_log_to_s3(base_temp_dir_name, build_log, s3_commit_key, part=''):
-    """
-    :param dict build_log:
-    :param string s3_commit_key:
-    :param string part:
-    :return:
-    """
-    assert not part
-    build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
-    write_file(build_log_file, build_log)
-    upload_key = f'{s3_commit_key}/{part}build_log.json'
-    GlobalSettings.logger.debug(f'Saving build log to {GlobalSettings.cdn_bucket_name}/{upload_key}')
-    GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
-    # GlobalSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
-#end of upload_build_log_to_s3
+# def upload_build_log_to_s3(base_temp_dir_name:str, build_log:dict, s3_commit_key:str, part:str='') -> None:
+#     """
+#     :param dict build_log:
+#     :param string s3_commit_key:
+#     :param string part:
+#     :return:
+#     """
+#     assert not part
+#     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
+#     write_file(build_log_file, build_log)
+#     upload_key = f'{s3_commit_key}/{part}build_log.json'
+#     GlobalSettings.logger.debug(f'Saving build log to {GlobalSettings.cdn_bucket_name}/{upload_key}')
+#     GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
+#     # GlobalSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
+# #end of upload_build_log_to_s3
 
 
-def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job, pusher_username, repo_name, repo_owner):
-    """
-    :param string commit_id:
-    :param string commit_message:
-    :param string commit_url:
-    :param string compare_url:
-    :param TxJob cbl_job:
-    :param string pusher_username:
-    :param string repo_name:
-    :param string repo_owner:
-    :return dict:
-    """
-    build_log_dict = dict(cbl_job)
-    build_log_dict['repo_name'] = repo_name
-    build_log_dict['repo_owner'] = repo_owner
-    build_log_dict['commit_id'] = commit_id
-    build_log_dict['committed_by'] = pusher_username
-    build_log_dict['commit_url'] = commit_url
-    build_log_dict['compare_url'] = compare_url
-    build_log_dict['commit_message'] = commit_message
+# def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job, pusher_username, repo_name, repo_owner):
+#     """
+#     :param string commit_id:
+#     :param string commit_message:
+#     :param string commit_url:
+#     :param string compare_url:
+#     :param TxJob cbl_job:
+#     :param string pusher_username:
+#     :param string repo_name:
+#     :param string repo_owner:
+#     :return dict:
+#     """
+#     build_log_dict = dict(cbl_job)
+#     build_log_dict['repo_name'] = repo_name
+#     build_log_dict['repo_owner'] = repo_owner
+#     build_log_dict['commit_id'] = commit_id
+#     build_log_dict['committed_by'] = pusher_username
+#     build_log_dict['commit_url'] = commit_url
+#     build_log_dict['compare_url'] = compare_url
+#     build_log_dict['commit_message'] = commit_message
 
-    return build_log_dict
-# end of create_build_log function
+#     return build_log_dict
+# # end of create_build_log function
 
 
-def clear_commit_directory_in_cdn(s3_commit_key):
+def clear_commit_directory_in_cdn(s3_commit_key:str) -> None:
     """
-    Clear out the commit directory in the cdn bucket for this project revision.
+    Clear out the commit directory in the CDN bucket for this project revision.
     """
-    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' …")
-    for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-        # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
-        GlobalSettings.cdn_s3_handler().delete_file(obj.key)
+    GlobalSettings.logger.debug(f"Clearing objects from CDN commit directory '{s3_commit_key}' …")
+    # Original code
+    # for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
+    #     # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
+    #     GlobalSettings.cdn_s3_handler().delete_file(obj.key)
+    # New code (adapted from https://stackoverflow.com/questions/11426560/amazon-s3-boto-how-to-delete-folder)
+    # May also delete the folder itself (doesn't matter)
+    GlobalSettings.cdn_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
 # end of clear_commit_directory_in_cdn function
 
 
-def get_unique_job_id():
+def get_unique_job_id() -> str:
     """
     :return string:
     """
@@ -190,7 +194,7 @@ def get_unique_job_id():
 # end of get_unique_job_id()
 
 
-def upload_zip_file(job_id, zip_filepath):
+def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
     """
     """
     file_key = f'preconvert/{job_id}.zip'
@@ -203,10 +207,10 @@ def upload_zip_file(job_id, zip_filepath):
     finally:
         GlobalSettings.logger.debug('Upload finished.')
     return file_key
-# end of upload_zip_file function
+# end of upload_preconvert_zip_file function
 
 
-def get_repo_files(base_temp_dir_name, commit_url, repo_name):
+def get_repo_files(base_temp_dir_name:str, commit_url:str, repo_name:str) -> str:
     """
     """
     temp_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix=f'{repo_name}_')
@@ -218,7 +222,7 @@ def get_repo_files(base_temp_dir_name, commit_url, repo_name):
 # end of get_repo_files function
 
 
-def download_repo(base_temp_dir_name, commit_url, repo_dir):
+def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
     """
     Downloads and unzips a git repository from Github or git.door43.org
     :param str commit_url: The URL of the repository to download
@@ -253,7 +257,7 @@ def download_repo(base_temp_dir_name, commit_url, repo_dir):
 # end of download_repo function
 
 
-def get_tX_subject(gts_repo_name, gts_rc):
+def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
     """
     Given a resource container, try to determine the repo subject
         even if the manifest has no subject field.
@@ -342,7 +346,7 @@ def get_tX_subject(gts_repo_name, gts_rc):
 # end of get_tX_subject function
 
 
-def remember_job(rj_job_dict, rj_redis_connection):
+def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
     """
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
@@ -398,69 +402,69 @@ def remember_job(rj_job_dict, rj_redis_connection):
 # end of remember_job function
 
 
-def upload_to_BDB(job_name, BDB_zip_filepath):
-    """
-    Upload a Bible job (usfm) to the Bible Drop Box.
+# def upload_to_BDB(job_name:str, BDB_zip_filepath:str) -> None:
+#     """
+#     Upload a Bible job (usfm) to the Bible Drop Box.
 
-    Included here temporarily as a way to compare handling of USFM files
-        and for a comparison of warnings/errors that are detected/displayed.
-        (Would have to be manually compared -- nothing is done here with the BDB results.)
-    """
-    GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
-    BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
-    files_data = {
-        'nameLine': (None, f'DCS_Auto_{prefixed_our_name}'),
-        'emailLine': (None, 'noone@nowhere.org'),
-        'projectLine': (None, job_name),
-            'doChecks': (None, 'Yes'),
-                'NTfinished': (None, 'No'),
-                'OTfinished': (None, 'No'),
-                'DCfinished': (None, 'No'),
-                'ALLfinished': (None, 'No'),
-            'doExports': (None, 'No'),
-                'photoBible': (None, 'No'),
-                'odfs': (None, 'No'),
-                'pdfs': (None, 'No'),
-        'goalLine': (None, 'test'),
-            'permission': (None, 'Yes'),
-        'uploadedZipFile': (os.path.basename(BDB_zip_filepath), open(BDB_zip_filepath, 'rb'), 'application/zip'),
-        'uploadedMetadataFile': ('', b''),
-        'submit': (None, 'Submit'),
-        }
-    GlobalSettings.logger.debug(f"Posting data to {BDB_url} …")
-    try:
-        response = requests.post(BDB_url, files=files_data)
-    except requests.exceptions.ConnectionError as e:
-        GlobalSettings.logger.critical(f"BDB connection error: {e}")
-        response = None
+#     Included here temporarily as a way to compare handling of USFM files
+#         and for a comparison of warnings/errors that are detected/displayed.
+#         (Would have to be manually compared -- nothing is done here with the BDB results.)
+#     """
+#     GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
+#     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
+#     files_data = {
+#         'nameLine': (None, f'DCS_Auto_{prefixed_our_name}'),
+#         'emailLine': (None, 'noone@nowhere.org'),
+#         'projectLine': (None, job_name),
+#             'doChecks': (None, 'Yes'),
+#                 'NTfinished': (None, 'No'),
+#                 'OTfinished': (None, 'No'),
+#                 'DCfinished': (None, 'No'),
+#                 'ALLfinished': (None, 'No'),
+#             'doExports': (None, 'No'),
+#                 'photoBible': (None, 'No'),
+#                 'odfs': (None, 'No'),
+#                 'pdfs': (None, 'No'),
+#         'goalLine': (None, 'test'),
+#             'permission': (None, 'Yes'),
+#         'uploadedZipFile': (os.path.basename(BDB_zip_filepath), open(BDB_zip_filepath, 'rb'), 'application/zip'),
+#         'uploadedMetadataFile': ('', b''),
+#         'submit': (None, 'Submit'),
+#         }
+#     GlobalSettings.logger.debug(f"Posting data to {BDB_url} …")
+#     try:
+#         response = requests.post(BDB_url, files=files_data)
+#     except requests.exceptions.ConnectionError as e:
+#         GlobalSettings.logger.critical(f"BDB connection error: {e}")
+#         response = None
 
-    if response:
-        GlobalSettings.logger.info(f"BDB response.status_code = {response.status_code}, response.reason = {response.reason}")
-        GlobalSettings.logger.debug(f"BDB response.headers = {response.headers}")
-        # GlobalSettings.logger.debug(f"BDB response.text = {response.text}")
-        if response.status_code == 200:
-            if "Your project has been submitted" in response.text:
-                ix = response.text.find('eventually be available <a href="')
-                if ix != -1:
-                    ixStart = ix + 33
-                    ixEnd = response.text.find('">here</a>')
-                    job_url = response.text[ixStart:ixEnd]
-                    GlobalSettings.logger.info(f"BDB results will be available at http://Freely-Given.org/Software/BibleDropBox/{job_url}")
-            else:
-                GlobalSettings.logger.error(f"BDB didn't accept job: {response.text}")
-        else:
-            GlobalSettings.logger.error(f"Failed to submit job to BDB:"
-                                           f" {response.status_code}={response.reason}")
-    else: # no response
-        # error_msg = "Submission of job to BDB got no response"
-        GlobalSettings.logger.error("Submission of job to BDB got no response")
-        #raise Exception(error_msg) # Is this the best thing to do here?
-# end of upload_to_BDB
+#     if response:
+#         GlobalSettings.logger.info(f"BDB response.status_code = {response.status_code}, response.reason = {response.reason}")
+#         GlobalSettings.logger.debug(f"BDB response.headers = {response.headers}")
+#         # GlobalSettings.logger.debug(f"BDB response.text = {response.text}")
+#         if response.status_code == 200:
+#             if "Your project has been submitted" in response.text:
+#                 ix = response.text.find('eventually be available <a href="')
+#                 if ix != -1:
+#                     ixStart = ix + 33
+#                     ixEnd = response.text.find('">here</a>')
+#                     job_url = response.text[ixStart:ixEnd]
+#                     GlobalSettings.logger.info(f"BDB results will be available at http://Freely-Given.org/Software/BibleDropBox/{job_url}")
+#             else:
+#                 GlobalSettings.logger.error(f"BDB didn't accept job: {response.text}")
+#         else:
+#             GlobalSettings.logger.error(f"Failed to submit job to BDB:"
+#                                            f" {response.status_code}={response.reason}")
+#     else: # no response
+#         # error_msg = "Submission of job to BDB got no response"
+#         GlobalSettings.logger.error("Submission of job to BDB got no response")
+#         #raise Exception(error_msg) # Is this the best thing to do here?
+# # end of upload_to_BDB
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
-def process_job(queued_json_payload, redis_connection):
+def process_job(queued_json_payload:dict, redis_connection) -> str:
     """
     Parameters:
         pj_prefix in '' or 'dev-'
@@ -534,8 +538,8 @@ def process_job(queued_json_payload, redis_connection):
     base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
     try:
         os.makedirs(base_temp_dir_name)
-    except:
-        pass
+    except Exception as e:
+        GlobalSettings.logger.warning(f"SetupTempFolder threw an exception: {e}: {traceback.format_exc()}")
 
 
     # for fieldname in queued_json_payload: # Display interesting fields given in payload
@@ -610,14 +614,18 @@ def process_job(queued_json_payload, redis_connection):
         GlobalSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
-        commit_id = 'latest'
+        commit_type = 'default'
+        commit_id = commit_branch
     elif tag_name:
+        commit_type = 'tag'
         commit_id = tag_name
     elif commit_branch not in (None, 'UnknownCommitBranch', 'NoCommitBranch'):
+        commit_type = 'branch'
         commit_id = commit_branch
     else:
+        commit_type = 'unknown'
         commit_id = 'OhDear'
-    GlobalSettings.logger.debug(f"Got new commit_id='{commit_id}'")
+    GlobalSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
     GlobalSettings.logger.debug(f"Got commit_url='{commit_url}'")
 
 
@@ -732,7 +740,7 @@ def process_job(queued_json_payload, redis_connection):
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     our_job_id = get_unique_job_id()
-    file_key = upload_zip_file(our_job_id, preprocessed_zip_file.name)
+    file_key = upload_preconvert_zip_file(our_job_id, preprocessed_zip_file.name)
 
 
     # We no longer use txJob class but just create our own Python dict
@@ -744,6 +752,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
     pj_job_dict['repo_owner_username'] = repo_owner_username
     pj_job_dict['repo_name'] = repo_name
+    pj_job_dict['commit_type'] = commit_type
     pj_job_dict['commit_id'] = commit_id
     pj_job_dict['manifests_id'] = tx_manifest.id
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -765,7 +774,7 @@ def process_job(queued_json_payload, redis_connection):
     pj_job_dict['door43_webhook_received_at'] = queued_json_payload['door43_webhook_received_at']
     if preprocessor_warning_list:
         pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-    if 'echoed_from_production' in queued_json_payload:
+    if 'echoed_from_production' in queued_json_payload: # helps us keep track of where jobs are coming from in dev- chain
         pj_job_dict['echoed_from_production'] = queued_json_payload['echoed_from_production']
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
