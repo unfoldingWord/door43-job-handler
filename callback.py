@@ -12,6 +12,7 @@ import json
 from ast import literal_eval
 import tempfile
 import traceback
+from typing import Union, List
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -39,7 +40,7 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
-def verify_expected_job(vej_job_id, vej_redis_connection):
+def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[dict, bool]:
     """
     Check that we have this outstanding job in a REDIS dict
         and delete it once we make a match.
@@ -89,7 +90,7 @@ def verify_expected_job(vej_job_id, vej_redis_connection):
 # end of verify_expected_job
 
 
-def merge_results_logs(build_log, file_results, converter_flag):
+def merge_results_logs(build_log:dict, file_results:dict, converter_flag:bool) -> dict:
     """
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
@@ -110,7 +111,7 @@ def merge_results_logs(build_log, file_results, converter_flag):
 # end of merge_results_logs function
 
 
-def merge_dicts_lists(build_log, file_results, key):
+def merge_dicts_lists(build_log:dict, file_results:dict, key:str) -> None:
     """
     Used for merging log dicts from various sub-processes.
 
@@ -131,47 +132,98 @@ def merge_dicts_lists(build_log, file_results, key):
 # end of merge_dicts_lists function
 
 
-def update_project_file(build_log, output_dir):
+def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> None:
+    """
+    Clear out and remove the commit directory from the cdn bucket for this project revision.
+    """
+    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} …")
+    s3_bucket_handler.bucket.objects.filter(Prefix=s3_commit_key).delete()
+# end of clear_commit_directory_from_bucket function
+
+
+def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dict]:
+    """
+    Given a list of commits (oldest first),
+        remove the unnecessary ones
+        and DELETE THE files from S3!
+
+    Written: Aug 2019
+        This was especially important as we moved from hash numbers
+            to tag and branch names.
+    """
+    GlobalSettings.logger.debug(f"remove_excess_commits({commits_list}, {project_folder_key})…")
+    new_commits = []
+    # Process it backwards in case we want to count how many we have as we go
+    for commit in reversed(commits_list):
+        GlobalSettings.logger.debug(f"Processing {commit['type']} '{commit['id']}' commit (have {len(new_commits)})")
+        if len(new_commits) > 3 \
+        and commit['type'] in ('hash', 'unknown'):
+            if 0: # really do it DISABLED DISABLED DISABLED DISABLED DISABLED
+                commit_key = f"{project_folder_key}{commit['id']}"
+                GlobalSettings.logger.info(f"Removing CDN '{commit['type']}' '{commit['id']}' commit! …")
+                clear_commit_directory_from_bucket(GlobalSettings.cdn_s3_handler(), commit_key)
+                GlobalSettings.logger.info(f"Removing D43 '{commit['type']}' '{commit['id']}' commit! …")
+                clear_commit_directory_from_bucket(GlobalSettings.door43_s3_handler(), commit_key)
+            else:
+                GlobalSettings.logger.warning(f"Need to remove '{commit['type']}' '{commit['id']}' commit…")
+                new_commits.insert(0, commit) # Insert at beginning to get the order correct again
+        else:
+            new_commits.insert(0, commit) # Insert at beginning to get the order correct again
+    return new_commits
+# end of remove_excess_commits
+
+
+def update_project_file(build_log:dict, output_dirpath:str) -> None:
     """
     project.json is read by the Javascript in door43.org/js/project-page-functions.js
         The commits are used to update the Revision list in the left side-bar.
     """
-    GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dir})…")
-    # if not output_dir:
-    #     output_dir = tempfile.mkdtemp(suffix='',
-    #                  prefix='Door43_callback_update_project_file_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
+    GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dirpath})…")
 
     commit_id = build_log['commit_id']
     repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
     repo_name = build_log['repo_name']
-    project_json_key = f'u/{repo_owner_username}/{repo_name}/project.json'
+    project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
+    project_json_key = f'{project_folder_key}project.json'
     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
     project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{repo_owner_username}/{repo_name}'
     commit = {
         'id': commit_id,
+        'type': build_log['commit_type'],
         'created_at': build_log['created_at'],
         'status': build_log['status'],
         'success': build_log['success'],
-        'started_at': None,
-        'ended_at': None
+        # 'started_at': None,
+        # 'ended_at': None
     }
-    if 'started_at' in build_log:
-        commit['started_at'] = build_log['started_at']
-    if 'ended_at' in build_log:
-        commit['ended_at'] = build_log['ended_at']
+    # if 'started_at' in build_log:
+    #     commit['started_at'] = build_log['started_at']
+    # if 'ended_at' in build_log:
+    #     commit['ended_at'] = build_log['ended_at']
+
+    def is_hash(commit_str:str) -> bool:
+        """Checks to see if this looks like a hexadecimal (abbreviated) hash"""
+        if len(commit_str) != 10: return False
+        for char in commit_str:
+            if char not in 'abcdef1234567890': return False
+        return True
+
     if 'commits' not in project_json:
         project_json['commits'] = []
     commits = []
     for c in project_json['commits']:
         if c['id'] != commit_id:
+            if 'type' not in c: # Should be able to remove this eventually
+                c['type'] = 'hash' if is_hash(c['id']) else 'unknown'
             commits.append(c)
     commits.append(commit)
+    commits = remove_excess_commits(commits, project_folder_key)
     project_json['commits'] = commits
-    project_file = os.path.join(output_dir, 'project.json')
-    write_file(project_file, project_json)
-    GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key, cache_time=0)
+    project_filepath = os.path.join(output_dirpath, 'project.json')
+    write_file(project_filepath, project_json)
+    GlobalSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
     # if prefix and debug_mode_flag:
     #     GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
     # else:
@@ -329,7 +381,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
 
 
 
-def job(queued_json_payload):
+def job(queued_json_payload) -> None:
     """
     This function is called by the rq package to process a job in the queue(s).
 
