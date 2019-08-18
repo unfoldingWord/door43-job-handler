@@ -12,7 +12,7 @@ import json
 from ast import literal_eval
 import tempfile
 import traceback
-from typing import Union, List
+from typing import Union, List, Optional
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -132,6 +132,28 @@ def merge_dicts_lists(build_log:dict, file_results:dict, key:str) -> None:
 # end of merge_dicts_lists function
 
 
+def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Optional[str]:
+    """
+    Look for build_log.json in the Door43 bucket
+        and extract the job_id from it.
+
+    NOTE: It seems like old builds also put build_log.json in the CDN bucket
+            but the new ones don't seem to have that.
+
+    Return None if anything fails.
+    """
+    file_key = f'{project_folder_key}{commit_id}/build_log.json'
+    try:
+        file_content = GlobalSettings.door43_s3_handler() \
+                    .resource.Object(bucket_name=GlobalSettings.door43_bucket_name, key=file_key) \
+                    .get()['Body'].read().decode('utf-8')
+        json_content = json.loads(file_content)
+        return json_content['job_id']
+    except Exception as e:
+        GlobalSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
+# end of get_jobID_from_commit_buildLog function
+
+
 def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> None:
     """
     Clear out and remove the commit directory from the cdn bucket for this project revision.
@@ -151,21 +173,27 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
         This was especially important as we moved from hash numbers
             to tag and branch names.
     """
-    GlobalSettings.logger.debug(f"remove_excess_commits({commits_list}, {project_folder_key})…")
+    GlobalSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits = []
     # Process it backwards in case we want to count how many we have as we go
     for commit in reversed(commits_list):
-        GlobalSettings.logger.debug(f"Processing {commit['type']} '{commit['id']}' commit (have {len(new_commits)})")
+        GlobalSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (have {len(new_commits)})")
         if len(new_commits) > 3 \
         and commit['type'] in ('hash', 'unknown'):
             if 0: # really do it DISABLED DISABLED DISABLED DISABLED DISABLED
                 commit_key = f"{project_folder_key}{commit['id']}"
-                GlobalSettings.logger.info(f"Removing CDN '{commit['type']}' '{commit['id']}' commit! …")
+                GlobalSettings.logger.info(f"  Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
                 clear_commit_directory_from_bucket(GlobalSettings.cdn_s3_handler(), commit_key)
-                GlobalSettings.logger.info(f"Removing D43 '{commit['type']}' '{commit['id']}' commit! …")
+                GlobalSettings.logger.info(f"  Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
                 clear_commit_directory_from_bucket(GlobalSettings.door43_s3_handler(), commit_key)
+                if commit['job_id']:
+                    zipFile_key = f"preconvert/{commit['job_id']}.zip"
+                    GlobalSettings.logger.info(f"  Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                    clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zipFile_key)
+                else: # don't know the job_id (or the zip file was already deleted)
+                    GlobalSettings.logger.warning("  No job_id so pre-convert zip file not deleted.")
             else:
-                GlobalSettings.logger.warning(f"Need to remove '{commit['type']}' '{commit['id']}' commit…")
+                GlobalSettings.logger.warning(f"  Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
                 new_commits.insert(0, commit) # Insert at beginning to get the order correct again
         else:
             new_commits.insert(0, commit) # Insert at beginning to get the order correct again
@@ -189,8 +217,9 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
     project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{repo_owner_username}/{repo_name}'
-    commit = {
+    current_commit = {
         'id': commit_id,
+        'job_id': build_log['job_id'],
         'type': build_log['commit_type'],
         'created_at': build_log['created_at'],
         'status': build_log['status'],
@@ -199,36 +228,45 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
         # 'ended_at': None
     }
     # if 'started_at' in build_log:
-    #     commit['started_at'] = build_log['started_at']
+    #     current_commit['started_at'] = build_log['started_at']
     # if 'ended_at' in build_log:
-    #     commit['ended_at'] = build_log['ended_at']
+    #     current_commit['ended_at'] = build_log['ended_at']
 
     def is_hash(commit_str:str) -> bool:
-        """Checks to see if this looks like a hexadecimal (abbreviated) hash"""
+        """
+        Checks to see if this looks like a hexadecimal (abbreviated) hash
+        """
         if len(commit_str) != 10: return False
         for char in commit_str:
             if char not in 'abcdef1234567890': return False
         return True
 
+    GlobalSettings.logger.debug("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
     commits = []
     for c in project_json['commits']:
-        if c['id'] != commit_id:
-            if 'type' not in c: # Should be able to remove this eventually
+        GlobalSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' {c['id'] == commit_id}…")
+        if c['id'] == commit_id: # the old entry for the current commit id
+            zip_file_key = f"preconvert/{c['job_id']}.zip"
+            GlobalSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{c['type']}' '{commit_id}' {zip_file_key} …")
+            try:
+                clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zip_file_key)
+            except Exception as e:
+                GlobalSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
+            # Not appended to commits here coz it happens below instead
+        else: # a different commit from the current one
+            if 'job_id' not in c: # Might be able to remove this eventually
+                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, c['id'])
+                # Returned job id might have been None
+            if 'type' not in c: # Might be able to remove this eventually
                 c['type'] = 'hash' if is_hash(c['id']) else 'unknown'
             commits.append(c)
-    commits.append(commit)
-    commits = remove_excess_commits(commits, project_folder_key)
-    project_json['commits'] = commits
+    commits.append(current_commit)
+    project_json['commits'] = remove_excess_commits(commits, project_folder_key)
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
     GlobalSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
-    # if prefix and debug_mode_flag:
-    #     GlobalSettings.logger.debug(f"Temp folder '{output_dir}' has been left on disk for debugging!")
-    # else:
-    #     remove_tree(output_dir)
-    # return project_json
 # end of update_project_file function
 
 
@@ -372,7 +410,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                             else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
     GlobalSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
-        GlobalSettings.logger.info("This job was echoed from production (for testing)!")
+        GlobalSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
+        GlobalSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn it off.)")
     if deployed:
         GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
