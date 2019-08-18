@@ -248,8 +248,8 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     for c in project_json['commits']:
         GlobalSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' {c['id'] == commit_id}…")
         if c['id'] == commit_id: # the old entry for the current commit id
-            zip_file_key = f"preconvert/{c['job_id']}.zip"
-            GlobalSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{c['type']}' '{commit_id}' {zip_file_key} …")
+            zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
+            GlobalSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
             try:
                 clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zip_file_key)
             except Exception as e:
@@ -263,7 +263,17 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
                 c['type'] = 'hash' if is_hash(c['id']) else 'unknown'
             commits.append(c)
     commits.append(current_commit)
-    project_json['commits'] = remove_excess_commits(commits, project_folder_key)
+    cleaned_commits = remove_excess_commits(commits, project_folder_key)
+    if len(cleaned_commits) < len(commits): # Then we removed some
+        # Save a dated (coz this could happen more than once) backup of the project.json file
+        save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        save_project_filepath = os.path.join(output_dirpath, save_project_filename)
+        write_file(save_project_filepath, project_json)
+        save_project_json_key = f'{project_folder_key}{save_project_filename}'
+        GlobalSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+        GlobalSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+    # Now save the updated project.json file
+    project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
     GlobalSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
