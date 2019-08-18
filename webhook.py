@@ -172,7 +172,7 @@ def clear_commit_directory_in_cdn(s3_commit_key:str) -> None:
     """
     Clear out the commit directory in the CDN bucket for this project revision.
     """
-    GlobalSettings.logger.debug(f"Clearing objects from CDN commit directory '{s3_commit_key}' …")
+    GlobalSettings.logger.debug(f"Clearing objects from {prefix}CDN commit directory '{s3_commit_key}' …")
     # Original code
     # for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
     #     # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
@@ -185,9 +185,14 @@ def clear_commit_directory_in_cdn(s3_commit_key:str) -> None:
 
 def get_unique_job_id() -> str:
     """
+    Returns a 64 hex-character (lowercase) string.
+        e.g., 'e2cddf55dc410ec584d647157388e96f22bf7b60d900e79afd1c56e27aa0e417'
+
     :return string:
     """
     job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
+    # We no longer use TxJob so can't check it for duplicates
+    #   (but could theoretically check the preconvert bucket since job_id.zip is saved there).
     #while TxJob.get(job_id):
         #job_id = hashlib.sha256(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f').encode('utf-8')).hexdigest()
     return job_id
@@ -197,16 +202,15 @@ def get_unique_job_id() -> str:
 def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
     """
     """
-    file_key = f'preconvert/{job_id}.zip'
-    GlobalSettings.logger.debug(f'Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{file_key} …')
+    zip_file_key = f'preconvert/{job_id}.zip'
+    GlobalSettings.logger.debug(f"Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{zip_file_key} …")
     try:
-        GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, file_key, cache_time=0)
+        GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, zip_file_key, cache_time=0)
     except Exception as e:
-        GlobalSettings.logger.error('Failed to upload zipped repo up to server')
-        GlobalSettings.logger.exception(e)
+        GlobalSettings.logger.error(f"Failed to upload zipped repo up to server -- got exception: {e}")
     finally:
-        GlobalSettings.logger.debug('Upload finished.')
-    return file_key
+        GlobalSettings.logger.debug("Upload finished.")
+    return zip_file_key
 # end of upload_preconvert_zip_file function
 
 
@@ -233,7 +237,7 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
                         else commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
-    GlobalSettings.logger.debug(f'Downloading {repo_zip_url} …')
+    GlobalSettings.logger.debug(f"Downloading {repo_zip_url} …")
     try:
         # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -241,14 +245,14 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
 
         download_file(repo_zip_url, repo_zip_file)
     finally:
-        GlobalSettings.logger.debug('Downloading finished.')
+        GlobalSettings.logger.debug("Downloading finished.")
 
-    GlobalSettings.logger.debug(f'Unzipping {repo_zip_file} …')
+    GlobalSettings.logger.debug(f"Unzipping {repo_zip_file} …")
     try:
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
-        GlobalSettings.logger.debug('Unzipping finished.')
+        GlobalSettings.logger.debug("Unzipping finished.")
 
     # Remove the downloaded zip file (now unzipped)
     if not prefix: # For dev- save this file longer
@@ -539,7 +543,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     try:
         os.makedirs(base_temp_dir_name)
     except Exception as e:
-        GlobalSettings.logger.warning(f"SetupTempFolder threw an exception: {e}: {traceback.format_exc()}")
+        GlobalSettings.logger.warning(f"SetupTempFolder threw an exception: {e}")
 
 
     # for fieldname in queued_json_payload: # Display interesting fields given in payload
@@ -740,7 +744,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     # Upload zipped file to the S3 pre-convert bucket
     GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     our_job_id = get_unique_job_id()
-    file_key = upload_preconvert_zip_file(our_job_id, preprocessed_zip_file.name)
+    file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
 
 
     # We no longer use txJob class but just create our own Python dict

@@ -111,7 +111,7 @@ class ProjectDeployer:
                 GlobalSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
-        GlobalSettings.logger.info("Copying files and setting up redirect…")
+        GlobalSettings.logger.info("Copying json files and setting up redirect…")
         try:
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=GlobalSettings.cdn_bucket_name)
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
@@ -196,7 +196,7 @@ class ProjectDeployer:
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
-        GlobalSettings.logger.debug(f"Uploading {fname} to {key} …")
+        GlobalSettings.logger.debug(f"Uploading '{fname}' to {GlobalSettings.cdn_bucket_name} {key} …")
         GlobalSettings.cdn_s3_handler().upload_file(out_file, key, cache_time=0)
     # end of ProjectDeployer.write_data_to_file_and_upload_to_CDN function
 

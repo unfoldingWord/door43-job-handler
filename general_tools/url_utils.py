@@ -3,8 +3,11 @@ import shutil
 import sys
 import ssl
 from contextlib import closing
+import logging
 
 import urllib.request as urllib2
+from global_settings.global_settings import GlobalSettings
+
 
 
 def get_url(url, catch_exception=False):
@@ -47,10 +50,10 @@ def _download_file(url, outfile, urlopen):
         with closing(urlopen(url)) as request:
             with open(outfile, 'wb') as fp:
                 shutil.copyfileobj(request, fp)
-    except IOError as err:
-        print('ERROR retrieving %s' % url)
-        print(err)
-        sys.exit(1)
+    except IOError as e:
+        error_message = f"Error retrieving {url}: {e}"
+        GlobalSettings.logger.critical(error_message)
+        raise IOError(error_message)
 
 
 def get_languages():

@@ -186,12 +186,12 @@ class ClientConverterCallback:
 
         NOTE: These are used from there by the Print button/function.
         """
-        GlobalSettings.logger.info(f"Uploading converted files from {unzip_dir} to CDN {s3_commit_key} …")
+        GlobalSettings.logger.info(f"Uploading converted files from {unzip_dir} to {prefix}CDN {s3_commit_key} …")
         for root, _dirs, files in os.walk(unzip_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
                 key = s3_commit_key + filepath.replace(unzip_dir, '')
-                GlobalSettings.logger.debug(f"Uploading {filename} to CDN {key} …")
+                GlobalSettings.logger.debug(f"Uploading {filename} to {prefix}CDN {key} …")
                 GlobalSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
     # end of ClientConverterCallback.upload_converted_files_to_CDN function
 
