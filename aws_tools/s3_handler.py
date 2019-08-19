@@ -3,6 +3,7 @@ import json
 import boto3
 import botocore
 from boto3.session import Session
+from typing import Optional
 
 
 
@@ -19,7 +20,7 @@ class S3Handler:
         self.setup_resources()
 
 
-    def setup_resources(self):
+    def setup_resources(self) -> None:
         if self.aws_access_key_id and self.aws_secret_access_key:
             session = Session(aws_access_key_id=self.aws_access_key_id,
                               aws_secret_access_key=self.aws_secret_access_key,
@@ -143,7 +144,7 @@ class S3Handler:
     #             CopySource='{0}/{1}'.format(self.bucket_name, key), MetadataDirective='REPLACE')
 
 
-    def upload_file(self, path, key, cache_time=600, content_type=None):
+    def upload_file(self, path:str, key:str, cache_time:int=600, content_type:str=None) -> None:
         """
         Upload file to S3 storage. Similar to the s3.upload_file, however, that
         does not work nicely with moto, whereas this function does.
@@ -167,15 +168,15 @@ class S3Handler:
         )
 
 
-    def get_object(self, key):
+    def get_object(self, key:str):
         return self.resource.Object(bucket_name=self.bucket_name, key=key)
 
 
-    def redirect(self, key, location):
+    def redirect(self, key:str, location:str) -> None:
         self.bucket.put_object(Key=key, WebsiteRedirectLocation=location, CacheControl='max-age=0')
 
 
-    def get_file_contents(self, key:str, catch_exception:bool=True):
+    def get_file_contents(self, key:str, catch_exception:bool=True) -> Optional[str]:
         if catch_exception:
             try:
                 return self.get_object(key).get()['Body'].read()
@@ -195,7 +196,7 @@ class S3Handler:
             return json.loads(self.get_file_contents(key, catch_exception))
 
 
-    def get_objects(self, prefix=None, suffix=None):
+    def get_objects(self, prefix:Optional[str]=None, suffix:Optional[str]=None):
         filtered = []
         objects = self.bucket.objects.filter(Prefix=prefix)
         if objects:

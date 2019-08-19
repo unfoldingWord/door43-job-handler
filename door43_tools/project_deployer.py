@@ -23,17 +23,17 @@ class ProjectDeployer:
     by applying the door43.org template to the raw html files
     """
 
-    def __init__(self, unzip_dir, temp_dir):
+    def __init__(self, unzip_dir:str, temp_dir:str) -> None:
         GlobalSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
         self.unzip_dir = unzip_dir
         self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
 
 
-    def close(self):
+    def close(self) -> None:
         pass
 
 
-    def deploy_revision_to_door43(self, build_log):
+    def deploy_revision_to_door43(self, build_log:str) -> bool:
         """
         Deploys a single revision of a project to door43.org
 
@@ -115,9 +115,10 @@ class ProjectDeployer:
         try:
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=GlobalSettings.cdn_bucket_name)
             GlobalSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
-                                            to_key=f'{s3_repo_key}/manifest.json')
-            GlobalSettings.door43_s3_handler().redirect(s3_repo_key, '/' + s3_commit_key)
-            GlobalSettings.door43_s3_handler().redirect(s3_repo_key + '/index.html', '/' + s3_commit_key)
+                                                    to_key=f'{s3_repo_key}/manifest.json')
+            GlobalSettings.door43_s3_handler().redirect(key=s3_repo_key, location='/' + s3_commit_key)
+            GlobalSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html',
+                                                        location='/' + s3_commit_key)
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except Exception as e:
             GlobalSettings.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")
@@ -129,8 +130,8 @@ class ProjectDeployer:
     # end of ProjectDeployer.deploy_revision_to_door43(build_log)
 
 
-    def template_converted_files(self, build_log, output_dir, repo_name, resource_type, s3_commit_key,
-                                 source_dir, start_time, template_filepath):
+    def template_converted_files(self, build_log:str, output_dir:str, repo_name:str, resource_type:str, s3_commit_key:str,
+                                 source_dir:str, start_time, template_filepath:str):
         GlobalSettings.logger.debug(f"template_converted_files(…, od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
@@ -192,7 +193,7 @@ class ProjectDeployer:
     # end of ProjectDeployer.template_converted_files function
 
 
-    def write_data_to_file_and_upload_to_CDN(self, output_dir, s3_commit_key, fname, data):
+    def write_data_to_file_and_upload_to_CDN(self, output_dir:str, s3_commit_key:str, fname:str, data:str) -> None:
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
@@ -201,13 +202,13 @@ class ProjectDeployer:
     # end of ProjectDeployer.write_data_to_file_and_upload_to_CDN function
 
 
-    def run_templater(self, templater):  # for test purposes
+    def run_templater(self, templater) -> None:  # for test purposes
         templater.run()
     # end of ProjectDeployer.run_templater(templater)
 
 
     @staticmethod
-    def update_index_key(index_json_dict, templater_object, key_string):
+    def update_index_key(index_json_dict:dict, templater_object, key_string:str) -> None:
         """
         key_string is one of 'titles', chapters', 'book_codes'
 
@@ -222,7 +223,7 @@ class ProjectDeployer:
 
 
     @staticmethod
-    def get_templater_index(s3_commit_key, index_json_fname):
+    def get_templater_index(s3_commit_key:str, index_json_fname:str) -> dict:
         index_json = GlobalSettings.cdn_s3_handler().get_json(s3_commit_key + '/' + index_json_fname)
         if not index_json:
             index_json['titles'] = {}
