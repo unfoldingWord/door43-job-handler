@@ -237,7 +237,7 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
                         else commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
-    GlobalSettings.logger.debug(f"Downloading {repo_zip_url} …")
+    GlobalSettings.logger.info(f"Downloading zipped repo from {repo_zip_url} …")
     try:
         # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
