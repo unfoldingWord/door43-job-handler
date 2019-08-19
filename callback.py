@@ -156,9 +156,9 @@ def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Opt
 
 def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> None:
     """
-    Clear out and remove the commit directory from the cdn bucket for this project revision.
+    Clear out and remove the commit directory from the requested bucket for this project revision.
     """
-    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} …")
+    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} bucket…")
     s3_bucket_handler.bucket.objects.filter(Prefix=s3_commit_key).delete()
 # end of clear_commit_directory_from_bucket function
 
@@ -166,36 +166,46 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> 
 def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dict]:
     """
     Given a list of commits (oldest first),
-        remove the unnecessary ones
+        remove the unnecessary ones from the list
         and DELETE THE files from S3!
 
     Written: Aug 2019
         This was especially important as we moved from hash numbers
             to tag and branch names.
     """
+    MAX_WANTED_COMMITS = 3
     GlobalSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits = []
     # Process it backwards in case we want to count how many we have as we go
     for commit in reversed(commits_list):
-        GlobalSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (have {len(new_commits)})")
-        if len(new_commits) > 3 \
+        GlobalSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        if len(new_commits) >= MAX_WANTED_COMMITS \
         and commit['type'] in ('hash', 'unknown'):
             if 0: # really do it DISABLED DISABLED DISABLED DISABLED DISABLED
+                # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
-                GlobalSettings.logger.info(f"  Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
+                GlobalSettings.logger.info(f"    Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
                 clear_commit_directory_from_bucket(GlobalSettings.cdn_s3_handler(), commit_key)
-                GlobalSettings.logger.info(f"  Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
+                GlobalSettings.logger.info(f"    Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
                 clear_commit_directory_from_bucket(GlobalSettings.door43_s3_handler(), commit_key)
+                # Delete the pre-convert .zip file (available on Download button) from its bucket
                 if commit['job_id']:
                     zipFile_key = f"preconvert/{commit['job_id']}.zip"
-                    GlobalSettings.logger.info(f"  Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                    GlobalSettings.logger.info(f"    Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
                     clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zipFile_key)
                 else: # don't know the job_id (or the zip file was already deleted)
                     GlobalSettings.logger.warning("  No job_id so pre-convert zip file not deleted.")
+                # Setup redirects (so users don't get 404 errors from old saved links)
+                old_repo_key = f"{project_folder_key}{commit['id']}"
+                latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
+                GlobalSettings.logger.info(f"    Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                GlobalSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                GlobalSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
             else:
-                GlobalSettings.logger.warning(f"  Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
+                GlobalSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
                 new_commits.insert(0, commit) # Insert at beginning to get the order correct again
         else:
+            GlobalSettings.logger.debug("    Keeping this one.")
             new_commits.insert(0, commit) # Insert at beginning to get the order correct again
     return new_commits
 # end of remove_excess_commits
