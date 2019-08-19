@@ -355,9 +355,9 @@ class BiblePreprocessor(Preprocessor):
         return self.book_filenames
 
 
-    def remove_closed_w_field(self, B, C, V, line, marker, text):
+    def remove_closed_w_field(self, B:str, C:str, V:str, line:str, marker:str, text:str) -> str:
         """
-        Extract words out of \w or \+w fields
+        Extract words out of \\w or \\+w fields
         """
         assert marker in ('w', '+w')
 
@@ -381,7 +381,7 @@ class BiblePreprocessor(Preprocessor):
         return text
 
 
-    def write_clean_file(self, file_name, file_contents):
+    def write_clean_file(self, file_name:str, file_contents:str) -> None:
         """
         Cleans the USFM text as it writes it.
 
@@ -403,7 +403,72 @@ class BiblePreprocessor(Preprocessor):
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
 
+        # Check USFM2/3 pairs
+        for opener,closer in (
+                                # Character formatting
+                                ('\\add ', '\\add*'),
+                                ('\\addpn ', '\\addpn*'),
+                                ('\\bd ', '\\bd*'),
+                                ('\\bdit ', '\\bdit*'),
+                                ('\\bk ', '\\bk*'),
+                                ('\\dc ', '\\dc*'),
+                                ('\\em ', '\\em*'),
+                                ('\\fig ', '\\fig*'),
+                                ('\\it ', '\\it*'),
+                                ('\\k ', '\\k*'),
+                                ('\\nd ', '\\nd*'),
+                                ('\\ndx ', '\\ndx*'),
+                                ('\\no ', '\\no*'),
+                                ('\\ord ', '\\ord*'),
+                                ('\\pn ', '\\pn*'),
+                                ('\\pro ', '\\pro*'),
+                                ('\\qt ', '\\qt*'),
+                                ('\\sc ', '\\sc*'),
+                                ('\\sig ', '\\sig*'),
+                                ('\\sls ', '\\sls*'),
+                                ('\\tl ', '\\tl*'),
+                                ('\\w ', '\\w*'),
+                                ('\\wg ', '\\wg*'),
+                                ('\\wh ', '\\wh*'),
+                                ('\\wj ', '\\wj*'),
+
+                                ('\\f ', '\\f*'),
+                                ('\\x ', '\\x*'),
+                             ):
+            cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
+            if cnt1 != cnt2:
+                error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                GlobalSettings.logger.error(error_msg)
+                self.warnings.append(error_msg)
+
         if has_USFM3_line:
+            # Issue any global USFM3 warnings
+            if '\\s5' in file_contents:
+                warning_msg = "\\s5 fields should be coded as \\ts-s\\*…\\ts-e\\* milestones"
+                GlobalSettings.logger.warning(warning_msg)
+                self.warnings.append(warning_msg)
+
+            # Check USFM3 pairs
+            for opener,closer in (
+                                    # Character formatting
+                                    ('\\png ', '\\png*'),
+                                    ('\\rb ', '\\rb*'),
+                                    ('\\sup ', '\\sup*'),
+                                    ('\\wa ', '\\wa*'),
+                                    # Milestones
+                                    ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
+                                    ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
+                                    ('\\qt2-s\\*', '\\qt2-e\\*'), # NOTE: Will this still work if it has attributes?
+                                    ('\\ts-s\\*', '\\ts-e\\*'),
+                                    ('\\zaln-s ', '\\zaln-e\\*'),
+                                 ):
+                cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
+                if cnt1 != cnt2:
+                    error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                    GlobalSettings.logger.error(error_msg)
+                    self.warnings.append(error_msg)
+
+            # Do some global adjustments to make things easier
             preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', r'', preadjusted_file_contents) # Remove \zaln start milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
@@ -614,7 +679,7 @@ class BiblePreprocessor(Preprocessor):
     # end of write_clean_file function
 
 
-    def clean_copy(self, source_pathname, destination_pathname):
+    def clean_copy(self, source_pathname:str, destination_pathname:str) -> None:
         """
         Cleans the USFM file as it copies it.
         """
