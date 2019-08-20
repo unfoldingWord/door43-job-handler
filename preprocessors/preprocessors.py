@@ -5,7 +5,7 @@ from glob import glob
 from shutil import copy, copytree
 
 from rq_settings import prefix, debug_mode_flag
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir
 from resource_container.ResourceContainer import RC
@@ -15,31 +15,31 @@ from preprocessors.converters import txt2md
 
 def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
     if repo_subject == 'Open_Bible_Stories':
-        GlobalSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
-        GlobalSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
         preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
-        GlobalSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
         preprocessor = BiblePreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Academy':
-        GlobalSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
         preprocessor = TaPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Questions':
-        GlobalSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
         preprocessor = TqPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
-        GlobalSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
         preprocessor = TwPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
-        GlobalSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(commit_url, rc, repo_dir, output_dir)
     elif repo_subject in ('Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
-        GlobalSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
+        AppSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
         preprocessor = LexiconPreprocessor(commit_url, rc, repo_dir, output_dir)
     else:
-        GlobalSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
+        AppSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(commit_url, rc, repo_dir, output_dir)
     return preprocessor.run()
 # end of do_preprocess()
@@ -85,13 +85,13 @@ class Preprocessor:
         Case #2: It's a directory of files, so we copy them over to the output directory
         Case #3: The project path is multiple chapters, so we piece them together
         """
-        GlobalSettings.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
 
             if os.path.isfile(project_path):
                 # Case #1: Project path is a file, then we copy the file over to the output dir
-                GlobalSettings.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}' …")
+                AppSettings.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}' …")
                 if project.identifier.lower() in BOOK_NUMBERS:
                     filename = f'{BOOK_NUMBERS[project.identifier.lower()]}-{project.identifier.upper()}.{self.rc.resource.file_ext}'
                 else:
@@ -100,7 +100,7 @@ class Preprocessor:
                 self.num_files_written += 1
             else:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
-                GlobalSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
+                AppSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
                 files = glob(os.path.join(project_path, f'*.{self.rc.resource.file_ext}'))
                 if files:
                     for file_path in files:
@@ -111,9 +111,9 @@ class Preprocessor:
                             self.num_files_written += 1
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
-                    GlobalSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
+                    AppSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    GlobalSettings.logger.debug(f"Merging chapters in '{project.identifier}' …")
+                    AppSettings.logger.debug(f"Merging chapters in '{project.identifier}' …")
                     if chapters:
                         text = ''
                         for chapter in chapters:
@@ -128,11 +128,11 @@ class Preprocessor:
                         write_file(os.path.join(self.output_dir, filename), text)
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"Default preprocessor didn't write any files")
+            AppSettings.logger.error(f"Default preprocessor didn't write any files")
             self.warnings.append("No source files discovered")
         else:
-            GlobalSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files")
-        GlobalSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files")
+        AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of DefaultPreprocessor run()
 
@@ -224,9 +224,9 @@ class ObsPreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
             project_path = os.path.join(self.source_dir, project.path)
             # Copy all the markdown files in the project root directory to the output directory
             for file_path in glob(os.path.join(project_path, '*.md')):
@@ -256,11 +256,11 @@ class ObsPreprocessor(Preprocessor):
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
+            AppSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
             self.warnings.append("No OBS source files discovered")
         else:
-            GlobalSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files")
-        GlobalSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files")
+        AppSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
@@ -274,9 +274,9 @@ class ObsNotesPreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
+            AppSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
             for story_number in range(1, 50+1):
                 story_number_string = str(story_number).zfill(2)
                 story_folder_path = os.path.join(self.source_dir, 'content/', f'{story_number_string}/')
@@ -301,7 +301,7 @@ class ObsNotesPreprocessor(Preprocessor):
                     markdown = self.fix_links(markdown)
                     rc_count = markdown.count('rc://')
                     if rc_count:
-                        GlobalSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
+                        AppSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
                     write_file(os.path.join(self.output_dir,f'{story_number_string}.md'), markdown)
                     self.num_files_written += 1
 
@@ -313,11 +313,11 @@ class ObsNotesPreprocessor(Preprocessor):
                     write_file(toc_filepath,toc_contents)
 
         if self.num_files_written == 0:
-            GlobalSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
+            AppSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
             self.warnings.append("No OBSNotes source files discovered")
         else:
-            GlobalSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files")
-        GlobalSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files")
+        AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of ObsNotesPreprocessor run()
 
@@ -367,14 +367,14 @@ class BiblePreprocessor(Preprocessor):
             # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
             if ixEnd != -1:
                 field = text[ixW+len(marker)+2:ixEnd]
-                # GlobalSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
+                # AppSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
                 bits = field.split('|')
                 adjusted_field = bits[0]
-                # GlobalSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
+                # AppSettings.logger.debug(f"Adjusted field to: {adjusted_field!r}")
                 text = text[:ixW] + adjusted_field + text[ixEnd+len(marker)+2:]
-                # GlobalSettings.logger.debug(f"Adjusted line to: '{text}'")
+                # AppSettings.logger.debug(f"Adjusted line to: '{text}'")
             else:
-                GlobalSettings.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
+                AppSettings.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
                 self.warnings.append(f"{B} {C}:{V} - Missing \\{marker}* closure")
                 text = text.replace(f'\\{marker} ', '', 1) # Attempt to limp on
             ixW = text.find(f'\\{marker} ', ixW) # Might be another one
@@ -388,7 +388,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Check/Remove some of this code once tC export is fixed
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
-        # GlobalSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
+        # AppSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -438,14 +438,14 @@ class BiblePreprocessor(Preprocessor):
             cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
             if cnt1 != cnt2:
                 error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
-                GlobalSettings.logger.error(error_msg)
+                AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
         if has_USFM3_line:
             # Issue any global USFM3 warnings
             if '\\s5' in file_contents:
                 warning_msg = "\\s5 fields should be coded as \\ts-s\\*…\\ts-e\\* milestones"
-                GlobalSettings.logger.warning(warning_msg)
+                AppSettings.logger.warning(warning_msg)
                 self.warnings.append(warning_msg)
 
             # Check USFM3 pairs
@@ -465,7 +465,7 @@ class BiblePreprocessor(Preprocessor):
                 cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
                 if cnt1 != cnt2:
                     error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
-                    GlobalSettings.logger.error(error_msg)
+                    AppSettings.logger.error(error_msg)
                     self.warnings.append(error_msg)
 
             # Do some global adjustments to make things easier
@@ -479,7 +479,7 @@ class BiblePreprocessor(Preprocessor):
             C = V = ''
             for line in preadjusted_file_contents.split('\n'):
                 if not line: continue # Ignore blank lines
-                # GlobalSettings.logger.debug(f"Processing line: {line!r}")
+                # AppSettings.logger.debug(f"Processing line: {line!r}")
 
                 # Get C,V for debug messages
                 if line.startswith('\\c '):
@@ -489,20 +489,20 @@ class BiblePreprocessor(Preprocessor):
 
                 adjusted_line = line
                 if '\\k' in adjusted_line: # Delete these fields
-                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    # AppSettings.logger.debug(f"Processing user-defined line: {line}")
                     ix = adjusted_line.find('\\k-s ')
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                     ix = adjusted_line.find('\\k-s')
                     if ix != -1:
-                        GlobalSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                        AppSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
                         adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                 if '\\k-s' in adjusted_line:
-                    GlobalSettings.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    AppSettings.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-s field")
                 if '\\k-e' in adjusted_line:
-                    GlobalSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    AppSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-e field")
 
                 # Remove \w fields (just leaving the word)
@@ -515,12 +515,12 @@ class BiblePreprocessor(Preprocessor):
                 for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
                                          '\\+w ', '\\+w\t', '\\+w\n', ):
                     if illegal_sequence in adjusted_line:
-                        GlobalSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                        AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
                         self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
-                        #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
+                        #  AppSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
                     adjusted_file_contents += ' ' + adjusted_line
                     needs_new_line = True
                     continue
@@ -595,7 +595,7 @@ class BiblePreprocessor(Preprocessor):
             C = V = ''
             for line in preadjusted_file_contents.split('\n'):
                 if not line: continue # Ignore blank lines
-                # GlobalSettings.logger.debug(f"Processing line: {line!r}")
+                # AppSettings.logger.debug(f"Processing line: {line!r}")
 
                 # Get C,V for debug messages
                 if line.startswith('\\c '):
@@ -606,7 +606,7 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_line = line
                 if '\\k' in adjusted_line: # Delete these fields
                     # TODO: These milestone fields in the source texts should be self-closing
-                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    # AppSettings.logger.debug(f"Processing user-defined line: {line}")
                     ix = adjusted_line.find('\\k-s')
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
@@ -614,7 +614,7 @@ class BiblePreprocessor(Preprocessor):
                 assert '\\k-e' not in adjusted_line
                 # HANDLE FAULTY USFM IN UGNT
                 if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
-                    GlobalSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
+                    AppSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
                     adjusted_line += '*' # Try a change to a closing marker
 
                 # Remove \w fields (just leaving the word)
@@ -625,25 +625,25 @@ class BiblePreprocessor(Preprocessor):
                 for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
                                          '\\+w ', '\\+w\t', '\\+w\n', ):
                     if illegal_sequence in adjusted_line:
-                        GlobalSettings.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
+                        AppSettings.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
                         self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                         halt
                 # assert '\\w*' not in adjusted_line
                 if '\\z' in adjusted_line: # Delete these user-defined fields
                     # TODO: These milestone fields in the source texts should be self-closing
-                    # GlobalSettings.logger.debug(f"Processing user-defined line: {line}")
+                    # AppSettings.logger.debug(f"Processing user-defined line: {line}")
                     ix = adjusted_line.find('\\zaln-s')
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove zaln-s field right up to end of line
                 if '\\z' in adjusted_line:
-                    GlobalSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    AppSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\z field")
                 if not adjusted_line: # was probably just a \zaln-s milestone with nothing else
                     continue
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
-                        #  GlobalSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
+                        #  AppSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
                     adjusted_file_contents += ' ' + adjusted_line
                     needs_new_line = True
                     continue
@@ -658,7 +658,7 @@ class BiblePreprocessor(Preprocessor):
                 adjusted_file_contents += line + '\n'
 
             if needs_global_check: # Do some file-wide clean-up
-                # GlobalSettings.logger.debug(f"Doing global fixes for {B} …")
+                # AppSettings.logger.debug(f"Doing global fixes for {B} …")
                 adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
                 adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
                 adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
@@ -672,7 +672,7 @@ class BiblePreprocessor(Preprocessor):
         # Write the modified USFM
         if prefix and debug_mode_flag:
             if '\\w ' in adjusted_file_contents or '\\w\t' in adjusted_file_contents or '\\w\n' in adjusted_file_contents:
-                GlobalSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
+                AppSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
             assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
@@ -683,7 +683,7 @@ class BiblePreprocessor(Preprocessor):
         """
         Cleans the USFM file as it copies it.
         """
-        # GlobalSettings.logger.debug(f"clean_copy( {source_pathname}, {destination_pathname} )")
+        # AppSettings.logger.debug(f"clean_copy( {source_pathname}, {destination_pathname} )")
 
         # Replacing this code:
         # copy(source_pathname, destination_pathname)
@@ -696,13 +696,13 @@ class BiblePreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
             file_format = '{0}-{1}.usfm'
 
             # Case #1: The project path is a file, and thus is one book of the Bible, copy to standard filename
-            # GlobalSettings.logger.debug(f"Bible preprocessor case #1: Copying single Bible file for '{project.identifier}' …")
+            # AppSettings.logger.debug(f"Bible preprocessor case #1: Copying single Bible file for '{project.identifier}' …")
             if os.path.isfile(project_path):
                 if project.identifier.lower() in BOOK_NUMBERS:
                     filename = file_format.format(BOOK_NUMBERS[project.identifier.lower()], project.identifier.upper())
@@ -714,7 +714,7 @@ class BiblePreprocessor(Preprocessor):
                 self.num_files_written += 1
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
-                GlobalSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
+                AppSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
                 usfm_files = glob(os.path.join(project_path, '*.usfm'))
                 if usfm_files:
                     for usfm_path in usfm_files:
@@ -731,7 +731,7 @@ class BiblePreprocessor(Preprocessor):
                         self.num_files_written += 1
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
-                    GlobalSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
+                    AppSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
                     # print("chapters:", chapters)
                     if chapters:
@@ -804,12 +804,12 @@ class BiblePreprocessor(Preprocessor):
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
+            AppSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
             self.warnings.append("No Bible source files discovered")
         else:
-            GlobalSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files")
-        GlobalSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        # GlobalSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
+            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files")
+        AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.num_files_written, self.warnings
     # end of BiblePreprocessor run()
 # end of class BiblePreprocessor
@@ -877,7 +877,7 @@ class TaPreprocessor(Preprocessor):
         :return:
         """
         # if prefix and debug_mode_flag:
-        #     GlobalSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
+        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -917,16 +917,16 @@ class TaPreprocessor(Preprocessor):
                     markdown += self.compile_ta_section(project, subsection, level + 1)
             else: # why is it empty? probably user error
                 msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['title']}'"
-                GlobalSettings.logger.warning(msg)
+                AppSettings.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown
     # end of compile_ta_section(self, project, section, level)
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
-            GlobalSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
             self.section_container_id = 1
             toc = self.rc.toc(project.identifier)
             if project.identifier in self.manual_title_map:
@@ -953,11 +953,11 @@ class TaPreprocessor(Preprocessor):
             elif project.path!='./':
                 self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
         if self.num_files_written == 0:
-            GlobalSettings.logger.error("tA preprocessor didn't write any markdown files")
+            AppSettings.logger.error("tA preprocessor didn't write any markdown files")
             self.warnings.append("No tA source files discovered")
         else:
-            GlobalSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files")
-        GlobalSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files")
+        AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TaPreprocessor run()
 
@@ -993,7 +993,7 @@ class TaPreprocessor(Preprocessor):
 class TqPreprocessor(Preprocessor):
 
     def run(self):
-        GlobalSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -1001,7 +1001,7 @@ class TqPreprocessor(Preprocessor):
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}' …")
+            AppSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 markdown = ''
                 book = project.identifier.lower()
@@ -1014,7 +1014,7 @@ class TqPreprocessor(Preprocessor):
                 index_json['chapters'][html_file] = []
                 if chapter_dirs:
                     for chapter_dir in chapter_dirs:
-                        # GlobalSettings.logger.debug(f"tQ preprocessor: Processing {chapter_dir} for '{project.identifier}' {book} …")
+                        # AppSettings.logger.debug(f"tQ preprocessor: Processing {chapter_dir} for '{project.identifier}' {book} …")
                         chapter = os.path.basename(chapter_dir)
                         if chapter in self.ignoreFiles or chapter == 'manifest.json':
                             # NOTE: Would it have been better to check for file vs folder here (and ignore files) ???
@@ -1027,7 +1027,7 @@ class TqPreprocessor(Preprocessor):
                             txt2md(chapter_dir)
                             # convertedCount = txt2md(chapter_dir)
                             # if convertedCount:
-                            #     GlobalSettings.logger.debug(f"tQ preprocessor: Converted {convertedCount} txt files in {chapter} to JSON")
+                            #     AppSettings.logger.debug(f"tQ preprocessor: Converted {convertedCount} txt files in {chapter} to JSON")
 
                         link = f'tq-chapter-{book}-{chapter.zfill(3)}'
                         index_json['chapters'][html_file].append(link)
@@ -1035,7 +1035,7 @@ class TqPreprocessor(Preprocessor):
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths:
                             for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
-                                # GlobalSettings.logger.debug(f"tQ preprocessor: Processing {chunk_file} in {chapter_dir} for '{project.identifier}' {book} …")
+                                # AppSettings.logger.debug(f"tQ preprocessor: Processing {chunk_file} in {chapter_dir} for '{project.identifier}' {book} …")
                                 start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
                                 if chunk_idx < len(chunk_filepaths)-1:
                                     try:
@@ -1044,7 +1044,7 @@ class TqPreprocessor(Preprocessor):
                                         # Can throw a ValueError if chunk is not an integer, e.g., '5&8' or contains \u00268 (ɨ)
                                         initial_string = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx+1]))[0]
                                         msg = f"{book} {chapter} had a problem handling '{initial_string}'"
-                                        GlobalSettings.logger.critical(msg)
+                                        AppSettings.logger.critical(msg)
                                         self.warnings.append(msg)
                                         # TODO: The following is probably not the best/right thing to do???
                                         end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
@@ -1052,7 +1052,7 @@ class TqPreprocessor(Preprocessor):
                                     try:
                                         end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
                                     except KeyError:
-                                        GlobalSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
+                                        AppSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
                                         self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
                                         # TODO: The following is probably not the best/right thing to do???
                                         end_verse = '199'
@@ -1068,28 +1068,28 @@ class TqPreprocessor(Preprocessor):
                                 markdown += text
                         else: # no chunk files
                             msg = f"No .md chunk files found in {book} {chapter} folder"
-                            GlobalSettings.logger.warning(msg)
+                            AppSettings.logger.warning(msg)
                             self.warnings.append(msg)
                 else: # no chapter dirs
                     msg = f"No chapter folders found in {book} folder"
-                    GlobalSettings.logger.warning(msg)
+                    AppSettings.logger.warning(msg)
                     self.warnings.append(msg)
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
                 self.num_files_written += 1
             else:
-                GlobalSettings.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
+                AppSettings.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
 
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
+            AppSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
             self.warnings.append("No tQ source files discovered")
         else:
-            GlobalSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files")
 
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        GlobalSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
@@ -1104,7 +1104,7 @@ class TwPreprocessor(Preprocessor):
     }
 
     def run(self):
-        GlobalSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -1117,11 +1117,11 @@ class TwPreprocessor(Preprocessor):
         and '01' in dir_list and 'LICENSE.md' in dir_list and 'manifest.json' in dir_list:
             # TODO: Is the above the best way to detect these types of repos (One has .DS_Store file also)
             # Handle tW json (.txt) files containing "title" and "body" fields
-            GlobalSettings.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
+            AppSettings.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
             assert len(self.rc.projects) == 1
             project = self.rc.projects[0]
-            GlobalSettings.logger.debug(f"tW preprocessor 01: Copying files for '{project.identifier}' …")
-            # GlobalSettings.logger.debug(f"tW preprocessor 01: project.path='{project.path}'")
+            AppSettings.logger.debug(f"tW preprocessor 01: Copying files for '{project.identifier}' …")
+            # AppSettings.logger.debug(f"tW preprocessor 01: project.path='{project.path}'")
             # Collect all the JSON MD data from the text files into dictionaries
             term_text = {}
             section = 'other' # since we don't have any other info to set this inteligently (e.g., KTs, names)
@@ -1132,7 +1132,7 @@ class TwPreprocessor(Preprocessor):
             term_files = sorted(glob(os.path.join(self.source_dir, '01/', '*.txt')))
             for term_filepath in term_files:
                 # These .txt files actually contain JSON (which contains markdown)
-                GlobalSettings.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
+                AppSettings.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
                 term = os.path.splitext(os.path.basename(term_filepath))[0]
                 try: text = read_file(term_filepath)
                 except Exception as e:
@@ -1144,7 +1144,7 @@ class TwPreprocessor(Preprocessor):
                     # Clean-up the filepath for display (mostly removing /tmp folder names)
                     adjusted_filepath = '/'.join(term_filepath.split('/')[6:]) #.replace('/./','/')
                     error_message = f"Badly formed tW json file '{adjusted_filepath}': {e}"
-                    GlobalSettings.logger.error(error_message)
+                    AppSettings.logger.error(error_message)
                     self.warnings.append(error_message)
                     json_data = {}
                 if json_data:
@@ -1169,7 +1169,7 @@ class TwPreprocessor(Preprocessor):
                     term_text[term] = body_text
                 else:
                     error_message = f"No tW json data found in file '{adjusted_filepath}'"
-                    GlobalSettings.logger.error(error_message)
+                    AppSettings.logger.error(error_message)
                     self.warnings.append(error_message)
             # Now process the dictionaries to sort terms by title and add to markdown
             markdown = ''
@@ -1196,7 +1196,7 @@ class TwPreprocessor(Preprocessor):
             title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
             headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
             for project in self.rc.projects:
-                GlobalSettings.logger.debug(f"tW preprocessor 02: Copying files for '{project.identifier}' …")
+                AppSettings.logger.debug(f"tW preprocessor 02: Copying files for '{project.identifier}' …")
                 term_text = {}
                 section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                 for section_dir in section_dirs:
@@ -1209,7 +1209,7 @@ class TwPreprocessor(Preprocessor):
                     index_json['book_codes'][key] = section
                     term_files = sorted(glob(os.path.join(section_dir, '*.md')))
                     for term_filepath in term_files:
-                        GlobalSettings.logger.debug(f"tW preprocessor 02: processing '{term_filepath}' …")
+                        AppSettings.logger.debug(f"tW preprocessor 02: processing '{term_filepath}' …")
                         term = os.path.splitext(os.path.basename(term_filepath))[0]
                         try: text = read_file(term_filepath)
                         except Exception as e:
@@ -1245,11 +1245,11 @@ class TwPreprocessor(Preprocessor):
                 write_file(output_file, index_json)
 
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"tW preprocessor didn't write any markdown files")
+            AppSettings.logger.error(f"tW preprocessor didn't write any markdown files")
             self.warnings.append("No tW source files discovered")
         else:
-            GlobalSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files")
-        GlobalSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files")
+        AppSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TwPreprocessor run()
 
@@ -1306,7 +1306,7 @@ class TnPreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -1314,7 +1314,7 @@ class TnPreprocessor(Preprocessor):
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            GlobalSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
                 html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
@@ -1327,7 +1327,7 @@ class TnPreprocessor(Preprocessor):
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv_filename_end): # We have the tsv file
                         found_tsv = True
-                        GlobalSettings.logger.debug(f"tN preprocessor got {this_filepath}")
+                        AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
                         copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
                         self.num_files_written += 1
                         break
@@ -1350,7 +1350,7 @@ class TnPreprocessor(Preprocessor):
                         markdown += f"""## <a id="{link}"/> {name} {chapter.lstrip('0')}\n\n"""
                         chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.md')))
                         if chunk_filepaths: # We have .md files
-                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
+                            # AppSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} md chunk files: {chunk_filepaths}")
                             found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
@@ -1383,13 +1383,13 @@ class TnPreprocessor(Preprocessor):
                         else: # See if there's .txt files (as no .md files found)
                             # NOTE: These seem to actually be json files (created by tS)
                             chunk_filepaths = sorted(glob(os.path.join(chapter_dir, '*.txt')))
-                            # GlobalSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
+                            # AppSettings.logger.debug(f"tN preprocessor: got {len(chunk_filepaths)} txt chunk files: {chunk_filepaths}")
                             if chunk_filepaths: found_something = True
                             for move_str in ['front', 'intro']:
                                 self.move_to_front(chunk_filepaths, move_str)
                             for chunk_idx, chunk_filepath in enumerate(chunk_filepaths):
                                 if os.path.basename(chunk_filepath) in self.ignoreFiles:
-                                    # GlobalSettings.logger.debug(f"tN preprocessor: ignored {chunk_filepath}")
+                                    # AppSettings.logger.debug(f"tN preprocessor: ignored {chunk_filepath}")
                                     continue
                                 start_verse = os.path.splitext(os.path.basename(chunk_filepath))[0].lstrip('0')
                                 if chunk_idx < len(chunk_filepaths)-1:
@@ -1415,7 +1415,7 @@ class TnPreprocessor(Preprocessor):
                                     # Clean-up the filepath for display (mostly removing /tmp folder names)
                                     adjusted_filepath = '/'.join(chunk_filepath.split('/')[6:]) #.replace('/./','/')
                                     error_message = f"Badly formed tN json file '{adjusted_filepath}': {e}"
-                                    GlobalSettings.logger.error(error_message)
+                                    AppSettings.logger.error(error_message)
                                     self.warnings.append(error_message)
                                     json_data = {}
                                 for tn_unit in json_data:
@@ -1430,22 +1430,22 @@ class TnPreprocessor(Preprocessor):
                     book_file_name = f'{BOOK_NUMBERS[book]}-{book.upper()}.md'
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
-                    # GlobalSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
+                    # AppSettings.logger.debug(f"tN preprocessor: writing {file_path} with: {markdown}")
                     write_file(file_path, markdown)
                     self.num_files_written += 1
             else:
-                GlobalSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
+                AppSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
 
         if self.num_files_written == 0:
-            GlobalSettings.logger.error(f"tN preprocessor didn't write any markdown files")
+            AppSettings.logger.error(f"tN preprocessor didn't write any markdown files")
             self.warnings.append("No tN source files discovered")
         else:
-            GlobalSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files")
 
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        # GlobalSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        # AppSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TnPreprocessor run()
 
@@ -1496,23 +1496,23 @@ class LexiconPreprocessor(Preprocessor):
         :param str folder:
         :return: markdown str
         """
-        # GlobalSettings.logger.debug(f"compile_lexicon_entry for {project} {folder} …")
+        # AppSettings.logger.debug(f"compile_lexicon_entry for {project} {folder} …")
         content_folderpath = os.path.join(self.source_dir, project.path, folder)
         file_list = os.listdir(content_folderpath)
         if len(file_list) != 1: # expecting '01.md'
-            GlobalSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
+            AppSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
         markdown = "" # f"# {folder}\n" # Not needed coz Strongs number is included inside the file
         content_filepath = os.path.join(content_folderpath, '01.md')
         if os.path.isfile(content_filepath):
             try: content = read_file(content_filepath)
             except Exception as e:
                 msg = f"Error reading {os.path.basename(content_folderpath)}/01.md: {e}"
-                GlobalSettings.logger.error(msg)
+                AppSettings.logger.error(msg)
                 self.warnings.append(msg)
                 content = None
         else:
             msg = f"compile_lexicon_entry couldn't find any files for {folder}"
-            GlobalSettings.logger.error(msg)
+            AppSettings.logger.error(msg)
             self.warnings.append(msg)
             content = None
         if content:
@@ -1523,12 +1523,12 @@ class LexiconPreprocessor(Preprocessor):
 
 
     def run(self):
-        GlobalSettings.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        AppSettings.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             project_path = os.path.join(self.source_dir, project.path)
             print("project_path", project_path)
 
-            GlobalSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
 
             # Even though the .md files won't be converted, they still need to be copied
             #   so they can be linted
@@ -1574,7 +1574,7 @@ class LexiconPreprocessor(Preprocessor):
                 with open(readme_filepath, 'rt') as rmf:
                     readme_markdown = rmf.read()
             else:
-                GlobalSettings.logger.error("Lexicon preprocessor cannot find README.md")
+                AppSettings.logger.error("Lexicon preprocessor cannot find README.md")
                 readme_markdown = "No README.md found\n"
             link1 = "* [Lexicon entries (by number)](number_index.html)\n"
             link2 = "* [Lexicon entries (by word)](word_index.html)\n"
@@ -1583,15 +1583,15 @@ class LexiconPreprocessor(Preprocessor):
             self.num_files_written += 1
 
         if self.num_files_written == 0:
-            GlobalSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
+            AppSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
             self.warnings.append("No lexicon source files discovered")
         else:
-            GlobalSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files")
 
         str_list = str(os.listdir(self.output_dir))
         str_list_adjusted = str_list if len(str_list)<1500 \
                                 else f'{str_list[:1000]} …… {str_list[-500:]}'
-        GlobalSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
+        AppSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
         return self.num_files_written, self.warnings
     # end of LexiconPreprocessor run()
 
@@ -1600,7 +1600,7 @@ class LexiconPreprocessor(Preprocessor):
         """
         Changes the actual links to point to the original .md files.
         """
-        # GlobalSettings.logger.debug("LexiconPreprocessor.fix_index_links(…)…")
+        # AppSettings.logger.debug("LexiconPreprocessor.fix_index_links(…)…")
 
         newLines = []
         for line in content.split('\n'):
@@ -1627,7 +1627,7 @@ class LexiconPreprocessor(Preprocessor):
     def change_index_entries(self, project_path, content):
         """
         """
-        # GlobalSettings.logger.debug(f"LexiconPreprocessor.change_index_entries({project_path}, …)…")
+        # AppSettings.logger.debug(f"LexiconPreprocessor.change_index_entries({project_path}, …)…")
 
         # Change Strongs numbers to lemma entries
         newLines = []
@@ -1650,7 +1650,7 @@ class LexiconPreprocessor(Preprocessor):
                     with open(filepath, 'rt') as lex_file:
                         lex_content = lex_file.read()
                 except FileNotFoundError:
-                    GlobalSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find {filepath}")
+                    AppSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find {filepath}")
                     self.warnings.append(f"No lexicon entry file found for {strongs}")
                     lex_content = None
                     title = "-BAD-"
@@ -1658,7 +1658,7 @@ class LexiconPreprocessor(Preprocessor):
                     title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
                 # print("title", repr(title))
                 if lex_content and title is None: # Why?
-                    GlobalSettings.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
+                    AppSettings.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
                     title = strongs
                 line = f"[{title:6}]({fileURL})"
             newLines.append(line)

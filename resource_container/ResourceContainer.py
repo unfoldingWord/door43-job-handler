@@ -8,7 +8,7 @@ from yaml.parser import ParserError, ScannerError
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
 from general_tools.file_utils import load_json_object, load_yaml_object, read_file
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 
 
 class RC:
@@ -42,35 +42,35 @@ class RC:
         try:
             manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
         except (ParserError, ScannerError) as e:
-            GlobalSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
+            AppSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
         except JSONDecodeError as e:
-                GlobalSettings.logger.error(f"Badly formed 'manifest.json' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'manifest.json' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'package.json'))
         except JSONDecodeError as e:
-                GlobalSettings.logger.error(f"Badly formed 'package.json' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'package.json' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'project.json'))
         except JSONDecodeError as e:
-                GlobalSettings.logger.error(f"Badly formed 'project.json' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'project.json' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'meta.json'))
         except JSONDecodeError as e:
-                GlobalSettings.logger.error(f"Badly formed 'meta.json' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'meta.json' in {self.repo_name}: {e}")
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
@@ -271,7 +271,7 @@ class RC:
             try:
                 p.config_yaml = load_yaml_object(file_path)
             except ParserError as e:
-                GlobalSettings.logger.error(f"Badly formed 'config.yaml' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'config.yaml' in {self.repo_name}: {e}")
         return p.config_yaml
 
     def toc(self, project_identifier=None):
@@ -283,7 +283,7 @@ class RC:
             try:
                 p.toc_yaml = load_yaml_object(file_path)
             except ParserError as e:
-                GlobalSettings.logger.error(f"Badly formed 'toc.yaml' in {self.repo_name}: {e}")
+                AppSettings.logger.error(f"Badly formed 'toc.yaml' in {self.repo_name}: {e}")
         return p.toc_yaml
 
 
@@ -298,7 +298,7 @@ class Resource:
         self.resource = resource
         if not isinstance(self.resource, dict):
             raise Exception('Missing dict parameter: resource')
-        # GlobalSettings.logger.debug(f"Created new RC Resource with: {resource}")
+        # AppSettings.logger.debug(f"Created new RC Resource with: {resource}")
         self._language = None
 
 
@@ -309,7 +309,7 @@ class Resource:
 
     @property
     def format(self):
-        # GlobalSettings.logger.debug("Resource.format()…")
+        # AppSettings.logger.debug("Resource.format()…")
         if 'format' in self.resource and self.resource['format']:
             old_format = self.resource['format']
             if '/' not in old_format:
@@ -321,11 +321,11 @@ class Resource:
         elif 'content_mime_type' in self.rc.manifest and self.rc.manifest['content_mime_type']:
             return self.rc.manifest['content_mime_type']
         elif 'format' in self.rc.manifest and self.rc.manifest['format']:
-            # GlobalSettings.logger.debug(f"Returning Resource format={self.rc.manifest['format']} from rc.manifest{' for '+self.identifier if self.identifier else ''}.")
+            # AppSettings.logger.debug(f"Returning Resource format={self.rc.manifest['format']} from rc.manifest{' for '+self.identifier if self.identifier else ''}.")
             return self.rc.manifest['format']
         elif self.rc.usfm_files(): # e.g., a plain USFM bundle (with no manifest, etc.)
             return 'text/usfm'
-        GlobalSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
+        AppSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
     # end of Resource.format() property
 
 
@@ -335,7 +335,7 @@ class Resource:
         File extension of this type of resource, such as md or usfm
         :return string:
         """
-        # GlobalSettings.logger.debug("RC.file_ext()…")
+        # AppSettings.logger.debug("RC.file_ext()…")
         result = {
                 'text/usx': 'usx',
                 'text/usfm': 'usfm',
@@ -344,20 +344,20 @@ class Resource:
                 'text/tsv': 'tsv',
             }.get(self.format, 'txt')
         if not self.format and self.identifier=='bible':
-            GlobalSettings.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
+            AppSettings.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
             result = 'usfm'
-        # GlobalSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
+        # AppSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
         return result
     # end of Resource.file_ext() property
 
 
     @property
     def type(self):
-        # GlobalSettings.logger.debug("Resource.type()…")
+        # AppSettings.logger.debug("Resource.type()…")
         # print(f"Getting resource type for {self.resource}…")
         # print(f"file_ext = {self.file_ext}")
-        # GlobalSettings.logger.critical(f"Type is in RC: {'type' in self.resource}")
-        # if 'type' in self.resource: GlobalSettings.logger.debug(f"RC type is: {self.resource['type']}")
+        # AppSettings.logger.critical(f"Type is in RC: {'type' in self.resource}")
+        # if 'type' in self.resource: AppSettings.logger.debug(f"RC type is: {self.resource['type']}")
         # NOTE: Seems that type can also be a dict, e.g., {'id': 'text', 'name': 'Text'} for OBS manifest.json
         if 'type' in self.resource and isinstance(self.resource['type'], str):
             return self.resource['type'].lower()
@@ -368,10 +368,10 @@ class Resource:
             else:
                 return 'book'
         # elif self.identifier in resource_map:
-        #     GlobalSettings.logger.critical(f"Found {self.identifier} Resource.type() = '{resource_map[self.identifier]['type']}' in resource_map.")
+        #     AppSettings.logger.critical(f"Found {self.identifier} Resource.type() = '{resource_map[self.identifier]['type']}' in resource_map.")
         #     return resource_map[self.identifier]['type']
         else:
-            # GlobalSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.type() in resource_map. (Returning 'book'.)")
+            # AppSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.type() in resource_map. (Returning 'book'.)")
             return 'book'
     # end of Resource.type() property
 
@@ -379,24 +379,24 @@ class Resource:
     @property
     def identifier(self):
         if 'identifier' in self.resource and self.resource['identifier']:
-            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['identifier'].lower()}' from self.resource['identifier']")
+            # AppSettings.logger.debug(f"Returning Resource identifier='{self.resource['identifier'].lower()}' from self.resource['identifier']")
             return self.resource['identifier'].lower()
         elif 'id' in self.resource and self.resource['id']:
-            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['id'].lower()}' from self.resource['id']")
+            # AppSettings.logger.debug(f"Returning Resource identifier='{self.resource['id'].lower()}' from self.resource['id']")
             return self.resource['id'].lower()
         elif 'type' in self.resource and 'id' in self.resource['type'] and self.resource['type']['id']:
-            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['type']['id']}' from self.resource['type']['id']")
+            # AppSettings.logger.debug(f"Returning Resource identifier='{self.resource['type']['id']}' from self.resource['type']['id']")
             return self.resource['type']['id']
         elif 'slug' in self.resource and self.resource['slug']:
-            # GlobalSettings.logger.debug(f"Returning Resource identifier='{self.resource['slug'].lower()}' from self.resource['slug']")
+            # AppSettings.logger.debug(f"Returning Resource identifier='{self.resource['slug'].lower()}' from self.resource['slug']")
             return self.resource['slug'].lower()
-        GlobalSettings.logger.critical(f"Returning Resource identifier=None.")
+        AppSettings.logger.critical(f"Returning Resource identifier=None.")
     # end of Resource.identifier() property
 
 
     @property
     def title(self):
-        # GlobalSettings.logger.debug("Resource.title()…")
+        # AppSettings.logger.debug("Resource.title()…")
         if 'title' in self.resource and self.resource['title']:
             #print(f"RESOURCE.title returning1 resource title {self.resource['title']!r}")
             return self.resource['title']
@@ -405,11 +405,11 @@ class Resource:
             return self.resource['name']
         # elif self.identifier in resource_map:
         #     #print(f"RESOURCE.title returning3 resource_map title {resource_map[self.identifier]['title']!r}")
-        #     GlobalSettings.logger.critical(f"Found {self.identifier} Resource.title() = '{resource_map[self.identifier]['title']}' in resource_map.")
+        #     AppSettings.logger.critical(f"Found {self.identifier} Resource.title() = '{resource_map[self.identifier]['title']}' in resource_map.")
         #     return resource_map[self.identifier]['title']
         else:
             #print(f"RESOURCE.title (final ELSE) returning4 resource identifier {self.identifier!r}")
-            # GlobalSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.title() in resource_map. (Returning '{self.identifier}'.)")
+            # AppSettings.logger.critical(f"Searched unsuccessfully for {self.identifier} Resource.title() in resource_map. (Returning '{self.identifier}'.)")
             return self.identifier
     # end of Resource.title() property
 
@@ -437,20 +437,20 @@ class Resource:
             issued_result = self.resource.get('issued')
             if isinstance(issued_result, str):
                 return issued_result
-            GlobalSettings.logger.error(f"RC issued={issued_result!r}")
+            AppSettings.logger.error(f"RC issued={issued_result!r}")
             if isinstance(issued_result, (date, datetime)):
                 return issued_result.strftime('%Y-%m-%d')
-            GlobalSettings.logger.critical(f"RC issued={issued_result!r}")
+            AppSettings.logger.critical(f"RC issued={issued_result!r}")
         elif 'pub_date' in self.resource.get('status', {}):
             issued_pub_date = self.resource['status']['pub_date']
             if isinstance(issued_pub_date, str):
                 return issued_pub_date
-            GlobalSettings.logger.error(f"RC issued pub_date={issued_pub_date!r}")
+            AppSettings.logger.error(f"RC issued pub_date={issued_pub_date!r}")
             if isinstance(issued_result, (date, datetime)):
                 return issued_pub_date.strftime('%Y-%m-%d')
-            GlobalSettings.logger.critical(f"RC issued pub_date={issued_pub_date!r}")
+            AppSettings.logger.critical(f"RC issued pub_date={issued_pub_date!r}")
         else:
-            GlobalSettings.logger.warning("RC has no 'issued' date available")
+            AppSettings.logger.warning("RC has no 'issued' date available")
             return datetime.utcnow().strftime('%Y-%m-%d')
 
     @property
@@ -459,12 +459,12 @@ class Resource:
         if 'modified' in self.resource and self.resource['modified']:
             modified_result = self.resource.get('modified')
             if isinstance(modified_result, str): return modified_result
-            GlobalSettings.logger.error(f"RC modified={modified_result!r}")
+            AppSettings.logger.error(f"RC modified={modified_result!r}")
             if isinstance(modified_result, (date, datetime)):
                 return modified_result.strftime('%Y-%m-%d')
-            GlobalSettings.logger.critical(f"RC modified={modified_result!r}")
+            AppSettings.logger.critical(f"RC modified={modified_result!r}")
         else:
-            GlobalSettings.logger.warning("RC has no 'modified' date available")
+            AppSettings.logger.warning("RC has no 'modified' date available")
             return datetime.utcnow().strftime('%Y-%m-%d')
 
     @property
@@ -485,7 +485,7 @@ class Resource:
             elif 'target_language' in self.rc.manifest and self.rc.manifest['target_language']:
                 self._language = Language(self.rc, self.rc.manifest['target_language'])
             else:
-                GlobalSettings.logger.warning(f"Resource '{self.title}' is assuming 'English' language")
+                AppSettings.logger.warning(f"Resource '{self.title}' is assuming 'English' language")
                 # Always assume English by default
                 self._language = Language(self.rc, {
                     'identifier': 'en',
@@ -564,7 +564,7 @@ class Language:
         elif 'id' in self.language and self.language['id']:
             return self.language['id'].lower()
         else:
-            GlobalSettings.logger.warning(f"Language '{self.language}' is assuming 'en' identifier")
+            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'en' identifier")
             return 'en'
 
     @property
@@ -574,7 +574,7 @@ class Language:
         if 'dir'in self.language:
             return self.language['dir']
         else:
-            GlobalSettings.logger.warning(f"Language '{self.language}' is assuming 'ltr' direction")
+            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'ltr' direction")
             return 'ltr'
 
     @property
@@ -584,7 +584,7 @@ class Language:
         elif 'name'in self.language:
             return self.language['name']
         else:
-            GlobalSettings.logger.warning(f"Language '{self.language}' is assuming 'English' title")
+            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'English' title")
             return 'English'
 
 
@@ -681,7 +681,7 @@ def get_manifest_from_repo_name(repo_name):
     """
     If no manifest file was given, try dissecting the repo name.
     """
-    GlobalSettings.logger.warning(f"Getting manifest from repo name '{repo_name}'…")
+    AppSettings.logger.warning(f"Getting manifest from repo name '{repo_name}'…")
     manifest = {
         'dublin_core': {},
     }
@@ -705,9 +705,9 @@ def get_manifest_from_repo_name(repo_name):
                 lang = TdLanguage.get_language(part)
                 if lang:
                     if 'language' in manifest['dublin_core']:
-                        GlobalSettings.logger.warning(f"Ignoring '{part}' potential language in repo name '{repo_name}' coz already have '{manifest['dublin_core']['language']}'")
+                        AppSettings.logger.warning(f"Ignoring '{part}' potential language in repo name '{repo_name}' coz already have '{manifest['dublin_core']['language']}'")
                     else: # we'll take this to be the language
-                        GlobalSettings.logger.info(f"Taking '{part}' to be the language code in repo name '{repo_name}'")
+                        AppSettings.logger.info(f"Taking '{part}' to be the language code in repo name '{repo_name}'")
                         manifest['dublin_core']['language'] = {
                             'identifier': lang.lc,
                             'title': lang.ln,
@@ -715,9 +715,9 @@ def get_manifest_from_repo_name(repo_name):
                             }
                         continue # Used the part
 
-        # GlobalSettings.logger.critical(f"Checking for {part}/{part.lower()} in resource_map…")
+        # AppSettings.logger.critical(f"Checking for {part}/{part.lower()} in resource_map…")
         # if part.lower() in resource_map:
-        #     GlobalSettings.logger.critical(f"Found {part.lower()} in resource_map…")
+        #     AppSettings.logger.critical(f"Found {part.lower()} in resource_map…")
         #     manifest['dublin_core']['identifier'] = part
         #     if 'projects' not in manifest:
         #         manifest['projects'] = [{'identifier': part}]

@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 
 
 def txt2md(rootdir='.'):
@@ -35,7 +35,7 @@ def txt2md(rootdir='.'):
 
                             processedCount += 1
                         except BaseException as e:
-                            GlobalSettings.logger.debug(f"Error: {e}")
+                            AppSettings.logger.debug(f"Error: {e}")
 
                 if os.path.isfile(filepath):
                     os.remove(filepath)

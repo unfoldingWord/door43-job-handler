@@ -152,8 +152,8 @@ class S3Handler:
         :param string key: name of the object in the bucket
         """
         from general_tools.file_utils import get_mime_type
-        #from global_settings.global_settings import GlobalSettings
-        #GlobalSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
+        #from app_settings.app_settings import AppSettings
+        #AppSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
         assert 'http' not in key.lower()
 
         with open(path, 'rb') as f:

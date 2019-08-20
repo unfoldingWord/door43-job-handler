@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 from rq_settings import prefix, debug_mode_flag
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from general_tools.file_utils import write_file, remove_tree
 
 
@@ -26,7 +26,7 @@ class ClientLinterCallback:
                         or
                     u/user/repo/commid_id/part_id if multi-part job
         """
-        GlobalSettings.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors})…")
+        AppSettings.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors})…")
         self.job_dict = job_dict
         self.identifier = identifier
         self.success = success
@@ -48,15 +48,15 @@ class ClientLinterCallback:
         self.job = None
 
     def do_post_processing(self):
-        GlobalSettings.logger.debug(f"ClientLinterCallback.do_post_processing()…")
+        AppSettings.logger.debug(f"ClientLinterCallback.do_post_processing()…")
         if not self.identifier:
             error = 'No identifier found'
-            GlobalSettings.logger.error(error)
+            AppSettings.logger.error(error)
             raise Exception(error)
 
         # if not self.s3_results_key:
         #     error = f"No s3_results_key found for identifier = {self.identifier}"
-        #     GlobalSettings.logger.error(error)
+        #     AppSettings.logger.error(error)
         #     raise Exception(error)
 
         id_parts = self.identifier.split('/')
@@ -65,11 +65,11 @@ class ClientLinterCallback:
             halt
             # NOTE: Disabled 4Mar2019 coz unused
             # part_count, part_id, book = id_parts[1:4]
-            # GlobalSettings.logger.debug('Multiple project, part {0} of {1}, linted book {2}'.
+            # AppSettings.logger.debug('Multiple project, part {0} of {1}, linted book {2}'.
             #                  format(part_id, part_count, book))
             # s3__master_results_key = '/'.join(self.s3_results_key.split('/')[:-1])
         else:
-            GlobalSettings.logger.debug('Single project')
+            AppSettings.logger.debug('Single project')
             # NOTE: Disabled 4Mar2019 coz unused
             # s3__master_results_key = self.s3_results_key
 
@@ -86,9 +86,9 @@ class ClientLinterCallback:
         if not self.success:
             msg = "Linter failed for identifier: " + self.identifier
             build_log['warnings'].append(msg)
-            GlobalSettings.logger.error(msg)
+            AppSettings.logger.error(msg)
         else:
-            GlobalSettings.logger.debug(f"Linter {self.identifier} had success with"
+            AppSettings.logger.debug(f"Linter {self.identifier} had success with"
                                         f" {len(self.warnings)} warnings: {', '.join(self.warnings[:5])} …")
 
         has_warnings = len(build_log['warnings']) > 0
@@ -109,10 +109,10 @@ class ClientLinterCallback:
         #     build_log = results
 
         # if prefix and debug_mode_flag:
-        #     GlobalSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
+        #     AppSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
         # else:
         #     remove_tree(self.temp_dir)  # cleanup
-        GlobalSettings.db_close()
+        AppSettings.db_close()
         return build_log
     # end of do_post_processing()
 # end of ClientLinterCallback class

@@ -20,7 +20,7 @@ from statsd import StatsClient # Graphite front-end
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from client_converter_callback import ClientConverterCallback
 from client_linter_callback import ClientLinterCallback
 from door43_tools.project_deployer import ProjectDeployer
@@ -28,9 +28,9 @@ from general_tools.file_utils import write_file, remove_tree
 
 
 
-GlobalSettings(prefix=prefix)
+AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
+    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
 general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
 
 
@@ -48,44 +48,44 @@ def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[dict, boo
     Return the job dict or False
     """
     # vej_job_id = vej_job_dict['job_id']
-    # GlobalSettings.logger.debug(f"verify_expected_job({vej_job_id})")
+    # AppSettings.logger.debug(f"verify_expected_job({vej_job_id})")
 
     outstanding_jobs_dict_bytes = vej_redis_connection.get(REDIS_JOB_LIST) # Gets bytes!!!
     if not outstanding_jobs_dict_bytes:
-        GlobalSettings.logger.error("No expected jobs found in redis store")
+        AppSettings.logger.error("No expected jobs found in redis store")
         return False
-    # GlobalSettings.logger.debug(f"Got outstanding_jobs_dict_bytes:"
+    # AppSettings.logger.debug(f"Got outstanding_jobs_dict_bytes:"
     #                             f" ({len(outstanding_jobs_dict_bytes)}) {outstanding_jobs_dict_bytes}")
     assert isinstance(outstanding_jobs_dict_bytes,bytes)
     outstanding_jobs_dict_json_string = outstanding_jobs_dict_bytes.decode() # bytes -> str
     assert isinstance(outstanding_jobs_dict_json_string,str)
     outstanding_jobs_dict = json.loads(outstanding_jobs_dict_json_string)
     assert isinstance(outstanding_jobs_dict,dict)
-    GlobalSettings.logger.info(f"Currently have {len(outstanding_jobs_dict)}"
+    AppSettings.logger.info(f"Currently have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store")
     if vej_job_id not in outstanding_jobs_dict:
-        GlobalSettings.logger.error(f"Not expecting job with id of {vej_job_id}")
-        GlobalSettings.logger.debug(f"Only had job ids: {outstanding_jobs_dict.keys()}")
+        AppSettings.logger.error(f"Not expecting job with id of {vej_job_id}")
+        AppSettings.logger.debug(f"Only had job ids: {outstanding_jobs_dict.keys()}")
         return False
     this_job_dict = outstanding_jobs_dict[vej_job_id]
 
     # We found a match -- delete that job from the outstanding list
-    GlobalSettings.logger.debug(f"Found job match for {vej_job_id}")
+    AppSettings.logger.debug(f"Found job match for {vej_job_id}")
     del outstanding_jobs_dict[vej_job_id]
     if outstanding_jobs_dict:
-        GlobalSettings.logger.debug(f"Still have {len(outstanding_jobs_dict)}"
+        AppSettings.logger.debug(f"Still have {len(outstanding_jobs_dict)}"
                                     f" outstanding job(s) in '{REDIS_JOB_LIST}'")
         # Update the job dict in redis now that this job has been deleted from it
         outstanding_jobs_json_string = json.dumps(outstanding_jobs_dict)
         vej_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string)
     else: # no outstanding jobs left
-        GlobalSettings.logger.info("Deleting the final outstanding job"
+        AppSettings.logger.info("Deleting the final outstanding job"
                                   f" in '{REDIS_JOB_LIST}' redis store")
         del_result = vej_redis_connection.delete(REDIS_JOB_LIST)
         # print("  Got redis delete result:", del_result)
         assert del_result == 1 # Should only have deleted one key
 
-    #GlobalSettings.logger.debug(f"Returning {this_job_dict}")
+    #AppSettings.logger.debug(f"Returning {this_job_dict}")
     return this_job_dict
 # end of verify_expected_job
 
@@ -95,7 +95,7 @@ def merge_results_logs(build_log:dict, file_results:dict, converter_flag:bool) -
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
     """
-    GlobalSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {converter_flag})…")
+    AppSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {converter_flag})…")
     if not build_log:
         return file_results
     if file_results:
@@ -121,7 +121,7 @@ def merge_dicts_lists(build_log:dict, file_results:dict, key:str) -> None:
 
     Alters first parameter build_log in place.
     """
-    # GlobalSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
+    # AppSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
     if key in file_results:
         value = file_results[key]
         if value:
@@ -144,13 +144,13 @@ def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Opt
     """
     file_key = f'{project_folder_key}{commit_id}/build_log.json'
     try:
-        file_content = GlobalSettings.door43_s3_handler() \
-                    .resource.Object(bucket_name=GlobalSettings.door43_bucket_name, key=file_key) \
+        file_content = AppSettings.door43_s3_handler() \
+                    .resource.Object(bucket_name=AppSettings.door43_bucket_name, key=file_key) \
                     .get()['Body'].read().decode('utf-8')
         json_content = json.loads(file_content)
         return json_content['job_id']
     except Exception as e:
-        GlobalSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
+        AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
 # end of get_jobID_from_commit_buildLog function
 
 
@@ -158,7 +158,7 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> 
     """
     Clear out and remove the commit directory from the requested bucket for this project revision.
     """
-    GlobalSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} bucket…")
+    AppSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} bucket…")
     s3_bucket_handler.bucket.objects.filter(Prefix=s3_commit_key).delete()
 # end of clear_commit_directory_from_bucket function
 
@@ -174,38 +174,38 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
             to tag and branch names.
     """
     MAX_WANTED_COMMITS = 3
-    GlobalSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
+    AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits = []
     # Process it backwards in case we want to count how many we have as we go
     for commit in reversed(commits_list):
-        GlobalSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
         if len(new_commits) >= MAX_WANTED_COMMITS \
         and commit['type'] in ('hash', 'unknown'):
             if 0: # really do it DISABLED DISABLED DISABLED DISABLED DISABLED
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
-                GlobalSettings.logger.info(f"    Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
-                clear_commit_directory_from_bucket(GlobalSettings.cdn_s3_handler(), commit_key)
-                GlobalSettings.logger.info(f"    Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
-                clear_commit_directory_from_bucket(GlobalSettings.door43_s3_handler(), commit_key)
+                AppSettings.logger.info(f"    Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
+                clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
+                AppSettings.logger.info(f"    Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
+                clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
                 # Delete the pre-convert .zip file (available on Download button) from its bucket
                 if commit['job_id']:
                     zipFile_key = f"preconvert/{commit['job_id']}.zip"
-                    GlobalSettings.logger.info(f"    Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
-                    clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zipFile_key)
+                    AppSettings.logger.info(f"    Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                    clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
                 else: # don't know the job_id (or the zip file was already deleted)
-                    GlobalSettings.logger.warning("  No job_id so pre-convert zip file not deleted.")
+                    AppSettings.logger.warning("  No job_id so pre-convert zip file not deleted.")
                 # Setup redirects (so users don't get 404 errors from old saved links)
                 old_repo_key = f"{project_folder_key}{commit['id']}"
                 latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
-                GlobalSettings.logger.info(f"    Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
-                GlobalSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
-                GlobalSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+                AppSettings.logger.info(f"    Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
             else:
-                GlobalSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
+                AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
                 new_commits.insert(0, commit) # Insert at beginning to get the order correct again
         else:
-            GlobalSettings.logger.debug("    Keeping this one.")
+            AppSettings.logger.debug("    Keeping this one.")
             new_commits.insert(0, commit) # Insert at beginning to get the order correct again
     return new_commits
 # end of remove_excess_commits
@@ -216,17 +216,17 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     project.json is read by the Javascript in door43.org/js/project-page-functions.js
         The commits are used to update the Revision list in the left side-bar.
     """
-    GlobalSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dirpath})…")
+    AppSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dirpath})…")
 
     commit_id = build_log['commit_id']
     repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
     repo_name = build_log['repo_name']
     project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     project_json_key = f'{project_folder_key}project.json'
-    project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
+    project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{GlobalSettings.gogs_url}/{repo_owner_username}/{repo_name}'
+    project_json['repo_url'] = f'https://{AppSettings.gogs_url}/{repo_owner_username}/{repo_name}'
     current_commit = {
         'id': commit_id,
         'job_id': build_log['job_id'],
@@ -251,19 +251,19 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
             if char not in 'abcdef1234567890': return False
         return True
 
-    GlobalSettings.logger.debug("Rebuilding commits list for project.json…")
+    AppSettings.logger.debug("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
     commits = []
     for c in project_json['commits']:
-        GlobalSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' {c['id'] == commit_id}…")
+        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' {c['id'] == commit_id}…")
         if c['id'] == commit_id: # the old entry for the current commit id
             zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
-            GlobalSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
+            AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
             try:
-                clear_commit_directory_from_bucket(GlobalSettings.pre_convert_s3_handler(), zip_file_key)
+                clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
             except Exception as e:
-                GlobalSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
+                AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
             # Not appended to commits here coz it happens below instead
         else: # a different commit from the current one
             if 'job_id' not in c: # Might be able to remove this eventually
@@ -280,13 +280,13 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
         save_project_filepath = os.path.join(output_dirpath, save_project_filename)
         write_file(save_project_filepath, project_json)
         save_project_json_key = f'{project_folder_key}{save_project_filename}'
-        GlobalSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
-        GlobalSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+        AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+        AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
     # Now save the updated project.json file
     project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
-    GlobalSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
+    AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
 # end of update_project_file function
 
 
@@ -309,12 +309,12 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     str_payload = str(queued_json_payload)
     str_payload_adjusted = str_payload if len(str_payload)<1500 \
                             else f'{str_payload[:1000]} …… {str_payload[-500:]}'
-    GlobalSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {str_payload_adjusted}")
+    AppSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {str_payload_adjusted}")
 
     # Check that this is an expected callback job
     if 'job_id' not in queued_json_payload:
         error = "Callback job has no 'job_id' field"
-        GlobalSettings.logger.critical(error)
+        AppSettings.logger.critical(error)
         raise Exception(error)
     # job_id = queued_json_payload['job_id']
     matched_job_dict = verify_expected_job(queued_json_payload['job_id'], redis_connection)
@@ -322,9 +322,9 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     #   so this means callback cannot be successfully retried if it fails below
     if not matched_job_dict:
         error = f"No waiting job found for {queued_json_payload}"
-        GlobalSettings.logger.critical(error)
+        AppSettings.logger.critical(error)
         raise Exception(error)
-    GlobalSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
+    AppSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
     job_descriptive_name = f"{matched_job_dict['resource_type']}({matched_job_dict['input_format']})"
 
     this_job_dict = queued_json_payload.copy()
@@ -338,13 +338,13 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
             del this_job_dict[fieldname]
 
     if 'preprocessor_warnings' in matched_job_dict:
-        # GlobalSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
+        # AppSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
         #                            f" remembered preprocessor_warnings: {matched_job_dict['preprocessor_warnings']}")
         # Prepend preprocessor results to linter warnings
         # total_warnings = len(matched_job_dict['preprocessor_warnings']) + len(queued_json_payload['linter_warnings'])
         queued_json_payload['linter_warnings'] = matched_job_dict['preprocessor_warnings'] \
                                                + queued_json_payload['linter_warnings']
-        # GlobalSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
+        # AppSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
         #                             f" linter_warnings: {queued_json_payload['linter_warnings']}")
         # assert len(queued_json_payload['linter_warnings']) == total_warnings
         del matched_job_dict['preprocessor_warnings'] # No longer required
@@ -352,14 +352,14 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     if 'identifier' in queued_json_payload:
         # NOTE: The identifier we send to the tX Job Handler system is a complex string, not a job_id
         identifier = queued_json_payload['identifier']
-        GlobalSettings.logger.debug(f"Got identifier from queued_json_payload: {identifier}.")
+        AppSettings.logger.debug(f"Got identifier from queued_json_payload: {identifier}.")
         job_descriptive_name = f'{identifier} {job_descriptive_name}'
     if 'identifier' in matched_job_dict: # overrides
         identifier = matched_job_dict['identifier']
-        GlobalSettings.logger.debug(f"Got identifier from matched_job_dict: {identifier}.")
+        AppSettings.logger.debug(f"Got identifier from matched_job_dict: {identifier}.")
     else:
         identifier = queued_json_payload['job_id']
-        GlobalSettings.logger.debug(f"Got identifier from job_id: {identifier}.")
+        AppSettings.logger.debug(f"Got identifier from job_id: {identifier}.")
     # NOTE: following line removed as stats recording used too much disk space
     # user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
     #                     if 'user_projects_invoked_string' in matched_job_dict \
@@ -376,7 +376,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
 
     # We get the adapted tx-manager calls to do our work for us
     # It doesn't actually matter which one we do first I think
-    GlobalSettings.logger.info("Running linter post-processing…")
+    AppSettings.logger.info("Running linter post-processing…")
     url_part2 = f"u/{this_job_dict['repo_owner_username']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
     clc = ClientLinterCallback(this_job_dict, identifier,
                                queued_json_payload['linter_success'],
@@ -387,7 +387,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
                             #    s3_results_key=url_part2)
     linter_log = clc.do_post_processing()
     build_log = merge_results_logs(matched_job_dict, linter_log, converter_flag=False)
-    GlobalSettings.logger.info("Running converter post-processing…")
+    AppSettings.logger.info("Running converter post-processing…")
     ccc = ClientConverterCallback(this_job_dict, identifier,
                                   queued_json_payload['converter_success'],
                                   queued_json_payload['converter_info'],
@@ -410,17 +410,17 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
 
     if unzip_dir is None:
-        GlobalSettings.logger.critical("Unable to deploy because file download failed previously")
+        AppSettings.logger.critical("Unable to deploy because file download failed previously")
         deployed = False
     else:
         # Now deploy the new pages (was previously a separate AWS Lambda call)
-        GlobalSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
+        AppSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
         deployer = ProjectDeployer(unzip_dir, our_temp_dir)
         deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
         deployed = True
 
     if prefix and debug_mode_flag:
-        GlobalSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
+        AppSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
     else:
         remove_tree(our_temp_dir)
 
@@ -428,13 +428,13 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     str_final_build_log = str(final_build_log)
     str_final_build_log_adjusted = str_final_build_log if len(str_final_build_log)<1500 \
                             else f'{str_final_build_log[:1000]} …… {str_final_build_log[-500:]}'
-    GlobalSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
+    AppSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
-        GlobalSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
-        GlobalSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn it off.)")
+        AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
+        AppSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn it off.)")
     if deployed:
-        GlobalSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
-                               f" at https://{GlobalSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
+        AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
+                               f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
     return job_descriptive_name, matched_job_dict['door43_webhook_received_at']
 #end of process_callback_job function
 
@@ -448,7 +448,7 @@ def job(queued_json_payload) -> None:
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
-    GlobalSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
+    AppSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time.time()
     stats_client.incr(f'{general_stats_prefix}.callback.jobs.attempted')
 
@@ -468,9 +468,9 @@ def job(queued_json_payload) -> None:
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
         prefixed_name = f"{prefix}Door43_Callback"
-        GlobalSettings.logger.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
-        GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
-        GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+        AppSettings.logger.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
+        AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+        AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
         # Now attempt to log it to an additional, separate FAILED log
         import logging
         from boto3 import Session
@@ -504,22 +504,22 @@ def job(queued_json_payload) -> None:
     elapsed_milliseconds = round((time.time() - start_time) * 1000)
     stats_client.timing(f'{general_stats_prefix}.callback.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        AppSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {round(time.time() - start_time)} seconds.")
+        AppSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {round(time.time() - start_time)} seconds.")
 
     # Calculate total elapsed time for the job
     total_elapsed_time = datetime.utcnow() - \
                          datetime.strptime(door43_webhook_received_at,
                                            '%Y-%m-%dT%H:%M:%SZ')
-    GlobalSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
+    AppSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
     stats_client.timing(f'{general_stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     # NOTE: following line removed as stats recording used too much disk space
     # stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
     stats_client.gauge(project_types_invoked_string, 0) # Mark as 'succeeded'
     stats_client.incr(f'{general_stats_prefix}.callback.jobs.succeeded')
-    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+    AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of callback.py for door43_enqueue_job

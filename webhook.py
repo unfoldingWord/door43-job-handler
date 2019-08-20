@@ -28,7 +28,7 @@ from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 
 
 
@@ -71,9 +71,9 @@ RESOURCE_SUBJECT_MAP = {
 
 
 
-GlobalSettings(prefix=prefix)
+AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    GlobalSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
+    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
 general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
 stats_prefix = f'{general_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
@@ -100,7 +100,7 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 #     :return:
 #     """
 #     project_json_key = f'u/{repo_owner}/{repo_name}/project.json'
-#     project_json = GlobalSettings.cdn_s3_handler().get_json(project_json_key)
+#     project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
 #     project_json['user'] = repo_owner
 #     project_json['repo'] = repo_name
 #     project_json['repo_url'] = f'https://git.door43.org/{repo_owner}/{repo_name}'
@@ -121,8 +121,8 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 #     project_json['commits'] = commits
 #     project_file = os.path.join(base_temp_dir_name, 'project.json')
 #     write_file(project_file, project_json)
-#     GlobalSettings.logger.debug(f'Saving project.json to {GlobalSettings.cdn_bucket_name}/{project_json_key}')
-#     GlobalSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
+#     AppSettings.logger.debug(f'Saving project.json to {AppSettings.cdn_bucket_name}/{project_json_key}')
+#     AppSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
 # # end of update_project_json function
 
 
@@ -137,9 +137,9 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 #     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
 #     write_file(build_log_file, build_log)
 #     upload_key = f'{s3_commit_key}/{part}build_log.json'
-#     GlobalSettings.logger.debug(f'Saving build log to {GlobalSettings.cdn_bucket_name}/{upload_key}')
-#     GlobalSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
-#     # GlobalSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
+#     AppSettings.logger.debug(f'Saving build log to {AppSettings.cdn_bucket_name}/{upload_key}')
+#     AppSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
+#     # AppSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
 # #end of upload_build_log_to_s3
 
 
@@ -172,14 +172,14 @@ def clear_commit_directory_in_cdn(s3_commit_key:str) -> None:
     """
     Clear out the commit directory in the CDN bucket for this project revision.
     """
-    GlobalSettings.logger.debug(f"Clearing objects from {prefix}CDN commit directory '{s3_commit_key}' …")
+    AppSettings.logger.debug(f"Clearing objects from {prefix}CDN commit directory '{s3_commit_key}' …")
     # Original code
-    # for obj in GlobalSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
-    #     # GlobalSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
-    #     GlobalSettings.cdn_s3_handler().delete_file(obj.key)
+    # for obj in AppSettings.cdn_s3_handler().get_objects(prefix=s3_commit_key):
+    #     # AppSettings.logger.debug(f"Removing s3 cdn file: {obj.key} …")
+    #     AppSettings.cdn_s3_handler().delete_file(obj.key)
     # New code (adapted from https://stackoverflow.com/questions/11426560/amazon-s3-boto-how-to-delete-folder)
     # May also delete the folder itself (doesn't matter)
-    GlobalSettings.cdn_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
+    AppSettings.cdn_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
 # end of clear_commit_directory_in_cdn function
 
 
@@ -203,13 +203,13 @@ def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
     """
     """
     zip_file_key = f'preconvert/{job_id}.zip'
-    GlobalSettings.logger.debug(f"Uploading {zip_filepath} to {GlobalSettings.pre_convert_bucket_name}/{zip_file_key} …")
+    AppSettings.logger.debug(f"Uploading {zip_filepath} to {AppSettings.pre_convert_bucket_name}/{zip_file_key} …")
     try:
-        GlobalSettings.pre_convert_s3_handler().upload_file(zip_filepath, zip_file_key, cache_time=0)
+        AppSettings.pre_convert_s3_handler().upload_file(zip_filepath, zip_file_key, cache_time=0)
     except Exception as e:
-        GlobalSettings.logger.error(f"Failed to upload zipped repo up to server -- got exception: {e}")
+        AppSettings.logger.error(f"Failed to upload zipped repo up to server -- got exception: {e}")
     finally:
-        GlobalSettings.logger.debug("Upload finished.")
+        AppSettings.logger.debug("Upload finished.")
     return zip_file_key
 # end of upload_preconvert_zip_file function
 
@@ -237,7 +237,7 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
                         else commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
-    GlobalSettings.logger.info(f"Downloading zipped repo from {repo_zip_url} …")
+    AppSettings.logger.info(f"Downloading zipped repo from {repo_zip_url} …")
     try:
         # If the file already exists, remove it, we want a fresh copy
         if os.path.isfile(repo_zip_file):
@@ -245,14 +245,14 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
 
         download_file(repo_zip_url, repo_zip_file)
     finally:
-        GlobalSettings.logger.debug("Downloading finished.")
+        AppSettings.logger.debug("Downloading finished.")
 
-    GlobalSettings.logger.debug(f"Unzipping {repo_zip_file} …")
+    AppSettings.logger.debug(f"Unzipping {repo_zip_file} …")
     try:
         # NOTE: This is unsafe if the zipfile comes from an untrusted source
         unzip(repo_zip_file, repo_dir)
     finally:
-        GlobalSettings.logger.debug("Unzipping finished.")
+        AppSettings.logger.debug("Unzipping finished.")
 
     # Remove the downloaded zip file (now unzipped)
     if not prefix: # For dev- save this file longer
@@ -270,12 +270,12 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
 
     Can return None if we can't determine one.
     """
-    GlobalSettings.logger.debug(f"get_tX_subject('{gts_repo_name}', rc)…")
-    # GlobalSettings.logger.debug(f"gts_rc.resource.identifier={gts_rc.resource.identifier}")
-    # GlobalSettings.logger.debug(f"gts_rc.resource.file_ext={gts_rc.resource.file_ext}")
-    # GlobalSettings.logger.debug(f"gts_rc.resource.type={gts_rc.resource.type}")
-    # GlobalSettings.logger.debug(f"gts_rc.resource.subject={gts_rc.resource.subject}")
-    # GlobalSettings.logger.debug(f"gts_rc.resource.format={gts_rc.resource.format}")
+    AppSettings.logger.debug(f"get_tX_subject('{gts_repo_name}', rc)…")
+    # AppSettings.logger.debug(f"gts_rc.resource.identifier={gts_rc.resource.identifier}")
+    # AppSettings.logger.debug(f"gts_rc.resource.file_ext={gts_rc.resource.file_ext}")
+    # AppSettings.logger.debug(f"gts_rc.resource.type={gts_rc.resource.type}")
+    # AppSettings.logger.debug(f"gts_rc.resource.subject={gts_rc.resource.subject}")
+    # AppSettings.logger.debug(f"gts_rc.resource.format={gts_rc.resource.format}")
 
     repo_subject = None
 
@@ -283,68 +283,68 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
     if adjusted_subject:
         adjusted_subject = adjusted_subject.replace(' ', '_') # NOTE: RC returns 'title' if 'subject' is missing
         if adjusted_subject in KNOWN_RESOURCE_SUBJECTS:
-            GlobalSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
+            AppSettings.logger.info(f"Using (adjusted) subject to set repo_subject='{adjusted_subject}'")
             repo_subject = adjusted_subject
         elif 'bible' in adjusted_subject.lower() and gts_rc.resource.identifier not in RESOURCE_SUBJECT_MAP:
             repo_subject = 'Bible'
-            GlobalSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject to '{repo_subject}'")
+            AppSettings.logger.info(f"Using 'bible' in (adjusted) subject=={adjusted_subject} to set repo_subject to '{repo_subject}'")
         else:
-            GlobalSettings.logger.warning(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
+            AppSettings.logger.warning(f"Didn't use (adjusted) subject='{adjusted_subject}' to set repo_subject")
     else:
-        GlobalSettings.logger.warning("No subject or title in RC manifest")
+        AppSettings.logger.warning("No subject or title in RC manifest")
 
     if not repo_subject:
         rc_resource_format = gts_rc.resource.format
         if rc_resource_format:
             if rc_resource_format in ('usfm','usfm3','text/usfm','text/usfm3'):
                 repo_subject = 'Bible'
-                GlobalSettings.logger.info(f"Using rc.resource.format='{rc_resource_format}' to set repo_subject='{repo_subject}'")
+                AppSettings.logger.info(f"Using rc.resource.format='{rc_resource_format}' to set repo_subject='{repo_subject}'")
             else:
-                GlobalSettings.logger.debug(f"Didn't use rc.resource.format='{rc_resource_format}' to set repo_subject")
+                AppSettings.logger.debug(f"Didn't use rc.resource.format='{rc_resource_format}' to set repo_subject")
         else:
-            GlobalSettings.logger.warning("No resource.format in RC manifest")
+            AppSettings.logger.warning("No resource.format in RC manifest")
 
     if not repo_subject:
         rc_resource_identifier = gts_rc.resource.identifier
         if rc_resource_identifier:
             if rc_resource_identifier in RESOURCE_SUBJECT_MAP:
                 repo_subject = RESOURCE_SUBJECT_MAP[rc_resource_identifier]
-                GlobalSettings.logger.info(f"Using rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
+                AppSettings.logger.info(f"Using rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
             else:
-                GlobalSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
+                AppSettings.logger.debug(f"Didn't use rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
         else:
-            GlobalSettings.logger.warning("No resource.identifier in RC manifest")
+            AppSettings.logger.warning("No resource.identifier in RC manifest")
 
     if (not repo_subject) and rc_resource_identifier:
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if rc_resource_identifier.endswith('_'+resource_subject_string) \
             or rc_resource_identifier.endswith('-'+resource_subject_string):
                 repo_subject = RESOURCE_SUBJECT_MAP[resource_subject_string]
-                GlobalSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
+                AppSettings.logger.info(f"Using '{resource_subject_string}' at end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject='{repo_subject}'")
                 break
         else: # if didn't match/break above
-            GlobalSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
+            AppSettings.logger.debug(f"Didn't use end of rc.resource.identifier='{rc_resource_identifier}' to set repo_subject")
 
     if not repo_subject:
         rc_resource_type = gts_rc.resource.type
         if rc_resource_type:
             if rc_resource_type in RESOURCE_SUBJECT_MAP: # e.g., help, man
                 repo_subject = RESOURCE_SUBJECT_MAP[rc_resource_type]
-                GlobalSettings.logger.info(f"Using rc.resource.type='{rc_resource_type}' to set repo_subject='{repo_subject}'")
+                AppSettings.logger.info(f"Using rc.resource.type='{rc_resource_type}' to set repo_subject='{repo_subject}'")
         else:
-            GlobalSettings.logger.warning("No resource.type in RC manifest")
+            AppSettings.logger.warning("No resource.type in RC manifest")
 
     if repo_subject=='Translation_Notes' and gts_rc.resource.format=='tsv':
         repo_subject = 'TSV_Translation_Notes'
-        GlobalSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
+        AppSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
 
     if not repo_subject and '-obs' in gts_repo_name or '_obs' in gts_repo_name:
         repo_subject = 'Open_Bible_Stories'
-        GlobalSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
+        AppSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
     if not repo_subject:
         repo_subject = 'Generic_Markdown'
-        GlobalSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
+        AppSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
     return repo_subject
 # end of get_tX_subject function
@@ -358,19 +358,19 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
     The REDIS dict contains a string representation of a json dict
         whose entries are job ids mapped to the full job info dict.
     """
-    # GlobalSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
+    # AppSettings.logger.debug(f"remember_job( {rj_job_dict['job_id']} )")
 
     try:
         outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
     # This can happen ONCE if the format has changed by code updates -- shouldn't normally happen
     # NOTE: Actually this code
     except redis_exceptions.ResponseError as e:
-        GlobalSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
-        GlobalSettings.logger.critical(f"Losing former outstanding_jobs_dict from Redis…")
+        AppSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
+        AppSettings.logger.critical(f"Losing former outstanding_jobs_dict from Redis…")
         outstanding_jobs_dict_bytes = None # Error should self-correct
         # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
-        GlobalSettings.logger.info("Created new outstanding_jobs_dict")
+        AppSettings.logger.info("Created new outstanding_jobs_dict")
         outstanding_jobs_dict = {}
     else:
         assert isinstance(outstanding_jobs_dict_bytes,bytes)
@@ -378,10 +378,10 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
         assert isinstance(outstanding_jobs_dict_json_string,str)
         outstanding_jobs_dict = json.loads(outstanding_jobs_dict_json_string)
         assert isinstance(outstanding_jobs_dict,dict)
-        # GlobalSettings.logger.debug(f"Got outstanding_jobs_dict: "
+        # AppSettings.logger.debug(f"Got outstanding_jobs_dict: "
         #                            f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
-        GlobalSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
+        AppSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
         # Remove any outstanding jobs more than two weeks old
         for outstanding_job_id, outstanding_job_dict in outstanding_jobs_dict.copy().items():
@@ -390,13 +390,13 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
             outstanding_duration = datetime.utcnow() \
                                 - datetime.strptime(outstanding_job_dict['created_at'], '%Y-%m-%dT%H:%M:%SZ')
             if outstanding_duration >= timedelta(weeks=2):
-                GlobalSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
+                AppSettings.logger.info(f"Deleting expired saved job from {outstanding_job_dict['created_at']}")
                 del outstanding_jobs_dict[outstanding_job_id] # Delete from our local copy
 
     # This new job shouldn't already be in the outstanding jobs dict
     assert rj_job_dict['job_id'] not in outstanding_jobs_dict
     outstanding_jobs_dict[rj_job_dict['job_id']] = rj_job_dict
-    GlobalSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
+    AppSettings.logger.info(f"Now have {len(outstanding_jobs_dict)}"
                                f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
 
     # Write the updated job list to Redis
@@ -414,7 +414,7 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
 #         and for a comparison of warnings/errors that are detected/displayed.
 #         (Would have to be manually compared -- nothing is done here with the BDB results.)
 #     """
-#     GlobalSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
+#     AppSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
 #     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
 #     files_data = {
 #         'nameLine': (None, f'DCS_Auto_{prefixed_our_name}'),
@@ -435,17 +435,17 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
 #         'uploadedMetadataFile': ('', b''),
 #         'submit': (None, 'Submit'),
 #         }
-#     GlobalSettings.logger.debug(f"Posting data to {BDB_url} …")
+#     AppSettings.logger.debug(f"Posting data to {BDB_url} …")
 #     try:
 #         response = requests.post(BDB_url, files=files_data)
 #     except requests.exceptions.ConnectionError as e:
-#         GlobalSettings.logger.critical(f"BDB connection error: {e}")
+#         AppSettings.logger.critical(f"BDB connection error: {e}")
 #         response = None
 
 #     if response:
-#         GlobalSettings.logger.info(f"BDB response.status_code = {response.status_code}, response.reason = {response.reason}")
-#         GlobalSettings.logger.debug(f"BDB response.headers = {response.headers}")
-#         # GlobalSettings.logger.debug(f"BDB response.text = {response.text}")
+#         AppSettings.logger.info(f"BDB response.status_code = {response.status_code}, response.reason = {response.reason}")
+#         AppSettings.logger.debug(f"BDB response.headers = {response.headers}")
+#         # AppSettings.logger.debug(f"BDB response.text = {response.text}")
 #         if response.status_code == 200:
 #             if "Your project has been submitted" in response.text:
 #                 ix = response.text.find('eventually be available <a href="')
@@ -453,15 +453,15 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
 #                     ixStart = ix + 33
 #                     ixEnd = response.text.find('">here</a>')
 #                     job_url = response.text[ixStart:ixEnd]
-#                     GlobalSettings.logger.info(f"BDB results will be available at http://Freely-Given.org/Software/BibleDropBox/{job_url}")
+#                     AppSettings.logger.info(f"BDB results will be available at http://Freely-Given.org/Software/BibleDropBox/{job_url}")
 #             else:
-#                 GlobalSettings.logger.error(f"BDB didn't accept job: {response.text}")
+#                 AppSettings.logger.error(f"BDB didn't accept job: {response.text}")
 #         else:
-#             GlobalSettings.logger.error(f"Failed to submit job to BDB:"
+#             AppSettings.logger.error(f"Failed to submit job to BDB:"
 #                                            f" {response.status_code}={response.reason}")
 #     else: # no response
 #         # error_msg = "Submission of job to BDB got no response"
-#         GlobalSettings.logger.error("Submission of job to BDB got no response")
+#         AppSettings.logger.error("Submission of job to BDB got no response")
 #         #raise Exception(error_msg) # Is this the best thing to do here?
 # # end of upload_to_BDB
 
@@ -514,7 +514,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     """
     # global user_projects_invoked_string
     global project_types_invoked_string
-    GlobalSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+    AppSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
 
 
     #  Update repo/owner/pusher stats
@@ -534,7 +534,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
 
 
     # Setup a temp folder to use
-    source_url_base = f'https://s3-{GlobalSettings.aws_region_name}.amazonaws.com/{GlobalSettings.pre_convert_bucket_name}'
+    source_url_base = f'https://s3-{AppSettings.aws_region_name}.amazonaws.com/{AppSettings.pre_convert_bucket_name}'
     # Move everything down one directory level for simple delete
     # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
     # TODO: This might not be enough 6-digit fractions of a second could collide???
@@ -543,21 +543,21 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     try:
         os.makedirs(base_temp_dir_name)
     except Exception as e:
-        GlobalSettings.logger.warning(f"SetupTempFolder threw an exception: {e}")
+        AppSettings.logger.warning(f"SetupTempFolder threw an exception: {e}")
 
 
     # for fieldname in queued_json_payload: # Display interesting fields given in payload
     #     if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
-    #         GlobalSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
+    #         AppSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
 
 
     # Get the commit_id, commit_url
     try:
         default_branch = queued_json_payload['repository']['default_branch']
     except KeyError:
-        GlobalSettings.logger.critical("No default branch specified")
+        AppSettings.logger.critical("No default branch specified")
         default_branch = 'NoDefaultBranch'
-    GlobalSettings.logger.debug(f"Got default_branch='{default_branch}'")
+    AppSettings.logger.debug(f"Got default_branch='{default_branch}'")
 
     # Gather other details from the commit that we will note for the job(s)
     repo_owner_username = queued_json_payload['repository']['owner']['username']
@@ -568,16 +568,16 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
         except (IndexError, AttributeError):
-            GlobalSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
+            AppSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
             commit_branch = 'UnknownCommitBranch'
         except KeyError:
-            GlobalSettings.logger.critical("No commit branch specified")
+            AppSettings.logger.critical("No commit branch specified")
             commit_branch = 'NoCommitBranch'
         # if commit_branch != default_branch:
         #     err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
-        #     GlobalSettings.logger.critical(err_msg)
+        #     AppSettings.logger.critical(err_msg)
         #     return False, {'error': f"{err_msg}."}
-        GlobalSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
+        AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
         commit_id = queued_json_payload['after']
         commit = None
@@ -585,7 +585,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
             if commit['id'] == commit_id:
                 break
         commit_id = commit_id[:10]  # Only use the short form
-        GlobalSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+        AppSettings.logger.debug(f"Got original commit_id='{commit_id}'")
         commit_url = commit['url']
         commit_message = commit['message'].strip() # Seems to always end with a newline
 
@@ -600,10 +600,10 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         try:
             tag_name = queued_json_payload['release']['tag_name']
         except (IndexError, AttributeError):
-            GlobalSettings.logger.critical(f"Could not determine tag name from '{queued_json_payload['release']}'")
+            AppSettings.logger.critical(f"Could not determine tag name from '{queued_json_payload['release']}'")
             tag_name = 'UnknownTagName'
         except KeyError:
-            GlobalSettings.logger.critical("No tag name specified")
+            AppSettings.logger.critical("No tag name specified")
             tag_name = 'NoTagName'
         commit_url = queued_json_payload['release']['zipball_url']
         commit_message = queued_json_payload['release']['name']
@@ -615,7 +615,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         pusher_username = pusher_dict['username']
         our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
     else:
-        GlobalSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
+        AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
         commit_type = 'default'
@@ -629,11 +629,11 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     else:
         commit_type = 'unknown'
         commit_id = 'OhDear'
-    GlobalSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
-    GlobalSettings.logger.debug(f"Got commit_url='{commit_url}'")
+    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
+    AppSettings.logger.debug(f"Got commit_url='{commit_url}'")
 
 
-    GlobalSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
+    AppSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
     ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
@@ -655,7 +655,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
 
 
     # Get the resource container
-    # GlobalSettings.logger.debug(f'Getting Resource Container…')
+    # AppSettings.logger.debug(f'Getting Resource Container…')
     rc = RC(repo_dir, repo_name)
     job_descriptive_name = f'{our_identifier} {rc.resource.type}({rc.resource.format}, {rc.resource.file_ext})'
 
@@ -667,24 +667,24 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
         # This can happen for usfm in .txt files (ts-desktop exports)
-        use_logger = GlobalSettings.logger.warning if input_format=='txt' else GlobalSettings.logger.critical
+        use_logger = AppSettings.logger.warning if input_format=='txt' else AppSettings.logger.critical
         use_logger(f"Changing input_format from '{input_format}' to 'usfm' for  resource_subject={resource_subject}")
         input_format = 'usfm'
-    GlobalSettings.logger.info(f"Got resource_subject='{resource_subject}', input_format='{input_format}'")
+    AppSettings.logger.info(f"Got resource_subject='{resource_subject}', input_format='{input_format}'")
     if resource_subject not in KNOWN_RESOURCE_SUBJECTS:
-        GlobalSettings.logger.critical(f"Got unexpected resource_subject={resource_subject} with input_format={input_format}")
+        AppSettings.logger.critical(f"Got unexpected resource_subject={resource_subject} with input_format={input_format}")
     if not resource_subject or not input_format:
         # Might as well fail here if they're not set properly
         if prefix and debug_mode_flag:
-            GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+            AppSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
         else:
             remove_tree(base_temp_dir_name)  # cleanup
         raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
 
 
     # Save manifest to manifest table
-    # GlobalSettings.logger.debug(f'Creating manifest dictionary…')
-    # GlobalSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
+    # AppSettings.logger.debug(f'Creating manifest dictionary…')
+    # AppSettings.logger.debug(f"Getting RC as_dict = {rc.as_dict()}")
     manifest_data = {
         'repo_name': repo_name,
         'user_name': repo_owner_username,
@@ -696,30 +696,30 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         'last_updated': datetime.utcnow()
     }
     # First see if manifest already exists in DB (can be slowish) and update it if it is
-    GlobalSettings.logger.debug(f"Getting manifest from DB for '{repo_name}' with user '{repo_owner_username}' …")
+    AppSettings.logger.debug(f"Getting manifest from DB for '{repo_name}' with user '{repo_owner_username}' …")
     tx_manifest = TxManifest.get(repo_name=repo_name, user_name=repo_owner_username)
     if tx_manifest:
         for key, value in manifest_data.items():
             setattr(tx_manifest, key, value)
-        GlobalSettings.logger.debug(f"Updating manifest in manifest table: {manifest_data}")
+        AppSettings.logger.debug(f"Updating manifest in manifest table: {manifest_data}")
         tx_manifest.update()
     else:
         tx_manifest = TxManifest(**manifest_data)
-        GlobalSettings.logger.debug(f"Inserting manifest into manifest table: {tx_manifest}")
+        AppSettings.logger.debug(f"Inserting manifest into manifest table: {tx_manifest}")
         tx_manifest.insert()
 
 
     # Preprocess the files
-    GlobalSettings.logger.info("Preprocessing files…")
+    AppSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, commit_url, rc, repo_dir, preprocess_dir)
     if preprocessor_warning_list:
-        GlobalSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
+        AppSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 
     # Copy the ReadMe file if it seems that this repo is just minimal
     if num_preprocessor_files_written < 3:
         if os.path.isfile(os.path.join(repo_dir, 'README.md')):
-            GlobalSettings.logger.debug("Try copying README.md…")
+            AppSettings.logger.debug("Try copying README.md…")
             shutil.copy(os.path.join(repo_dir, 'README.md'),preprocess_dir)
             num_preprocessor_files_written += 1
 
@@ -735,14 +735,14 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     #   so that at least any errors/warnings get displayed
 
     # Zip up the massaged files
-    GlobalSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
+    AppSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
     preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
-    GlobalSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
+    AppSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
     add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
-    GlobalSettings.logger.debug("Zipping finished.")
+    AppSettings.logger.debug("Zipping finished.")
 
     # Upload zipped file to the S3 pre-convert bucket
-    GlobalSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
+    AppSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
     our_job_id = get_unique_job_id()
     file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
 
@@ -750,7 +750,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     # We no longer use txJob class but just create our own Python dict
     #   This gets saved in Redis so it can be recalled by the callback function
     #       (only a very small subset gets posted to the tX-enqueue-job)
-    GlobalSettings.logger.debug("Webhook.process_job setting up job dict…")
+    AppSettings.logger.debug("Webhook.process_job setting up job dict…")
     pj_job_dict = {}
     pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
@@ -763,15 +763,15 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
     pj_job_dict['input_format'] = input_format
     pj_job_dict['source'] = f'{source_url_base}/{file_key}'
-    pj_job_dict['cdn_bucket'] = GlobalSettings.cdn_bucket_name
+    pj_job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
     pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
-    pj_job_dict['output'] = f"https://{GlobalSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
-    pj_job_dict['callback'] = f'{GlobalSettings.api_url}/client/callback'
+    pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
+    pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
     pj_job_dict['output_format'] = 'html'
     # NOTE: following line removed as stats recording used too much disk space
     # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pj_job_dict['links'] = {
-        'href': f'{GlobalSettings.api_url}/tx/job/{our_job_id}',
+        'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
         'rel': 'self',
         'method': 'GET'
     }
@@ -791,7 +791,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Pass the work request onto the tX system
-    GlobalSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
+    AppSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': our_job_id,
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
@@ -806,49 +806,49 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         'user_token': gogs_user_token, # Checked by tX enqueue job
         }
     if 'options' in pj_job_dict and pj_job_dict['options']:
-        GlobalSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
+        AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
         tx_payload['options'] = pj_job_dict['options']
 
-    GlobalSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    AppSettings.logger.debug(f"Payload for tX: {tx_payload}")
     try:
         response = requests.post(tx_post_url, json=tx_payload)
     except requests.exceptions.ConnectionError as e:
-        GlobalSettings.logger.critical(f"Callback connection error: {e}")
+        AppSettings.logger.critical(f"Callback connection error: {e}")
         response = None
     if response:
-        #GlobalSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-        #GlobalSettings.logger.debug(f"response.headers = {response.headers}")
+        #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #AppSettings.logger.debug(f"response.headers = {response.headers}")
         try:
-            GlobalSettings.logger.info(f"response.json = {response.json()}")
+            AppSettings.logger.info(f"response.json = {response.json()}")
         except json.decoder.JSONDecodeError:
-            GlobalSettings.logger.info("No valid response JSON found")
-            GlobalSettings.logger.debug(f"response.text = {response.text}")
+            AppSettings.logger.info("No valid response JSON found")
+            AppSettings.logger.debug(f"response.text = {response.text}")
         if response.status_code != 200:
-            GlobalSettings.logger.critical(f"Failed to submit job to tX:"
+            AppSettings.logger.critical(f"Failed to submit job to tX:"
                                         f" {response.status_code}={response.reason}")
     else: # no response
         error_msg = "Submission of job to tX system got no response"
-        GlobalSettings.logger.critical(error_msg)
+        AppSettings.logger.critical(error_msg)
         raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
     # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BibleDropBox
     #     if prefix and not debug_mode_flag: # Only for dev- chain
     #         # This was intended for comparing USFM linting during development of that area of code
-    #         GlobalSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+    #         AppSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
     #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
     #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
     #         # Not using the preprocessed files (only the originals above)
-    #         # GlobalSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+    #         # AppSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
     #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
 
     if prefix and debug_mode_flag:
-        GlobalSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
+        AppSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    # GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
-    GlobalSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} has finished.")
+    # AppSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
+    AppSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} has finished.")
     return job_descriptive_name
 #end of process_job function
 
@@ -861,7 +861,7 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
-    GlobalSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
+    AppSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr(f'{stats_prefix}.jobs.attempted')
 
@@ -883,9 +883,9 @@ def job(queued_json_payload):
         job_descriptive_name = process_job(queued_json_payload, current_job.connection)
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
-        GlobalSettings.logger.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
-        GlobalSettings.logger.critical(f"{e}: {traceback.format_exc()}")
-        GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+        AppSettings.logger.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
+        AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+        AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
         # Now attempt to log it to an additional, separate FAILED log
         import logging
         from boto3 import Session
@@ -919,12 +919,12 @@ def job(queued_json_payload):
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing(f'{stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
-        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
+        AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
-        GlobalSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
+        AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
     stats_client.incr(f'{stats_prefix}.jobs.completed')
-    GlobalSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+    AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
 # end of webhook.py for door43_enqueue_job

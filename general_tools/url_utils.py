@@ -6,7 +6,7 @@ from contextlib import closing
 import logging
 
 import urllib.request as urllib2
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 
 
 
@@ -52,7 +52,7 @@ def _download_file(url, outfile, urlopen):
                 shutil.copyfileobj(request, fp)
     except IOError as e:
         error_message = f"Error retrieving {url}: {e}"
-        GlobalSettings.logger.critical(error_message)
+        AppSettings.logger.critical(error_message)
         raise IOError(error_message)
 
 
