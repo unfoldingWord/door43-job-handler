@@ -883,7 +883,14 @@ class TaPreprocessor(Preprocessor):
         else:
             link = f'section-container-{self.section_container_id}'
             self.section_container_id = self.section_container_id + 1
-        markdown = f"""{'#' * level} <a id="{link}"/>{self.get_title(project, link, section['title'])}\n\n"""
+        try:
+            markdown = f"""{'#' * level} <a id="{link}"/>{self.get_title(project, link, section['title'])}\n\n"""
+        except KeyError: # probably missing section title
+            msg = f"Title seems missing for '{project.identifier}' level {level} '{link}'"
+            AppSettings.logger.warning(msg)
+            self.warnings.append(msg)
+            markdown = f"""{'#' * level} <a id="{link}"/>MISSING TITLE???\n\n"""
+
         if 'link' in section:
             top_box = ""
             bottom_box = ""

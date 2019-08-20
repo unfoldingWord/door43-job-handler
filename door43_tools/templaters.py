@@ -710,10 +710,16 @@ class TaTemplater(Templater):
         else:
             link = f'section-container-{self.section_container_id}'
             self.section_container_id = self.section_container_id + 1
-        html = f"""
-            <li>
-                <a href="#{link}">{section['title']}</a>
-            """
+        try:
+            html = f"""
+                <li>
+                    <a href="#{link}">{section['title']}</a>
+                """
+        except KeyError: # probably missing section title
+            html = f"""
+                <li>
+                    <a href="#{link}">MISSING TITLE???</a>
+                """
         if 'sections' in section:
             html += f"""
                 <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
