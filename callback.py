@@ -256,7 +256,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
         project_json['commits'] = []
     commits = []
     for c in project_json['commits']:
-        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' {c['id'] == commit_id}…")
+        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' Is current commit={c['id'] == commit_id}…")
         if c['id'] == commit_id: # the old entry for the current commit id
             zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
             AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
