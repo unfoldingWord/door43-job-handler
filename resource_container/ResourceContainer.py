@@ -4,6 +4,7 @@ from datetime import datetime, date
 from glob import glob
 from json.decoder import JSONDecodeError
 from yaml.parser import ParserError, ScannerError
+from typing import Optional
 
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
@@ -14,7 +15,7 @@ from app_settings.app_settings import AppSettings
 class RC:
     current_version = '0.2'
 
-    def __init__(self, directory=None, repo_name=None, manifest=None):
+    def __init__(self, directory=None, repo_name=None, manifest=None) -> None:
         """
         :param string directory:
         :param string repo_name:
@@ -27,6 +28,7 @@ class RC:
         self._resource = None
         self.loadeded_manifest_file = False
         self._projects = []
+        self.error_messages = set() # Don't want duplicates
 
     @property
     def manifest(self):
@@ -42,35 +44,45 @@ class RC:
         try:
             manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
         except (ParserError, ScannerError) as e:
-            AppSettings.logger.error(f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}")
+            err_msg = f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}"
+            AppSettings.logger.error(err_msg)
+            self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
         except JSONDecodeError as e:
-                AppSettings.logger.error(f"Badly formed 'manifest.json' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'manifest.json' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'package.json'))
         except JSONDecodeError as e:
-                AppSettings.logger.error(f"Badly formed 'package.json' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'package.json' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'project.json'))
         except JSONDecodeError as e:
-                AppSettings.logger.error(f"Badly formed 'project.json' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'project.json' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
         try:
             manifest = load_json_object(os.path.join(self.path, 'meta.json'))
         except JSONDecodeError as e:
-                AppSettings.logger.error(f"Badly formed 'meta.json' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'meta.json' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
             return manifest
@@ -271,7 +283,9 @@ class RC:
             try:
                 p.config_yaml = load_yaml_object(file_path)
             except (ParserError, ScannerError) as e:
-                AppSettings.logger.error(f"Badly formed 'config.yaml' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'config.yaml' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         return p.config_yaml
 
     def toc(self, project_identifier=None):
@@ -283,12 +297,15 @@ class RC:
             try:
                 p.toc_yaml = load_yaml_object(file_path)
             except (ParserError, ScannerError) as e:
-                AppSettings.logger.error(f"Badly formed 'toc.yaml' in {self.repo_name}: {e}")
+                err_msg = f"Badly formed 'toc.yaml' in {self.repo_name}: {e}"
+                AppSettings.logger.error(err_msg)
+                self.error_messages.add(err_msg)
         return p.toc_yaml
+# end of class RC
 
 
 class Resource:
-    def __init__(self, rc, resource):
+    def __init__(self, rc, resource:dict) -> None:
         """
         :param RC rc:
         :param dict resource:
@@ -308,7 +325,7 @@ class Resource:
 
 
     @property
-    def format(self):
+    def format(self) -> Optional[str]:
         # AppSettings.logger.debug("Resource.format()…")
         if 'format' in self.resource and self.resource['format']:
             old_format = self.resource['format']
@@ -356,7 +373,7 @@ class Resource:
         # AppSettings.logger.debug("Resource.type()…")
         # print(f"Getting resource type for {self.resource}…")
         # print(f"file_ext = {self.file_ext}")
-        # AppSettings.logger.critical(f"Type is in RC: {'type' in self.resource}")
+        # AppSettings.logger.debug(f"Type is in RC: {'type' in self.resource}")
         # if 'type' in self.resource: AppSettings.logger.debug(f"RC type is: {self.resource['type']}")
         # NOTE: Seems that type can also be a dict, e.g., {'id': 'text', 'name': 'Text'} for OBS manifest.json
         if 'type' in self.resource and isinstance(self.resource['type'], str):
@@ -542,6 +559,7 @@ class Resource:
     @property
     def version(self):
         return self.resource.get('version', '1')
+# end of class Resource
 
 
 class Language:
@@ -586,6 +604,7 @@ class Language:
         else:
             AppSettings.logger.warning(f"Language '{self.language}' is assuming 'English' title")
             return 'English'
+# end of Language class
 
 
 class Project:
@@ -675,6 +694,7 @@ class Project:
             'title': self.title,
             'versification': self.versification
         }
+# end of Project class
 
 
 def get_manifest_from_repo_name(repo_name):
@@ -739,3 +759,4 @@ def get_manifest_from_repo_name(repo_name):
         manifest['dublin_core']['identifier'] = repo_name
 
     return manifest
+# end of get_manifest_from_repo_name(repo_name)

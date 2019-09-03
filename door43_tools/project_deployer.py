@@ -27,6 +27,7 @@ class ProjectDeployer:
         AppSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
         self.unzip_dir = unzip_dir
         self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
+        self.error_messages = []
 
 
     def close(self) -> None:
@@ -70,6 +71,7 @@ class ProjectDeployer:
         source_dir, success = self.template_converted_files(build_log, output_dir, repo_name,
                                             resource_type, s3_commit_key, source_dir, start,
                                             template_file)
+        build_log['warnings'].extend(self.error_messages)
         if not success:
             AppSettings.logger.critical("Templating failed -- returning False")
             return False
@@ -204,6 +206,7 @@ class ProjectDeployer:
 
     def run_templater(self, templater) -> None:  # for test purposes
         templater.run()
+        self.error_messages = list(templater.error_messages)
     # end of ProjectDeployer.run_templater(templater)
 
 

@@ -713,6 +713,9 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     AppSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, commit_url, rc, repo_dir, preprocess_dir)
+
+    # Save the warnings for the user -- put any RC messages in front
+    preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
     if preprocessor_warning_list:
         AppSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
 

@@ -1,5 +1,6 @@
 import os
 from glob import glob
+from yaml.parser import ParserError, ScannerError
 
 from bs4 import BeautifulSoup
 
@@ -83,6 +84,7 @@ class Templater:
         self.titles = {}
         self.chapters = {}
         self.book_codes = {}
+        self.error_messages = set() # Don't want duplicates
 
 
     def run(self):
@@ -377,7 +379,14 @@ class ObsNotesTemplater(Templater):
                 html += f"""
                 <h4>{title}</h4>
                 """
-                toc = load_yaml_object(os.path.join(f'{os.path.splitext(fname)[0]}-toc.yaml'))
+                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
+                try:
+                    toc = load_yaml_object(filepath)
+                except (ParserError, ScannerError) as e:
+                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
+                    AppSettings.logger.critical("ObsNotes"+err_msg)
+                    self.error_messages.add(err_msg)
+                    toc = None
                 if toc:
                     for section in toc['sections']:
                         html += self.build_section_toc(section)
@@ -760,7 +769,14 @@ class TaTemplater(Templater):
                 html += f"""
                 <h4>{title}</h4>
                 """
-                toc = load_yaml_object(os.path.join(f'{os.path.splitext(fname)[0]}-toc.yaml'))
+                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
+                try:
+                    toc = load_yaml_object(os.path.join(filepath))
+                except (ParserError, ScannerError) as e:
+                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
+                    AppSettings.logger.critical("Ta"+err_msg)
+                    self.error_messages.add(err_msg)
+                    toc = None
                 if toc:
                     for section in toc['sections']:
                         html += self.build_section_toc(section)

@@ -174,14 +174,19 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
             to tag and branch names.
     """
     MAX_WANTED_COMMITS = 3
+    MAX_DEBUG_DISPLAYS = 10
+    DELETE_ENABLED = False # DISABLED DISABLED DISABLED DISABLED DISABLED
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits = []
     # Process it backwards in case we want to count how many we have as we go
     for commit in reversed(commits_list):
-        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+            AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+            AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         if len(new_commits) >= MAX_WANTED_COMMITS \
         and commit['type'] in ('hash', 'unknown'):
-            if 0: # really do it DISABLED DISABLED DISABLED DISABLED DISABLED
+            if DELETE_ENABLED: # really do it
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
                 AppSettings.logger.info(f"    Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
@@ -202,7 +207,8 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
                 AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
                 AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
             else:
-                AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
+                if len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+                    AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
                 new_commits.insert(0, commit) # Insert at beginning to get the order correct again
         else:
             AppSettings.logger.debug("    Keeping this one.")
