@@ -52,6 +52,7 @@ target/
 # virtualenv
 .venv
 venv/
+myVenv/
 
 # mkdocs documentation
 /site
