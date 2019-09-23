@@ -441,6 +441,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     if deployed:
         AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
+        if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings'):
+            AppSettings.logger.info(f"  or uncached at http://{AppSettings.door43_bucket_name}.s3-website-us-west-2.amazonaws.com/{url_part2}/")
     return job_descriptive_name, matched_job_dict['door43_webhook_received_at']
 #end of process_callback_job function
 
