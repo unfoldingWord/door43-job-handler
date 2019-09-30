@@ -17,7 +17,7 @@ sqlalchemy==1.3.8
 pymysql==0.9.3
 
 # boto3 is used by aws_tools
-boto3==1.9.233
+boto3==1.9.238
 
 #gogs_client is used by gogs_tools
 gogs_client==1.0.6
