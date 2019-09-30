@@ -262,7 +262,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
         project_json['commits'] = []
     commits = []
     for c in project_json['commits']:
-        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}' Is current commit={c['id'] == commit_id}…")
+        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
         if c['id'] == commit_id: # the old entry for the current commit id
             zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
             AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
@@ -293,6 +293,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
     AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
+    AppSettings.door43_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
 # end of update_project_file function
 
 
@@ -437,7 +438,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     AppSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
         AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
-        AppSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn it off.)")
+        AppSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn that off.)")
     if deployed:
         AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")

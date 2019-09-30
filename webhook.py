@@ -466,19 +466,90 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
 # # end of upload_to_BDB
 
 
+def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> None:
+    """
+    Clear out and remove the commit directory from the requested bucket for this project revision.
+    """
+    AppSettings.logger.debug(f"Clearing objects from commit directory '{s3_commit_key}' in {s3_bucket_handler.bucket_name} bucket…")
+    s3_bucket_handler.bucket.objects.filter(Prefix=s3_commit_key).delete()
+# end of clear_commit_directory_from_bucket function
+
+
+def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_name:str,
+                            deleted_branch_name:str) -> None:
+    """
+    Deletes the branch name from project.json
+        (project.json is read by the Javascript in door43.org/js/project-page-functions.js)
+    """
+    print(f"handle_branch_delete({base_temp_dir_name}, {repo_owner_username}, {repo_name}, {deleted_branch_name})")
+
+    project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
+    project_json_key = f'{project_folder_key}project.json'
+    project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
+
+    AppSettings.logger.debug("Rebuilding commits list for project.json…")
+    if 'commits' not in project_json:
+        project_json['commits'] = []
+    cleaned_commits = project_json['commits'].copy()
+    print(f"Got {len(project_json['commits'])} commits ({len(cleaned_commits)})")
+    for ix, c in enumerate( project_json['commits'] ):
+        AppSettings.logger.debug(f"  Looking at {ix}/ '{c['id']}'. Is wanted branch={c['id'] == deleted_branch_name}…")
+        if c['id'] == deleted_branch_name: # the old entry for this branch
+            AppSettings.logger.info(f"    Removing deleted '{deleted_branch_name}' branch…")
+            try:
+                # Delete the commit hash folders from both CDN and D43 buckets
+                commit_key = f"{project_folder_key}{deleted_branch_name}"
+                AppSettings.logger.info(f"      Removing {prefix}CDN '{c['type']}' '{deleted_branch_name}' commit! …")
+                clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
+                AppSettings.logger.info(f"      Removing {prefix}D43 '{c['type']}' '{deleted_branch_name}' commit! …")
+                clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
+                # Delete the pre-convert .zip file (available on Download button) from its bucket
+                if c['job_id']:
+                    zipFile_key = f"preconvert/{c['job_id']}.zip"
+                    AppSettings.logger.info(f"      Removing {prefix}PreConvert '{c['type']}' '{zipFile_key}' file! …")
+                    clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
+                else: # don't know the job_id (or the zip file was already deleted)
+                    AppSettings.logger.warning("   No job_id so pre-convert zip file not deleted.")
+                # Setup redirects (so users don't get 404 errors from old saved links)
+                old_repo_key = f"{project_folder_key}{deleted_branch_name}"
+                latest_repo_key = f"/{project_folder_key}{project_json['commits'][-1]['id']}" # Must start with /
+                AppSettings.logger.info(f"     Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+            except Exception as e:
+                AppSettings.logger.critical(f"  Removing deleted branch files threw an exception: {e}")
+            cleaned_commits.pop(ix) # Delete this one from the list
+        else:
+            AppSettings.logger.debug("    Keeping this one.")
+
+    print(f"Now got {len(project_json['commits'])} commits ({len(cleaned_commits)})")
+    if len(cleaned_commits) < len(project_json['commits']): # Then we removed some
+        AppSettings.logger.info(f"  Saving dated copy of old project.json (with {project_json['commits']} commit entries)…")
+        # Save a dated (coz this could happen more than once) backup of the project.json file
+        save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        save_project_filepath = os.path.join(base_temp_dir_name, save_project_filename)
+        write_file(save_project_filepath, project_json)
+        save_project_json_key = f'{project_folder_key}{save_project_filename}'
+        AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+        AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=0)
+
+        # Now save the updated project.json file
+        project_json['commits'] = cleaned_commits
+        AppSettings.logger.info(f"  Saving updated project.json (with {project_json['commits']} commit entries)…")
+        project_filepath = os.path.join(base_temp_dir_name, 'project.json')
+        write_file(project_filepath, project_json)
+        AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
+        AppSettings.door43_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
+# end of handle_branch_delete function
+
+
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
-def process_job(queued_json_payload:dict, redis_connection) -> str:
+def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis_connection,
+                        commit_type:str, commit_id:str, commit_url:str,
+                        repo_owner_username:str, repo_name:str,
+                        source_url_base:str, our_identifier:str) -> str:
     """
-    Parameters:
-        pj_prefix in '' or 'dev-'
-        queued_json_payload is a dict
-        redis_connection is a StrictRedis instance
-
-    Sets up a temp folder in the AWS S3 bucket.
-
-    It gathers details from the JSON payload.
-
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
         and then creates a ResourceContainer (RC) object.
 
@@ -508,147 +579,8 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     This code is "successful" once the job is submitted --
         it has no way to determine if it actually gets completed
         other than if a callback is made.
-
-    The given payload will be automatically appended to the 'failed' queue
-        by rq if an exception is thrown in this module.
     """
-    # global user_projects_invoked_string
     global project_types_invoked_string
-    AppSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
-
-
-    #  Update repo/owner/pusher stats
-    #   (all the following fields are expected from the Gitea webhook from push)
-    try:
-        stats_client.set(f'{stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
-    except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.repo_ids', 'No id')
-    try:
-        stats_client.set(f'{stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
-    except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.owner_ids', 'No id')
-    try:
-        stats_client.set(f'{stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
-    except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.pusher_ids', 'No id')
-
-
-    # Setup a temp folder to use
-    source_url_base = f'https://s3-{AppSettings.aws_region_name}.amazonaws.com/{AppSettings.pre_convert_bucket_name}'
-    # Move everything down one directory level for simple delete
-    # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
-    # TODO: This might not be enough 6-digit fractions of a second could collide???
-    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("_%Y-%m-%d_%H:%M:%S.%f")
-    base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
-    try:
-        os.makedirs(base_temp_dir_name)
-    except Exception as e:
-        AppSettings.logger.warning(f"SetupTempFolder threw an exception: {e}")
-
-
-    # for fieldname in queued_json_payload: # Display interesting fields given in payload
-    #     if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
-    #         AppSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
-
-
-    # Get the commit_id, commit_url
-    try:
-        default_branch = queued_json_payload['repository']['default_branch']
-    except KeyError:
-        AppSettings.logger.critical("No default branch specified")
-        default_branch = 'NoDefaultBranch'
-    AppSettings.logger.debug(f"Got default_branch='{default_branch}'")
-
-    # Gather other details from the commit that we will note for the job(s)
-    repo_owner_username = queued_json_payload['repository']['owner']['username']
-    repo_name = queued_json_payload['repository']['name']
-
-    commit_branch = tag_name = None
-    if queued_json_payload['DCS_event'] == 'push':
-        try:
-            commit_branch = queued_json_payload['ref'].split('/')[2]
-        except (IndexError, AttributeError):
-            AppSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
-            commit_branch = 'UnknownCommitBranch'
-        except KeyError:
-            AppSettings.logger.critical("No commit branch specified")
-            commit_branch = 'NoCommitBranch'
-        # if commit_branch != default_branch:
-        #     err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
-        #     AppSettings.logger.critical(err_msg)
-        #     return False, {'error': f"{err_msg}."}
-        AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
-
-        commit_id = queued_json_payload['after']
-        commit = None
-        for commit in queued_json_payload['commits']:
-            if commit['id'] == commit_id:
-                break
-        commit_id = commit_id[:10]  # Only use the short form
-        AppSettings.logger.debug(f"Got original commit_id='{commit_id}'")
-        commit_url = commit['url']
-        commit_message = commit['message'].strip() # Seems to always end with a newline
-
-        if 'pusher' in queued_json_payload:
-            pusher_dict = queued_json_payload['pusher']
-        else:
-            pusher_dict = {'username': commit['author']['username']}
-        pusher_username = pusher_dict['username']
-        our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
-
-    elif queued_json_payload['DCS_event'] == 'release':
-        try:
-            tag_name = queued_json_payload['release']['tag_name']
-        except (IndexError, AttributeError):
-            AppSettings.logger.critical(f"Could not determine tag name from '{queued_json_payload['release']}'")
-            tag_name = 'UnknownTagName'
-        except KeyError:
-            AppSettings.logger.critical("No tag name specified")
-            tag_name = 'NoTagName'
-        commit_url = queued_json_payload['release']['zipball_url']
-        commit_message = queued_json_payload['release']['name']
-
-        if 'author' in queued_json_payload['release']:
-            pusher_dict = queued_json_payload['release']['author']
-        # else:
-            # pusher_dict = {'username': commit['author']['username']}
-        pusher_username = pusher_dict['username']
-        our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
-    else:
-        AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
-
-    if commit_branch == default_branch:
-        commit_type = 'default'
-        commit_id = commit_branch
-    elif tag_name:
-        commit_type = 'tag'
-        commit_id = tag_name
-    elif commit_branch not in (None, 'UnknownCommitBranch', 'NoCommitBranch'):
-        commit_type = 'branch'
-        commit_id = commit_branch
-    else:
-        commit_type = 'unknown'
-        commit_id = 'OhDear'
-    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
-    AppSettings.logger.debug(f"Got commit_url='{commit_url}'")
-
-
-    AppSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
-    # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
-    ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
-    # ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
-    # adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
-    # Using a hyphen as separator as forward slash gets changed to hyphen anyway
-    # NOTE: following line removed as stats recording used too much disk space
-    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
-
-
-    # Here's our programmed failure (for remotely testing failures)
-    if pusher_username=='Failure' and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
-        deliberateFailureForTesting
-
 
     # Download and unzip the repo files
     repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
@@ -778,11 +710,11 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         'rel': 'self',
         'method': 'GET'
     }
-    pj_job_dict['door43_webhook_received_at'] = queued_json_payload['door43_webhook_received_at']
+    pj_job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
     if preprocessor_warning_list:
         pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-    if 'echoed_from_production' in queued_json_payload: # helps us keep track of where jobs are coming from in dev- chain
-        pj_job_dict['echoed_from_production'] = queued_json_payload['echoed_from_production']
+    if 'echoed_from_production' in submitted_json_payload: # helps us keep track of where jobs are coming from in dev- chain
+        pj_job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
     pj_job_dict['status'] = None
     pj_job_dict['success'] = False
 
@@ -844,6 +776,188 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     #         # Not using the preprocessed files (only the originals above)
     #         # AppSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
     #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+
+    return job_descriptive_name
+# end of handle_page_build function
+
+
+def process_job(queued_json_payload:dict, redis_connection) -> str:
+    """
+    Parameters:
+        queued_json_payload is a dict
+        redis_connection is a StrictRedis instance
+
+    Sets up a temp folder in the AWS S3 bucket.
+
+    It gathers details from the JSON payload.
+
+    The given payload will be automatically appended to the 'failed' queue
+        by rq if an exception is thrown in this module.
+    """
+    AppSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+
+
+    #  Update repo/owner/pusher stats
+    #   (all the following fields are expected from the Gitea webhook from push)
+    try:
+        stats_client.set(f'{stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set(f'{stats_prefix}.repo_ids', 'No id')
+    try:
+        stats_client.set(f'{stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set(f'{stats_prefix}.owner_ids', 'No id')
+    try:
+        stats_client.set(f'{stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
+    except (KeyError, AttributeError, IndexError, TypeError):
+        stats_client.set(f'{stats_prefix}.pusher_ids', 'No id')
+
+
+    # Setup a temp folder to use
+    source_url_base = f'https://s3-{AppSettings.aws_region_name}.amazonaws.com/{AppSettings.pre_convert_bucket_name}'
+    # Move everything down one directory level for simple delete
+    # NOTE: The base_temp_dir_name needs to be unique if we ever want multiple workers
+    # TODO: This might not be enough 6-digit fractions of a second could collide???
+    intermediate_dir_name = OUR_NAME + datetime.utcnow().strftime("_%Y-%m-%d_%H:%M:%S.%f")
+    base_temp_dir_name = os.path.join(tempfile.gettempdir(), intermediate_dir_name)
+    try:
+        os.makedirs(base_temp_dir_name)
+    except Exception as e:
+        AppSettings.logger.warning(f"SetupTempFolder threw an exception: {e}")
+
+
+    # for fieldname in queued_json_payload: # Display interesting fields given in payload
+    #     if fieldname not in ('door43_webhook_retry_count', 'door43_webhook_received_at'):
+    #         AppSettings.logger.info(f"{fieldname} = {queued_json_payload[fieldname]!r}")
+
+
+    # Get the commit_id, commit_url
+    try:
+        default_branch = queued_json_payload['repository']['default_branch']
+    except KeyError:
+        AppSettings.logger.critical("No default branch specified")
+        default_branch = 'NoDefaultBranch'
+    AppSettings.logger.debug(f"Got default_branch='{default_branch}'")
+
+    # Gather other details from the commit that we will note for the job(s)
+    repo_owner_username = queued_json_payload['repository']['owner']['username']
+    repo_name = queued_json_payload['repository']['name']
+
+    commit_branch = commit_url = tag_name = None
+    if queued_json_payload['DCS_event'] == 'push':
+        try:
+            commit_branch = queued_json_payload['ref'].split('/')[2]
+        except (IndexError, AttributeError):
+            AppSettings.logger.critical(f"Could not determine commit branch from '{queued_json_payload['ref']}'")
+            commit_branch = 'UnknownCommitBranch'
+        except KeyError:
+            AppSettings.logger.critical("No commit branch specified")
+            commit_branch = 'NoCommitBranch'
+        # if commit_branch != default_branch:
+        #     err_msg = f"Commit branch: '{commit_branch}' is not the default branch ({default_branch})"
+        #     AppSettings.logger.critical(err_msg)
+        #     return False, {'error': f"{err_msg}."}
+        AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
+
+        commit_id = queued_json_payload['after']
+        commit = None
+        for commit in queued_json_payload['commits']:
+            if commit['id'] == commit_id:
+                break
+        commit_id = commit_id[:10]  # Only use the short form
+        AppSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+        commit_url = commit['url']
+        commit_message = commit['message'].strip() # Seems to always end with a newline
+
+        if 'pusher' in queued_json_payload:
+            pusher_dict = queued_json_payload['pusher']
+        else:
+            pusher_dict = {'username': commit['author']['username']}
+        pusher_username = pusher_dict['username']
+        our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
+
+    elif queued_json_payload['DCS_event'] == 'release':
+        try:
+            tag_name = queued_json_payload['release']['tag_name']
+        except (IndexError, AttributeError):
+            AppSettings.logger.critical(f"Could not determine tag name from '{queued_json_payload['release']}'")
+            tag_name = 'UnknownTagName'
+        except KeyError:
+            AppSettings.logger.critical("No tag name specified")
+            tag_name = 'NoTagName'
+        commit_url = queued_json_payload['release']['zipball_url']
+        commit_message = queued_json_payload['release']['name']
+
+        if 'author' in queued_json_payload['release']:
+            pusher_dict = queued_json_payload['release']['author']
+        # else:
+            # pusher_dict = {'username': commit['author']['username']}
+        pusher_username = pusher_dict['username']
+        our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
+
+    elif queued_json_payload['DCS_event'] == 'delete': # delete a branch
+        if queued_json_payload['ref_type'] != 'branch':
+            AppSettings.logger.critical(f"Unexpected delete ref-type: '{queued_json_payload['ref_type']}'")
+        if queued_json_payload['pusher_type'] != 'user':
+            AppSettings.logger.critical(f"Unexpected delete pusher_type-type: '{queued_json_payload['pusher_type']}'")
+        try:
+            deleted_branch_name = queued_json_payload['ref']
+        except (IndexError, AttributeError):
+            AppSettings.logger.critical(f"Could not determine deleted branch from '{queued_json_payload['ref']}'")
+            deleted_branch_name = 'UnknownDeletedBranch'
+        except KeyError:
+            AppSettings.logger.critical("No commit branch specified")
+            deleted_branch_name = 'NoDeletedBranch'
+        AppSettings.logger.debug(f"Got deleted_branch='{deleted_branch_name}'")
+        commit_message = deleted_branch_name
+        sender_username = queued_json_payload['sender']['username']
+        our_identifier = f"'{sender_username}' deleting '{repo_owner_username}/{repo_name}/{deleted_branch_name}'"
+
+    else:
+        AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
+
+    if commit_branch == default_branch:
+        commit_type = 'default'
+        commit_id = commit_branch
+    elif tag_name:
+        commit_type = 'tag'
+        commit_id = tag_name
+    elif commit_branch not in (None, 'UnknownCommitBranch', 'NoCommitBranch'):
+        commit_type = 'branch'
+        commit_id = commit_branch
+    elif queued_json_payload['DCS_event'] == 'delete':
+        commit_type = 'delete'
+        commit_id = deleted_branch_name
+    else:
+        commit_type = 'unknown'
+        commit_id = 'OhDear'
+    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
+    if commit_url:
+        AppSettings.logger.debug(f"Got commit_url='{commit_url}'")
+
+
+    AppSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
+    # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
+    ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
+    # ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
+    # adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
+    stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
+    # Using a hyphen as separator as forward slash gets changed to hyphen anyway
+    # NOTE: following line removed as stats recording used too much disk space
+    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
+
+
+    if queued_json_payload['DCS_event'] == 'delete':
+        job_descriptive_name = f'{our_identifier}'
+        handle_branch_delete(base_temp_dir_name, repo_owner_username, repo_name, deleted_branch_name)
+    else: # 'push' or 'release' -- we have a repo to process and a page to build
+        # Here's our programmed failure (for remotely testing failures)
+        if pusher_username=='Failure' and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
+            deliberateFailureForTesting
+        job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
+                            commit_type, commit_id, commit_url,
+                            repo_owner_username, repo_name, source_url_base, our_identifier)
 
 
     if prefix and debug_mode_flag:
