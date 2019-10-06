@@ -546,7 +546,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis_connection,
-                        commit_type:str, commit_id:str, commit_url:str,
+                        commit_type:str, commit_id:str, repo_data_url:str,
                         repo_owner_username:str, repo_name:str,
                         source_url_base:str, our_identifier:str) -> str:
     """
@@ -583,7 +583,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
     global project_types_invoked_string
 
     # Download and unzip the repo files
-    repo_dir = get_repo_files(base_temp_dir_name, commit_url, repo_name)
+    repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
 
 
     # Get the resource container
@@ -644,7 +644,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
     # Preprocess the files
     AppSettings.logger.info("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, commit_url, rc, repo_dir, preprocess_dir)
+    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_data_url, rc, repo_dir, preprocess_dir)
 
     # Save the warnings for the user -- put any RC messages in front
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
@@ -843,7 +843,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
 
-    commit_branch = commit_url = tag_name = None
+    commit_branch = repo_data_url = tag_name = None
     if queued_json_payload['DCS_event'] == 'push':
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
@@ -866,8 +866,8 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
                 break
         commit_id = commit_id[:10]  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_id='{commit_id}'")
-        commit_url = commit['url']
-        commit_message = commit['message'].strip() # Seems to always end with a newline
+        repo_data_url = commit['url']
+        action_message = commit['message'].strip() # Seems to always end with a newline
 
         if 'pusher' in queued_json_payload:
             pusher_dict = queued_json_payload['pusher']
@@ -885,8 +885,8 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         except KeyError:
             AppSettings.logger.critical("No tag name specified")
             tag_name = 'NoTagName'
-        commit_url = queued_json_payload['release']['zipball_url']
-        commit_message = queued_json_payload['release']['name']
+        repo_data_url = queued_json_payload['release']['zipball_url']
+        action_message = queued_json_payload['release']['name']
 
         if 'author' in queued_json_payload['release']:
             pusher_dict = queued_json_payload['release']['author']
@@ -894,6 +894,23 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
             # pusher_dict = {'username': commit['author']['username']}
         pusher_username = pusher_dict['username']
         our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
+
+    elif queued_json_payload['DCS_event'] == 'create': # create a branch
+        if queued_json_payload['ref_type'] != 'branch':
+            AppSettings.logger.critical(f"Unexpected create ref-type: '{queued_json_payload['ref_type']}'")
+        try:
+            created_branch_name = queued_json_payload['ref']
+        except (IndexError, AttributeError):
+            AppSettings.logger.critical(f"Could not determine created branch from '{queued_json_payload['ref']}'")
+            created_branch_name = 'UnknownCreatedBranch'
+        except KeyError:
+            AppSettings.logger.critical("No commit branch specified")
+            created_branch_name = 'NoCreatedBranch'
+        AppSettings.logger.debug(f"Got created_branch_name='{created_branch_name}'")
+        repo_data_url = f"{queued_json_payload['repository']['html_url']}/archive/{created_branch_name}.zip"
+        action_message = created_branch_name
+        sender_username = queued_json_payload['sender']['username']
+        our_identifier = f"'{sender_username}' creating '{repo_owner_username}/{repo_name}/{created_branch_name}'"
 
     elif queued_json_payload['DCS_event'] == 'delete': # delete a branch
         if queued_json_payload['ref_type'] != 'branch':
@@ -908,8 +925,8 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         except KeyError:
             AppSettings.logger.critical("No commit branch specified")
             deleted_branch_name = 'NoDeletedBranch'
-        AppSettings.logger.debug(f"Got deleted_branch='{deleted_branch_name}'")
-        commit_message = deleted_branch_name
+        AppSettings.logger.debug(f"Got deleted_branch_name='{deleted_branch_name}'")
+        action_message = deleted_branch_name
         sender_username = queued_json_payload['sender']['username']
         our_identifier = f"'{sender_username}' deleting '{repo_owner_username}/{repo_name}/{deleted_branch_name}'"
 
@@ -932,11 +949,11 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         commit_type = 'unknown'
         commit_id = 'OhDear'
     AppSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
-    if commit_url:
-        AppSettings.logger.debug(f"Got commit_url='{commit_url}'")
+    if repo_data_url:
+        AppSettings.logger.debug(f"Got repo_data_url='{repo_data_url}'")
 
 
-    AppSettings.logger.info(f"Processing job for {our_identifier} for \"{commit_message}\"")
+    AppSettings.logger.info(f"Processing job for {our_identifier} for \"{action_message}\"")
     # Seems that statsd 3.3.0 can only handle ASCII chars (not full Unicode)
     ascii_repo_owner_username_bytes = repo_owner_username.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
@@ -951,12 +968,13 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     if queued_json_payload['DCS_event'] == 'delete':
         job_descriptive_name = f'{our_identifier}'
         handle_branch_delete(base_temp_dir_name, repo_owner_username, repo_name, deleted_branch_name)
-    else: # 'push' or 'release' -- we have a repo to process and a page to build
+    else: # 'push' or 'release' or create -- we have a repo to process and a page to build
         # Here's our programmed failure (for remotely testing failures)
-        if pusher_username=='Failure' and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
+        if queued_json_payload['DCS_event']=='push' and pusher_username=='Failure' \
+        and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
             deliberateFailureForTesting
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, commit_url,
+                            commit_type, commit_id, repo_data_url,
                             repo_owner_username, repo_name, source_url_base, our_identifier)
 
 
