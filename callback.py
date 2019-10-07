@@ -185,7 +185,7 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
         elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
             AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         if len(new_commits) >= MAX_WANTED_COMMITS \
-        and commit['type'] in ('hash','latest','unknown'):
+        and commit['type'] in ('hash','artifact','unknown'):
             if DELETE_ENABLED: # really do it
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
@@ -278,7 +278,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
                 # Returned job id might have been None
             if 'type' not in c: # Might be able to remove this eventually
                 c['type'] = 'hash' if is_hash(c['id']) \
-                      else 'latest' if c['id']=='latest' \
+                      else 'artifact' if c['id']in ('latest','OhDear') \
                       else 'unknown'
             commits.append(c)
     commits.append(current_commit)
