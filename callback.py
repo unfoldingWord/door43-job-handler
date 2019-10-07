@@ -263,15 +263,16 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     commits = []
     for c in project_json['commits']:
         AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
-        if c['id'] == commit_id: # the old entry for the current commit id
-            zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
-            AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
-            try:
-                clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
-            except Exception as e:
-                AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
+        # if c['id'] == commit_id: # the old entry for the current commit id
+            # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
+            # zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
+            # AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
+            # try:
+            #     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
+            # except Exception as e:
+            #     AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
             # Not appended to commits here coz it happens below instead
-        else: # a different commit from the current one
+        if c['id'] != commit_id: # a different commit from the current one
             if 'job_id' not in c: # Might be able to remove this eventually
                 c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, c['id'])
                 # Returned job id might have been None
