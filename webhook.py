@@ -947,8 +947,9 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         commit_id = deleted_branch_name
     else:
         commit_type = 'unknown'
-        commit_id = 'OhDear'
-    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id='{commit_id}'")
+        commit_id = None
+    commit_id_string = commit_id if commit_id is None else "'"+commit_id+"'"
+    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id={commit_id_string}")
     if repo_data_url:
         AppSettings.logger.debug(f"Got repo_data_url='{repo_data_url}'")
 
@@ -968,7 +969,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     if queued_json_payload['DCS_event'] == 'delete':
         job_descriptive_name = f'{our_identifier}'
         handle_branch_delete(base_temp_dir_name, repo_owner_username, repo_name, deleted_branch_name)
-    else: # 'push' or 'release' or create -- we have a repo to process and a page to build
+    elif commit_id: # for'push' or 'release' or create -- we have a repo to process and a page to build
         # Here's our programmed failure (for remotely testing failures)
         if queued_json_payload['DCS_event']=='push' and pusher_username=='Failure' \
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
@@ -976,6 +977,8 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
                             commit_type, commit_id, repo_data_url,
                             repo_owner_username, repo_name, source_url_base, our_identifier)
+    else:
+        AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
 
 
     if prefix and debug_mode_flag:
