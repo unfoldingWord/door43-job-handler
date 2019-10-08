@@ -495,7 +495,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
     for ix, c in enumerate( project_json['commits'] ):
         AppSettings.logger.debug(f"  Looking at {ix}/ '{c['id']}'. Is wanted branch={c['id'] == deleted_branch_name}…")
         if c['id'] == deleted_branch_name: # the old entry for this branch
-            AppSettings.logger.info(f"    Removing deleted '{deleted_branch_name}' branch…")
+            AppSettings.logger.info(f"    Removing deleted {repo_owner_username}/{repo_name} '{deleted_branch_name}' branch…")
             try:
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{deleted_branch_name}"
@@ -512,10 +512,15 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
                     AppSettings.logger.warning("   No job_id so pre-convert zip file not deleted.")
                 # Setup redirects (so users don't get 404 errors from old saved links)
                 old_repo_key = f"{project_folder_key}{deleted_branch_name}"
-                latest_repo_key = f"/{project_folder_key}{project_json['commits'][-1]['id']}" # Must start with /
-                AppSettings.logger.info(f"     Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
-                AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
-                AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+                latest_repo_key = f"{project_folder_key}{project_json['commits'][-1]['id']}"
+                if latest_repo_key == old_repo_key:
+                    print("What's gone wrong here?")
+                    print("commits", len(project_json['commits']), project_json['commits'])
+                else: # Redirect deleted branch to latest branch
+                    AppSettings.logger.info(f"     Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                    latest_repo_key = f"/{latest_repo_key}" # Must start with /
+                    AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                    AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
             except Exception as e:
                 AppSettings.logger.critical(f"  Removing deleted branch files threw an exception: {e}")
             cleaned_commits.pop(ix) # Delete this one from the list
@@ -540,6 +545,8 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
         write_file(project_filepath, project_json)
         AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
         AppSettings.door43_s3_handler().upload_file(project_filepath, project_json_key, cache_time=0)
+    else:
+        AppSettings.logger.info(f"Didn't find any '{deleted_branch_name}' branch files to delete.")
 # end of handle_branch_delete function
 
 
