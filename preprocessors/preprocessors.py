@@ -708,7 +708,6 @@ class BiblePreprocessor(Preprocessor):
                     filename = file_format.format(BOOK_NUMBERS[project.identifier.lower()], project.identifier.upper())
                 else:
                     filename = file_format.format(str(idx+1).zfill(2), project.identifier.upper())
-                # copy(project_path, os.path.join(self.output_dir, filename))
                 self.clean_copy(project_path, os.path.join(self.output_dir, filename))
                 self.book_filenames.append(filename)
                 self.num_files_written += 1
@@ -725,7 +724,6 @@ class BiblePreprocessor(Preprocessor):
                             filename = f'{os.path.splitext(os.path.basename(usfm_path))[0]}.usfm'
                         output_file_path = os.path.join(self.output_dir, filename)
                         if os.path.isfile(usfm_path) and not os.path.exists(output_file_path):
-                            # copy(usfm_path, output_file_path)
                             self.clean_copy(usfm_path, output_file_path)
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
@@ -733,7 +731,7 @@ class BiblePreprocessor(Preprocessor):
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
                     AppSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    # print("chapters:", chapters)
+                    # print("chapters3:", chapters)
                     if chapters:
                         #          Piece the USFM file together
                         title_file = os.path.join(project_path, chapters[0], 'title.txt')
@@ -799,7 +797,6 @@ class BiblePreprocessor(Preprocessor):
                                                           project.identifier.upper())
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
-                        # write_file(os.path.join(self.output_dir, filename), usfm)
                         self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
