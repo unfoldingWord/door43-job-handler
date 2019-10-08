@@ -487,15 +487,16 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
     project_json_key = f'{project_folder_key}project.json'
     project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
 
-    AppSettings.logger.debug("Rebuilding commits list for project.json…")
+    AppSettings.logger.info("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
     cleaned_commits = project_json['commits'].copy()
     print(f"Got {len(project_json['commits'])} commits ({len(cleaned_commits)})")
-    for ix, c in enumerate( project_json['commits'] ):
+    for ix, c in enumerate(project_json['commits']):
         AppSettings.logger.debug(f"  Looking at {ix}/ '{c['id']}'. Is wanted branch={c['id'] == deleted_branch_name}…")
         if c['id'] == deleted_branch_name: # the old entry for this branch
             AppSettings.logger.info(f"    Removing deleted {repo_owner_username}/{repo_name} '{deleted_branch_name}' branch…")
+            cleaned_commits.pop(ix) # Delete this one from the list
             try:
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{deleted_branch_name}"
@@ -510,20 +511,23 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
                     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
                 else: # don't know the job_id (or the zip file was already deleted)
                     AppSettings.logger.warning("   No job_id so pre-convert zip file not deleted.")
-                # Setup redirects (so users don't get 404 errors from old saved links)
-                old_repo_key = f"{project_folder_key}{deleted_branch_name}"
-                latest_repo_key = f"{project_folder_key}{project_json['commits'][-1]['id']}"
-                if latest_repo_key == old_repo_key:
-                    print("What's gone wrong here?")
-                    print("commits", len(project_json['commits']), project_json['commits'])
-                else: # Redirect deleted branch to latest branch
-                    AppSettings.logger.info(f"     Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
-                    latest_repo_key = f"/{latest_repo_key}" # Must start with /
-                    AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
-                    AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+                if cleaned_commits:
+                    # Setup redirects (so users don't get 404 errors from old saved links)
+                    old_repo_key = f"{project_folder_key}{deleted_branch_name}"
+                    latest_repo_key = f"{project_folder_key}{cleaned_commits[-1]['id']}"
+                    if latest_repo_key == old_repo_key:
+                        print("What's gone wrong here?")
+                        print("commits", len(project_json['commits']), project_json['commits'])
+                        print("cleaned_commits", len(cleaned_commits), cleaned_commits)
+                    else: # Redirect deleted branch to latest branch
+                        AppSettings.logger.info(f"     Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                        latest_repo_key = f"/{latest_repo_key}" # Must start with /
+                        AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                        AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+                else:
+                    AppSettings.logger.warning(f"Unable to redirect from '{deleted_branch_name}' -- no remaining {prefix}builds for {repo_owner_username}/{repo_name}!")
             except Exception as e:
                 AppSettings.logger.critical(f"  Removing deleted branch files threw an exception: {e}")
-            cleaned_commits.pop(ix) # Delete this one from the list
         else:
             AppSettings.logger.debug("    Keeping this one.")
 
