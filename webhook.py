@@ -315,7 +315,7 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
         else:
             AppSettings.logger.warning("No resource.identifier in RC manifest")
 
-    if (not repo_subject) and rc_resource_identifier:
+    if not repo_subject and rc_resource_identifier:
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if rc_resource_identifier.endswith('_'+resource_subject_string) \
             or rc_resource_identifier.endswith('-'+resource_subject_string):
@@ -338,7 +338,7 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
         repo_subject = 'TSV_Translation_Notes'
         AppSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
 
-    if not repo_subject and '-obs' in gts_repo_name or '_obs' in gts_repo_name:
+    if not repo_subject and ('-obs' in gts_repo_name or '_obs' in gts_repo_name):
         repo_subject = 'Open_Bible_Stories'
         AppSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
@@ -516,6 +516,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
                     old_repo_key = f"{project_folder_key}{deleted_branch_name}"
                     latest_repo_key = f"{project_folder_key}{cleaned_commits[-1]['id']}"
                     if latest_repo_key == old_repo_key:
+                        AppSettings.logger.error(f"Can't redirect {repo_owner_username}/{repo_name} '{old_repo_key}' to itself!")
                         print("What's gone wrong here?")
                         print("commits", len(project_json['commits']), project_json['commits'])
                         print("cleaned_commits", len(cleaned_commits), cleaned_commits)
@@ -906,22 +907,22 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         pusher_username = pusher_dict['username']
         our_identifier = f"'{pusher_username}' releasing '{repo_owner_username}/{repo_name}'"
 
-    elif queued_json_payload['DCS_event'] == 'create': # create a branch
-        if queued_json_payload['ref_type'] != 'branch':
-            AppSettings.logger.critical(f"Unexpected create ref-type: '{queued_json_payload['ref_type']}'")
-        try:
-            created_branch_name = queued_json_payload['ref']
-        except (IndexError, AttributeError):
-            AppSettings.logger.critical(f"Could not determine created branch from '{queued_json_payload['ref']}'")
-            created_branch_name = 'UnknownCreatedBranch'
-        except KeyError:
-            AppSettings.logger.critical("No commit branch specified")
-            created_branch_name = 'NoCreatedBranch'
-        AppSettings.logger.debug(f"Got created_branch_name='{created_branch_name}'")
-        repo_data_url = f"{queued_json_payload['repository']['html_url']}/archive/{created_branch_name}.zip"
-        action_message = created_branch_name
-        sender_username = queued_json_payload['sender']['username']
-        our_identifier = f"'{sender_username}' creating '{repo_owner_username}/{repo_name}/{created_branch_name}'"
+    # elif queued_json_payload['DCS_event'] == 'create': # create a branch
+    #     if queued_json_payload['ref_type'] != 'branch':
+    #         AppSettings.logger.critical(f"Unexpected create ref-type: '{queued_json_payload['ref_type']}'")
+    #     try:
+    #         created_branch_name = queued_json_payload['ref']
+    #     except (IndexError, AttributeError):
+    #         AppSettings.logger.critical(f"Could not determine created branch from '{queued_json_payload['ref']}'")
+    #         created_branch_name = 'UnknownCreatedBranch'
+    #     except KeyError:
+    #         AppSettings.logger.critical("No commit branch specified")
+    #         created_branch_name = 'NoCreatedBranch'
+    #     AppSettings.logger.debug(f"Got created_branch_name='{created_branch_name}'")
+    #     repo_data_url = f"{queued_json_payload['repository']['html_url']}/archive/{created_branch_name}.zip"
+    #     action_message = created_branch_name
+    #     sender_username = queued_json_payload['sender']['username']
+    #     our_identifier = f"'{sender_username}' creating '{repo_owner_username}/{repo_name}/{created_branch_name}'"
 
     elif queued_json_payload['DCS_event'] == 'delete': # delete a branch
         if queued_json_payload['ref_type'] != 'branch':
