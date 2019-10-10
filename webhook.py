@@ -306,7 +306,7 @@ def get_tX_subject(gts_repo_name, gts_rc):
         else:
             GlobalSettings.logger.warning("No resource.identifier in RC manifest")
 
-    if (not repo_subject) and rc_resource_identifier:
+    if not repo_subject and rc_resource_identifier:
         for resource_subject_string in RESOURCE_SUBJECT_MAP:
             if rc_resource_identifier.endswith('_'+resource_subject_string) \
             or rc_resource_identifier.endswith('-'+resource_subject_string):
@@ -329,7 +329,7 @@ def get_tX_subject(gts_repo_name, gts_rc):
         repo_subject = 'TSV_Translation_Notes'
         GlobalSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
 
-    if not repo_subject and '-obs' in gts_repo_name or '_obs' in gts_repo_name:
+    if not repo_subject and ('-obs' in gts_repo_name or '_obs' in gts_repo_name):
         repo_subject = 'Open_Bible_Stories'
         GlobalSettings.logger.info(f"Trying setting repo_subject='{repo_subject}'")
 
