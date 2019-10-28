@@ -319,7 +319,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
     str_payload = str(queued_json_payload)
     str_payload_adjusted = str_payload if len(str_payload)<1500 \
                             else f'{str_payload[:1000]} …… {str_payload[-500:]}'
-    AppSettings.logger.debug(f"Processing {pc_prefix+' ' if pc_prefix else ''}callback: {str_payload_adjusted}")
+    AppSettings.logger.info(f"CALLBACK {pc_prefix+' ' if pc_prefix else ''}processing: {str_payload_adjusted}")
 
     # Check that this is an expected callback job
     if 'job_id' not in queued_json_payload:

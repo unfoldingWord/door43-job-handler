@@ -381,7 +381,7 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
         # AppSettings.logger.debug(f"Got outstanding_jobs_dict: "
         #                            f" ({len(outstanding_jobs_dict)}) {outstanding_jobs_dict.keys()}")
 
-        AppSettings.logger.info(f"Already had {len(outstanding_jobs_dict)}"
+        AppSettings.logger.debug(f"Already had {len(outstanding_jobs_dict)}"
                                    f" outstanding job(s) in '{REDIS_JOB_LIST}' redis store.")
         # Remove any outstanding jobs more than two weeks old
         for outstanding_job_id, outstanding_job_dict in outstanding_jobs_dict.copy().items():
@@ -654,7 +654,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
 
 
     # Preprocess the files
-    AppSettings.logger.info("Preprocessing files…")
+    AppSettings.logger.debug("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_data_url, rc, repo_dir, preprocess_dir)
 
@@ -738,7 +738,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Pass the work request onto the tX system
-    AppSettings.logger.info(f"POST request to tX system @ {tx_post_url} …")
+    AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
     tx_payload = {
         'job_id': our_job_id,
         'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
@@ -806,7 +806,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     The given payload will be automatically appended to the 'failed' queue
         by rq if an exception is thrown in this module.
     """
-    AppSettings.logger.debug(f"Processing {prefix+' ' if prefix else ''}job: {queued_json_payload}")
+    AppSettings.logger.info(f"WEBHOOK {prefix+' ' if prefix else ''}processing: {queued_json_payload}")
 
 
     #  Update repo/owner/pusher stats
@@ -1011,7 +1011,7 @@ def job(queued_json_payload):
         but if the job throws an exception or times out (timeout specified in enqueue process)
             then the job gets added to the 'failed' queue.
     """
-    AppSettings.logger.info(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
+    AppSettings.logger.debug(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr(f'{stats_prefix}.jobs.attempted')
 
