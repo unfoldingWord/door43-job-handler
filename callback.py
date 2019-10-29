@@ -173,9 +173,9 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
         This was especially important as we moved from hash numbers
             to tag and branch names.
     """
-    MAX_WANTED_COMMITS = 3
+    MAX_WANTED_COMMITS = 5
     MAX_DEBUG_DISPLAYS = 10
-    DELETE_ENABLED = False # DISABLED DISABLED DISABLED DISABLED DISABLED
+    DELETE_ENABLED = True
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits = []
     # Process it backwards in case we want to count how many we have as we go
