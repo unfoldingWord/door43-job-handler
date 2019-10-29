@@ -23,7 +23,7 @@ from statsd import StatsClient # Graphite front-end
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url, REDIS_JOB_LIST
-from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree
+from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
@@ -1014,6 +1014,9 @@ def job(queued_json_payload):
     AppSettings.logger.debug(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr(f'{stats_prefix}.jobs.attempted')
+
+    AppSettings.logger.info(f"Clearing /tmp folder…")
+    empty_folder('/tmp/', only_prefix='Door43_') # Stops failed jobs from accumulating in /tmp
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload

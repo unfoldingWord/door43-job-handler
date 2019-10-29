@@ -4,7 +4,7 @@ from datetime import datetime
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
-from general_tools.file_utils import unzip, write_file, remove_tree, remove
+from general_tools.file_utils import unzip, write_file, remove_tree, remove_file
 from general_tools.url_utils import download_file
 # from client_linter_callback import ClientLinterCallback
 
@@ -111,7 +111,7 @@ class ClientConverterCallback:
         # Download the ZIP file of the converted files
         converted_zip_url = self.job.output
         converted_zip_file = os.path.join(self.temp_dir, converted_zip_url.rpartition('/')[2])
-        remove(converted_zip_file)  # make sure old file not present
+        remove_file(converted_zip_file)  # make sure old file not present
         download_success = True
         AppSettings.logger.debug(f"Downloading converted zip file from {converted_zip_url} …")
         try:
