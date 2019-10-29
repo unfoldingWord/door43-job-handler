@@ -437,14 +437,14 @@ class BiblePreprocessor(Preprocessor):
                              ):
             cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
             if cnt1 != cnt2:
-                error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                error_msg = f"{B} - Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
                 AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
         if has_USFM3_line:
             # Issue any global USFM3 warnings
             if '\\s5' in file_contents:
-                warning_msg = "\\s5 fields should be coded as \\ts-s\\*…\\ts-e\\* milestones"
+                warning_msg = f"{B} - \\s5 fields should be coded as \\ts-s\\*…\\ts-e\\* milestones"
                 AppSettings.logger.warning(warning_msg)
                 self.warnings.append(warning_msg)
 
@@ -464,7 +464,7 @@ class BiblePreprocessor(Preprocessor):
                                  ):
                 cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
                 if cnt1 != cnt2:
-                    error_msg = f"Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                    error_msg = f"{B} - Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
                     AppSettings.logger.error(error_msg)
                     self.warnings.append(error_msg)
 
