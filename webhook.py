@@ -11,9 +11,10 @@ import json
 import hashlib
 import shutil
 from datetime import datetime, timedelta
-from time import time
+from time import time, sleep
 from ast import literal_eval
 import traceback
+from zipfile import BadZipFile
 
 # Library (PyPi) imports
 import requests
@@ -90,84 +91,6 @@ graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
 stats_client = StatsClient(host=graphite_url, port=8125)
 
 
-
-# def update_project_json(base_temp_dir_name:str, commit_type:str, commit_id:str, upj_job_dict:dict, repo_name:str, repo_owner:str) -> None:
-#     """
-#     :param string commit_id:
-#     :param dict upj_job_dict:
-#     :param string repo_name:
-#     :param string repo_owner:
-#     :return:
-#     """
-#     project_json_key = f'u/{repo_owner}/{repo_name}/project.json'
-#     project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
-#     project_json['user'] = repo_owner
-#     project_json['repo'] = repo_name
-#     project_json['repo_url'] = f'https://git.door43.org/{repo_owner}/{repo_name}'
-#     commit = {
-#         'id': commit_id,
-#         'created_at': upj_job_dict['created_at'],
-#         'status': upj_job_dict['status'],
-#         'success': upj_job_dict['success'],
-#         'started_at': None,
-#         'ended_at': None
-#     }
-#     # Get all other previous commits, and then add this one
-#     if 'commits' in project_json:
-#         commits = [c for c in project_json['commits'] if c['id'] != commit_id]
-#         commits.append(commit)
-#     else:
-#         commits = [commit]
-#     project_json['commits'] = commits
-#     project_file = os.path.join(base_temp_dir_name, 'project.json')
-#     write_file(project_file, project_json)
-#     AppSettings.logger.debug(f'Saving project.json to {AppSettings.cdn_bucket_name}/{project_json_key}')
-#     AppSettings.cdn_s3_handler().upload_file(project_file, project_json_key)
-# # end of update_project_json function
-
-
-# def upload_build_log_to_s3(base_temp_dir_name:str, build_log:dict, s3_commit_key:str, part:str='') -> None:
-#     """
-#     :param dict build_log:
-#     :param string s3_commit_key:
-#     :param string part:
-#     :return:
-#     """
-#     assert not part
-#     build_log_file = os.path.join(base_temp_dir_name, 'build_log.json')
-#     write_file(build_log_file, build_log)
-#     upload_key = f'{s3_commit_key}/{part}build_log.json'
-#     AppSettings.logger.debug(f'Saving build log to {AppSettings.cdn_bucket_name}/{upload_key}')
-#     AppSettings.cdn_s3_handler().upload_file(build_log_file, upload_key, cache_time=0)
-#     # AppSettings.logger.debug('build log contains: ' + json.dumps(build_log_json))
-# #end of upload_build_log_to_s3
-
-
-# def create_build_log(commit_id, commit_message, commit_url, compare_url, cbl_job, pusher_username, repo_name, repo_owner):
-#     """
-#     :param string commit_id:
-#     :param string commit_message:
-#     :param string commit_url:
-#     :param string compare_url:
-#     :param TxJob cbl_job:
-#     :param string pusher_username:
-#     :param string repo_name:
-#     :param string repo_owner:
-#     :return dict:
-#     """
-#     build_log_dict = dict(cbl_job)
-#     build_log_dict['repo_name'] = repo_name
-#     build_log_dict['repo_owner'] = repo_owner
-#     build_log_dict['commit_id'] = commit_id
-#     build_log_dict['committed_by'] = pusher_username
-#     build_log_dict['commit_url'] = commit_url
-#     build_log_dict['compare_url'] = compare_url
-#     build_log_dict['commit_message'] = commit_message
-
-#     return build_log_dict
-# # end of create_build_log function
-
-
 def clear_commit_directory_in_cdn(s3_commit_key:str) -> None:
     """
     Clear out the commit directory in the CDN bucket for this project revision.
@@ -237,22 +160,38 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
                         else commit_url.replace('commit', 'archive') + '.zip'
     repo_zip_file = os.path.join(base_temp_dir_name, repo_zip_url.rpartition(os.path.sep)[2])
 
-    AppSettings.logger.info(f"Downloading zipped repo from {repo_zip_url} …")
-    try:
-        # If the file already exists, remove it, we want a fresh copy
-        if os.path.isfile(repo_zip_file):
-            os.remove(repo_zip_file)
+    MAX_TRIES = 4
+    SECONDS_BETWEEN_TRIES = 5
+    AppSettings.logger.info(f"Downloading and unzipping repo from {repo_zip_url} …")
+    try_number = 1
+    while True:
+        if try_number > 1:
+            AppSettings.logger.warning(f"Try {try_number}: Downloading and unzipping repo from {repo_zip_url} …")
+        try:
+            try:
+                # If the file already exists, remove it, we want a fresh copy
+                if os.path.isfile(repo_zip_file):
+                    os.remove(repo_zip_file)
 
-        download_file(repo_zip_url, repo_zip_file)
-    finally:
-        AppSettings.logger.debug("Downloading finished.")
+                download_file(repo_zip_url, repo_zip_file)
+            finally:
+                AppSettings.logger.debug("  Downloading finished.")
 
-    AppSettings.logger.debug(f"Unzipping {repo_zip_file} …")
-    try:
-        # NOTE: This is unsafe if the zipfile comes from an untrusted source
-        unzip(repo_zip_file, repo_dir)
-    finally:
-        AppSettings.logger.debug("Unzipping finished.")
+            AppSettings.logger.debug(f"  Unzipping {repo_zip_file} …")
+            try:
+                # NOTE: This is unsafe if the zipfile comes from an untrusted source
+                unzip(repo_zip_file, repo_dir)
+            finally:
+                AppSettings.logger.debug("  Unzipping finished.")
+            break # Get out of lopp
+        except BadZipFile: # I suspect a race condition within Gitea ???
+            AppSettings.logger.error(f"Try {try_number}: Got bad zip file when downloading repo from {repo_zip_url}")
+            if try_number < MAX_TRIES:
+                AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
+                sleep(SECONDS_BETWEEN_TRIES) # Try again after a few seconds
+                try_number += 1
+            else:
+                raise BadZipFile(f"Unable to get a good zip file from {repo_zip_url} after {try_number} tries")
 
     # Remove the downloaded zip file (now unzipped)
     if not prefix: # For dev- save this file longer
