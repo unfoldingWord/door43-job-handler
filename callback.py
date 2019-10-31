@@ -185,7 +185,7 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
         elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
             AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         if len(new_commits) >= MAX_WANTED_COMMITS \
-        and commit['type'] in ('hash','artifact','unknown'):
+        and commit['type'] in ('hash','artifact',): # but not 'unknown' -- can delete old master branches
             if DELETE_ENABLED: # really do it
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
