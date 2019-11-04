@@ -12,9 +12,10 @@ import hashlib
 import shutil
 from datetime import datetime, timedelta
 from time import time, sleep
-from ast import literal_eval
+# from ast import literal_eval
 import traceback
 from zipfile import BadZipFile
+from typing import Dict, List, Any, Optional, Union
 
 # Library (PyPi) imports
 import requests
@@ -289,7 +290,7 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
 # end of get_tX_subject function
 
 
-def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
+def remember_job(rj_job_dict:Dict[str,Any], rj_redis_connection) -> None:
     """
     Save this outstanding job in a REDIS dict
         so that we can match it when we get a callback
@@ -310,7 +311,7 @@ def remember_job(rj_job_dict:dict, rj_redis_connection) -> None:
         # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
         AppSettings.logger.info("Created new outstanding_jobs_dict")
-        outstanding_jobs_dict = {}
+        outstanding_jobs_dict:Dict[str,object] = {}
     else:
         assert isinstance(outstanding_jobs_dict_bytes,bytes)
         outstanding_jobs_dict_json_string = outstanding_jobs_dict_bytes.decode() # bytes -> str
@@ -496,9 +497,9 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
-def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis_connection,
-                        commit_type:str, commit_id:str, repo_data_url:str,
-                        repo_owner_username:str, repo_name:str,
+def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
+                        commit_type:str, commit_id:str, commit_hash:Optional[str],
+                        repo_data_url:str, repo_owner_username:str, repo_name:str,
                         source_url_base:str, our_identifier:str) -> str:
     """
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
@@ -637,13 +638,14 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
     #   This gets saved in Redis so it can be recalled by the callback function
     #       (only a very small subset gets posted to the tX-enqueue-job)
     AppSettings.logger.debug("Webhook.process_job setting up job dict…")
-    pj_job_dict = {}
+    pj_job_dict:Dict[str,Any] = {}
     pj_job_dict['job_id'] = our_job_id
     pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
     pj_job_dict['repo_owner_username'] = repo_owner_username
     pj_job_dict['repo_name'] = repo_name
     pj_job_dict['commit_type'] = commit_type
     pj_job_dict['commit_id'] = commit_id
+    pj_job_dict['commit_hash'] = commit_hash
     pj_job_dict['manifests_id'] = tx_manifest.id
     pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
@@ -696,6 +698,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
         tx_payload['options'] = pj_job_dict['options']
 
     AppSettings.logger.debug(f"Payload for tX: {tx_payload}")
+    response:Optional[requests.Response]
     try:
         response = requests.post(tx_post_url, json=tx_payload)
     except requests.exceptions.ConnectionError as e:
@@ -732,7 +735,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:dict, redis
 # end of handle_page_build function
 
 
-def process_job(queued_json_payload:dict, redis_connection) -> str:
+def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
     """
     Parameters:
         queued_json_payload is a dict
@@ -794,7 +797,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
     repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
 
-    commit_branch = repo_data_url = tag_name = None
+    commit_branch = commit_hash = repo_data_url = tag_name = None
     if queued_json_payload['DCS_event'] == 'push':
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
@@ -810,13 +813,14 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         #     return False, {'error': f"{err_msg}."}
         AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
-        commit_id = queued_json_payload['after']
+        commit_hash = queued_json_payload['after']
         commit = None
-        for commit in queued_json_payload['commits']:
-            if commit['id'] == commit_id:
+        for some_commit in queued_json_payload['commits']:
+            if some_commit['id'] == commit_hash:
+                commit = some_commit
                 break
-        commit_id = commit_id[:10]  # Only use the short form
-        AppSettings.logger.debug(f"Got original commit_id='{commit_id}'")
+        commit_hash = commit_hash[:10]  # Only use the short form
+        AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
         repo_data_url = commit['url']
         action_message = commit['message'].strip() # Seems to always end with a newline
 
@@ -828,6 +832,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
 
     elif queued_json_payload['DCS_event'] == 'release':
+        # Note: payload doesn't include a commit hash
         try:
             tag_name = queued_json_payload['release']['tag_name']
         except (IndexError, AttributeError):
@@ -900,7 +905,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         commit_type = 'unknown'
         commit_id = None
     commit_id_string = commit_id if commit_id is None else "'"+commit_id+"'"
-    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id={commit_id_string}")
+    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id={commit_id_string} (commit_hash={commit_hash})")
     if repo_data_url:
         AppSettings.logger.debug(f"Got repo_data_url='{repo_data_url}'")
 
@@ -924,9 +929,9 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
         # Here's our programmed failure (for remotely testing failures)
         if queued_json_payload['DCS_event']=='push' and pusher_username=='Failure' \
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
-            deliberateFailureForTesting
+            deliberateFailureForTesting  # type: ignore
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, repo_data_url,
+                            commit_type, commit_id, commit_hash, repo_data_url,
                             repo_owner_username, repo_name, source_url_base, our_identifier)
     else:
         AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
@@ -942,7 +947,7 @@ def process_job(queued_json_payload:dict, redis_connection) -> str:
 #end of process_job function
 
 
-def job(queued_json_payload):
+def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     This function is called by the rq package to process a job in the queue(s).
 

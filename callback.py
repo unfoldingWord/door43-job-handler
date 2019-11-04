@@ -9,10 +9,10 @@ import os
 from datetime import datetime
 import time
 import json
-from ast import literal_eval
+# from ast import literal_eval
 import tempfile
 import traceback
-from typing import Union, List, Optional
+from typing import Dict, List, Any, Optional, Tuple, Union, Literal
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -40,7 +40,7 @@ stats_client = StatsClient(host=graphite_url, port=8125)
 
 
 
-def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[dict, bool]:
+def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[Dict[str,Any], Literal[False]]:
     """
     Check that we have this outstanding job in a REDIS dict
         and delete it once we make a match.
@@ -90,7 +90,7 @@ def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[dict, boo
 # end of verify_expected_job
 
 
-def merge_results_logs(build_log:dict, file_results:dict, converter_flag:bool) -> dict:
+def merge_results_logs(build_log:Dict[str,Any], file_results:Dict[str,Any], converter_flag:bool) -> Dict[str,Any]:
     """
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
@@ -111,7 +111,7 @@ def merge_results_logs(build_log:dict, file_results:dict, converter_flag:bool) -
 # end of merge_results_logs function
 
 
-def merge_dicts_lists(build_log:dict, file_results:dict, key:str) -> None:
+def merge_dicts_lists(build_log:Dict[str,Any], file_results:Dict[str,Any], key:str) -> None:
     """
     Used for merging log dicts from various sub-processes.
 
@@ -151,10 +151,11 @@ def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Opt
         return json_content['job_id']
     except Exception as e:
         AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
+        return None
 # end of get_jobID_from_commit_buildLog function
 
 
-def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key:str) -> None:
+def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) -> None:
     """
     Clear out and remove the commit directory from the requested bucket for this project revision.
     """
@@ -177,7 +178,7 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
     MAX_DEBUG_DISPLAYS = 10
     DELETE_ENABLED = True
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
-    new_commits = []
+    new_commits:List[dict] = []
     # Process it backwards in case we want to count how many we have as we go
     for commit in reversed(commits_list):
         if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
@@ -217,7 +218,7 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
 # end of remove_excess_commits
 
 
-def update_project_file(build_log:dict, output_dirpath:str) -> None:
+def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     """
     project.json is read by the Javascript in door43.org/js/project-page-functions.js
         The commits are used to update the Revision list in the left side-bar.
@@ -243,6 +244,8 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
         # 'started_at': None,
         # 'ended_at': None
     }
+    if build_log['commit_hash']:
+        current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
     #     current_commit['started_at'] = build_log['started_at']
     # if 'ended_at' in build_log:
@@ -260,7 +263,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
     AppSettings.logger.debug("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
-    commits = []
+    commits:List[dict] = []
     for c in project_json['commits']:
         AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
         # if c['id'] == commit_id: # the old entry for the current commit id
@@ -302,7 +305,7 @@ def update_project_file(build_log:dict, output_dirpath:str) -> None:
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
-def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
+def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis_connection):
     """
     The job info is retrieved from REDIS and matched/checked
     The converted file(s) are downloaded
@@ -339,7 +342,8 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
 
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to or receive back from tX
-    for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'input_format', 'door43_webhook_received_at'):
+    for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'commit_hash',
+                                        'input_format', 'door43_webhook_received_at'):
         if prefix and debug_mode_flag: assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
     # Remove unneeded fields that we saved or received back from tX
@@ -452,7 +456,7 @@ def process_callback_job(pc_prefix, queued_json_payload, redis_connection):
 
 
 
-def job(queued_json_payload) -> None:
+def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     This function is called by the rq package to process a job in the queue(s).
 
