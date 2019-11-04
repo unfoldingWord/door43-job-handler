@@ -6,6 +6,7 @@ import traceback
 from glob import glob
 from shutil import copyfile
 from datetime import datetime, timedelta
+from typing import Dict, List, Any, Union
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -27,14 +28,14 @@ class ProjectDeployer:
         AppSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
         self.unzip_dir = unzip_dir
         self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
-        self.error_messages = []
+        self.error_messages:List[str] = []
 
 
     def close(self) -> None:
         pass
 
 
-    def deploy_revision_to_door43(self, build_log:str) -> bool:
+    def deploy_revision_to_door43(self, build_log:Dict[str,Any]) -> bool:
         """
         Deploys a single revision of a project to door43.org
 
@@ -132,8 +133,9 @@ class ProjectDeployer:
     # end of ProjectDeployer.deploy_revision_to_door43(build_log)
 
 
-    def template_converted_files(self, build_log:str, output_dir:str, repo_name:str, resource_type:str, s3_commit_key:str,
-                                 source_dir:str, start_time, template_filepath:str):
+    def template_converted_files(self, build_log:Dict[str,Any], output_dir:str,
+                                    repo_name:str, resource_type:str, s3_commit_key:str,
+                                    source_dir:str, start_time, template_filepath:str):
         AppSettings.logger.debug(f"template_converted_files(…, od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
@@ -190,12 +192,14 @@ class ProjectDeployer:
             self.update_index_key(index_json, templater, 'chapters')
             self.update_index_key(index_json, templater, 'book_codes')
             # AppSettings.logger.debug(f"Final 'index.json': {json.dumps(index_json)[:256]} …")
-            self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, index_json_fname, index_json)
+            self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key,
+                                                        index_json_fname, index_json)
         return source_dir, success
     # end of ProjectDeployer.template_converted_files function
 
 
-    def write_data_to_file_and_upload_to_CDN(self, output_dir:str, s3_commit_key:str, fname:str, data:str) -> None:
+    def write_data_to_file_and_upload_to_CDN(self, output_dir:str, s3_commit_key:str,
+                                                    fname:str, data:Union[str, Dict[str,Any]]) -> None:
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
@@ -211,7 +215,7 @@ class ProjectDeployer:
 
 
     @staticmethod
-    def update_index_key(index_json_dict:dict, templater_object, key_string:str) -> None:
+    def update_index_key(index_json_dict:Dict[str,Any], templater_object, key_string:str) -> None:
         """
         key_string is one of 'titles', chapters', 'book_codes'
 
@@ -226,7 +230,7 @@ class ProjectDeployer:
 
 
     @staticmethod
-    def get_templater_index(s3_commit_key:str, index_json_fname:str) -> dict:
+    def get_templater_index(s3_commit_key:str, index_json_fname:str) -> Dict[str,Any]:
         index_json = AppSettings.cdn_s3_handler().get_json(s3_commit_key + '/' + index_json_fname)
         if not index_json:
             index_json['titles'] = {}

@@ -3,6 +3,7 @@ import re
 import json
 from glob import glob
 from shutil import copy, copytree
+from typing import Dict, Any
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -355,7 +356,7 @@ class BiblePreprocessor(Preprocessor):
         return self.book_filenames
 
 
-    def remove_closed_w_field(self, B:str, C:str, V:str, line:str, marker:str, text:str) -> str:
+    def remove_closed_w_field(self, B: str, C: str, V: str, line: str, marker: str, text: str) -> str:
         """
         Extract words out of \\w or \\+w fields
         """
@@ -381,7 +382,7 @@ class BiblePreprocessor(Preprocessor):
         return text
 
 
-    def write_clean_file(self, file_name:str, file_contents:str) -> None:
+    def write_clean_file(self, file_name: str, file_contents: str) -> None:
         """
         Cleans the USFM text as it writes it.
 
@@ -628,7 +629,6 @@ class BiblePreprocessor(Preprocessor):
                         AppSettings.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
                         self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
-                        halt
                 # assert '\\w*' not in adjusted_line
                 if '\\z' in adjusted_line: # Delete these user-defined fields
                     # TODO: These milestone fields in the source texts should be self-closing
@@ -679,7 +679,7 @@ class BiblePreprocessor(Preprocessor):
     # end of write_clean_file function
 
 
-    def clean_copy(self, source_pathname:str, destination_pathname:str) -> None:
+    def clean_copy(self, source_pathname: str, destination_pathname: str) -> None:
         """
         Cleans the USFM file as it copies it.
         """
@@ -1292,7 +1292,7 @@ class TwPreprocessor(Preprocessor):
 
 
 class TnPreprocessor(Preprocessor):
-    index_json = {
+    index_json:Dict[str,Any] = {
         'titles': {},
         'chapters': {},
         'book_codes': {}

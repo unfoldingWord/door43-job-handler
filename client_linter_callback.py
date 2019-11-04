@@ -62,7 +62,7 @@ class ClientLinterCallback:
         id_parts = self.identifier.split('/')
         self.multipart = len(id_parts) > 3
         if self.multipart:
-            halt
+            raise Exception("Unsupported")
             # NOTE: Disabled 4Mar2019 coz unused
             # part_count, part_id, book = id_parts[1:4]
             # AppSettings.logger.debug('Multiple project, part {0} of {1}, linted book {2}'.
