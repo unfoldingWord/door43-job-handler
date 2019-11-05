@@ -3,23 +3,25 @@ import json
 import boto3
 import botocore
 from boto3.session import Session
+from typing import Any, Optional
 
 
 
 class S3Handler:
-    def __init__(self, bucket_name=None, aws_access_key_id=None, aws_secret_access_key=None,
-                 aws_region_name='us-west-2'):
+    def __init__(self, bucket_name:Optional[str]=None,
+                    aws_access_key_id:Optional[str]=None, aws_secret_access_key:Optional[str]=None,
+                    aws_region_name:str='us-west-2') -> None:
         self.bucket_name = bucket_name
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
-        self.bucket = None
-        self.client = None
-        self.resource = None
+        self.bucket:Optional[Any] = None
+        self.client:Optional[Any] = None
+        self.resource:Optional[Any] = None
         self.setup_resources()
 
 
-    def setup_resources(self):
+    def setup_resources(self) -> None:
         if self.aws_access_key_id and self.aws_secret_access_key:
             session = Session(aws_access_key_id=self.aws_access_key_id,
                               aws_secret_access_key=self.aws_secret_access_key,
@@ -41,7 +43,7 @@ class S3Handler:
             self.bucket = self.resource.Bucket(self.bucket_name)
 
 
-    def download_file(self, key, local_file):
+    def download_file(self, key:str, local_filepath:str) -> None:
         """
         Download file from S3 bucket. Similar to s3.download_file except that does
         not play nicely with moto, this however, does.
@@ -49,72 +51,13 @@ class S3Handler:
         :param string local_file: file to download to
         """
         body = self.resource.Object(bucket_name=self.bucket_name, key=key).get()['Body']
-        with open(local_file, 'wb') as f:
+        with open(local_filepath, 'wb') as f:
             for chunk in iter(lambda: body.read(1024), b''):
                 f.write(chunk)
 
 
-    # Downloads all the files in S3 that have a prefix of `key_prefix` from `bucket` to the `local` directory
-    def download_dir(self, key_prefix, local):
-        paginator = self.client.get_paginator('list_objects')
-        for result in paginator.paginate(Bucket=self.bucket_name, Delimiter='/', Prefix=key_prefix):
-            if result.get('CommonPrefixes') is not None:
-                for subdir in result.get('CommonPrefixes'):
-                    self.download_dir(subdir.get('Prefix'), local)
-            if result.get('Contents') is not None:
-                for file in result.get('Contents'):
-                    local_file = os.path.join(local, file.get('Key'))
-                    if local_file.endswith('/'):
-                        pass
-                    else:
-                        if not os.path.exists(os.path.dirname(local_file)):
-                            os.makedirs(os.path.dirname(local_file))
-                        self.download_file(file.get('Key'), local_file)
-
-
-    def key_exists(self, key, bucket_name=None):
-        if not bucket_name:
-            bucket = self.bucket
-        else:
-            bucket = self.resource.Bucket(bucket_name)
-
-        try:
-            bucket.Object(key=key).load()
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                exists = False
-            else:
-                raise
-        else:
-            exists = True
-
-        return exists
-
-
-    def key_modified_time(self, key, bucket_name=None):
-        """
-        get last modified time for key
-        :param key:
-        :param bucket_name:
-        :return:
-        """
-        if not bucket_name:
-            bucket = self.bucket
-        else:
-            bucket = self.resource.Bucket(bucket_name)
-
-        try:
-            s3_object = bucket.Object(key=key)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                return None
-            else:
-                raise
-
-        return s3_object.last_modified
-
-
-    def copy(self, from_key, from_bucket=None, to_key=None, catch_exception=True):
+    def copy(self, from_key:str, from_bucket:Optional[str]=None,
+                    to_key:Optional[str]=None, catch_exception:bool=True) -> Optional[object]:
         if not to_key:
             to_key = from_key
         if not from_bucket:
@@ -131,19 +74,7 @@ class S3Handler:
                 CopySource='{0}/{1}'.format(from_bucket, from_key))
 
 
-    def replace(self, key, catch_exception=True):
-        if catch_exception:
-            try:
-                return self.resource.Object(bucket_name=self.bucket_name, key=key).copy_from(
-                    CopySource='{0}/{1}'.format(self.bucket_name, key), MetadataDirective='REPLACE')
-            except:
-                return False
-        else:
-            return self.resource.Object(bucket_name=self.bucket_name, key=key).copy_from(
-                CopySource='{0}/{1}'.format(self.bucket_name, key), MetadataDirective='REPLACE')
-
-
-    def upload_file(self, path, key, cache_time=600, content_type=None):
+    def upload_file(self, path:str, key:str, cache_time:int=600, content_type:Optional[str]=None) -> None:
         """
         Upload file to S3 storage. Similar to the s3.upload_file, however, that
         does not work nicely with moto, whereas this function does.
@@ -151,31 +82,37 @@ class S3Handler:
         :param string key: name of the object in the bucket
         """
         from general_tools.file_utils import get_mime_type
-        #from global_settings.global_settings import GlobalSettings
-        #GlobalSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
+        #from app_settings.app_settings import AppSettings
+        #AppSettings.logger.debug(f"s3_handler.upload_file({path}, {key}, {cache_time}, {content_type})")
         assert 'http' not in key.lower()
 
         with open(path, 'rb') as f:
             binary = f.read()
         if content_type is None:
-            content_type = get_mime_type(path)
+            mime_type = get_mime_type(path)
+            content_type = mime_type # Let browser figure out the encoding
+            # content_type = f'{mime_type}; charset=utf-8' if 'usfm' in mime_type \
+            #                 else mime_type # RJH added charset Oct2019
+        # from app_settings.app_settings import AppSettings
+        # AppSettings.logger.debug(f"Uploading {path} to S3 {key} with cache_time={cache_time} content_type='{content_type}'…")
+        # AppSettings.logger.debug(f"Bucket is {self.bucket}")
         self.bucket.put_object(
             Key=key,
             Body=binary,
             ContentType=content_type,
-            CacheControl='max-age={0}'.format(cache_time)
+            CacheControl=f'max-age={cache_time}'
         )
 
 
-    def get_object(self, key):
+    def get_object(self, key:str):
         return self.resource.Object(bucket_name=self.bucket_name, key=key)
 
 
-    def redirect(self, key, location):
+    def redirect(self, key:str, location:str) -> None:
         self.bucket.put_object(Key=key, WebsiteRedirectLocation=location, CacheControl='max-age=0')
 
 
-    def get_file_contents(self, key, catch_exception=True):
+    def get_file_contents(self, key:str, catch_exception:bool=True) -> Optional[str]:
         if catch_exception:
             try:
                 return self.get_object(key).get()['Body'].read()
@@ -185,7 +122,7 @@ class S3Handler:
             return self.get_object(key).get()['Body'].read()
 
 
-    def get_json(self, key, catch_exception = True):
+    def get_json(self, key:str, catch_exception:bool=True):
         if catch_exception:
             try:
                 return json.loads(self.get_file_contents(key))
@@ -195,7 +132,7 @@ class S3Handler:
             return json.loads(self.get_file_contents(key, catch_exception))
 
 
-    def get_objects(self, prefix=None, suffix=None):
+    def get_objects(self, prefix:Optional[str]=None, suffix:Optional[str]=None):
         filtered = []
         objects = self.bucket.objects.filter(Prefix=prefix)
         if objects:
@@ -208,17 +145,7 @@ class S3Handler:
         return filtered
 
 
-    def put_contents(self, key, body, catch_exception=True):
-        if catch_exception:
-            try:
-                return self.get_object(key).put(Body=body)
-            except:
-                return None
-        else:
-            return self.get_object(key).put(Body=body)
-
-
-    def delete_file(self, key, catch_exception=True):
+    def delete_file(self, key:str, catch_exception:bool=True):
         if catch_exception:
             try:
                 return self.resource.Object(bucket_name=self.bucket_name, key=key).delete()
@@ -226,15 +153,3 @@ class S3Handler:
                 return False
         else:
             return self.resource.Object(bucket_name=self.bucket_name, key=key).delete()
-
-
-    def create_bucket(self, bucket_name=None, catch_exception=True):
-        if not bucket_name:
-            bucket_name = self.bucket_name
-        if catch_exception:
-            try:
-                return self.resource.create_bucket(Bucket=bucket_name)
-            except:
-                return None
-        else:
-            return self.resource.create_bucket(Bucket=bucket_name)

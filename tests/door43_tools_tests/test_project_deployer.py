@@ -6,7 +6,7 @@ from shutil import rmtree
 from bs4 import BeautifulSoup
 from moto import mock_s3
 
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from preprocessors.preprocessors import TqPreprocessor
 from preprocessors.preprocessors import TnPreprocessor
 from door43_tools.project_deployer import ProjectDeployer
@@ -22,9 +22,9 @@ class ProjectDeployerTests(unittest.TestCase):
 
     def setUp(self):
         """Runs before each test."""
-        GlobalSettings(prefix=f'{self._testMethodName}-')
-        GlobalSettings.cdn_s3_handler().create_bucket()
-        GlobalSettings.door43_s3_handler().create_bucket()
+        AppSettings(prefix=f'{self._testMethodName}-')
+        AppSettings.cdn_s3_handler().create_bucket()
+        AppSettings.door43_s3_handler().create_bucket()
         self.temp_dir = tempfile.mkdtemp(prefix='Door43_test_project_deployer')
         self.deployer = ProjectDeployer(self.temp_dir)
         TdLanguage.language_list = {
@@ -46,8 +46,8 @@ class ProjectDeployerTests(unittest.TestCase):
     #     build_log_key = '{0}/build_log.json'.format(self.project_key)
     #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
     #     self.assertTrue(ret)
-    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
-    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/50.html'.format(self.project_key)))
+    #     self.assertTrue(AppSettings.door43_s3_handler().key_exists(build_log_key))
+    #     self.assertTrue(AppSettings.door43_s3_handler().key_exists('{0}/50.html'.format(self.project_key)))
 
     # def test_obs_download_buildlog_and_deploy_revision_to_door43_exception(self):
     #     self.mock_s3_obs_project()
@@ -72,7 +72,7 @@ class ProjectDeployerTests(unittest.TestCase):
 
     #     # then
     #     self.assertTrue(ret)
-    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
+    #     self.assertTrue(AppSettings.door43_s3_handler().key_exists(build_log_key))
     #     files_to_verify = ['manifest.yaml']
     #     for book in BOOK_NUMBERS:
     #         html_file = '{0}-{1}.html'.format(BOOK_NUMBERS[book], book.upper())
@@ -80,25 +80,25 @@ class ProjectDeployerTests(unittest.TestCase):
 
     #     for file_name in files_to_verify:
     #         key = '{0}/{1}'.format(self.project_key, file_name)
-    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #         self.assertTrue(AppSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
     #     parent_key = '/'.join(self.project_key.split('/')[:-1])
     #     for file_name in ['project.json']:
     #         key = '{0}/{1}'.format(parent_key, file_name)
-    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #         self.assertTrue(AppSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
     # def test_tw_download_buildlog_and_deploy_revision_to_door43(self):
     #     self.mock_s3_tw_project()
     #     build_log_key = '{0}/build_log.json'.format(self.project_key)
     #     ret = self.deployer.download_buildlog_and_deploy_revision_to_door43(build_log_key)
     #     self.assertTrue(ret)
-    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(build_log_key))
+    #     self.assertTrue(AppSettings.door43_s3_handler().key_exists(build_log_key))
     #     for file_name in ['index.html', 'kt.html', 'names.html', 'other.html', 'build_log.json', 'manifest.yaml']:
     #         key = '{0}/{1}'.format(self.project_key, file_name)
-    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #         self.assertTrue(AppSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
     #     parent_key = '/'.join(self.project_key.split('/')[:-1])
     #     for file_name in ['project.json']:
     #         key = '{0}/{1}'.format(parent_key, file_name)
-    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #         self.assertTrue(AppSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
     # def test_tn_download_buildlog_and_deploy_revision_to_door43(self):
     #     # given
@@ -111,12 +111,12 @@ class ProjectDeployerTests(unittest.TestCase):
 
     #     # then
     #     self.assertTrue(ret)
-    #     self.assertTrue(GlobalSettings.door43_s3_handler().key_exists('{0}/build_log.json'.format(self.project_key)))
+    #     self.assertTrue(AppSettings.door43_s3_handler().key_exists('{0}/build_log.json'.format(self.project_key)))
     #     files_to_verify = ['01-GEN.html', 'index.json']
 
     #     for file_name in files_to_verify:
     #         key = '{0}/{1}'.format(self.project_key, file_name)
-    #         self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
+    #         self.assertTrue(AppSettings.door43_s3_handler().key_exists(key), "Key not found: {0}".format(key))
 
     # def test_bible_deploy_part_revision_to_door43(self):
     #     # given
@@ -213,8 +213,8 @@ class ProjectDeployerTests(unittest.TestCase):
 
     # def test_redeploy_all_projects(self):
     #     self.mock_s3_obs_project()
-    #     GlobalSettings.cdn_s3_handler().put_contents('u/user1/project1/revision1/build_log.json', '{}')
-    #     GlobalSettings.cdn_s3_handler().put_contents('u/user2/project2/revision2/build_log.json', '{}')
+    #     AppSettings.cdn_s3_handler().put_contents('u/user1/project1/revision1/build_log.json', '{}')
+    #     AppSettings.cdn_s3_handler().put_contents('u/user2/project2/revision2/build_log.json', '{}')
     #     self.assertTrue(self.deployer.redeploy_all_projects('test-door43_deployer'))
 
     #
@@ -225,7 +225,7 @@ class ProjectDeployerTests(unittest.TestCase):
         self.assertEqual(ret, expect_success)
         if expect_success:
             if output_key:
-                self.assertTrue(GlobalSettings.door43_s3_handler().key_exists(output_key))
+                self.assertTrue(AppSettings.door43_s3_handler().key_exists(output_key))
 
     def mock_run_templater_exception(self):
         raise NotImplementedError("Test Exception")
@@ -238,11 +238,11 @@ class ProjectDeployerTests(unittest.TestCase):
         self.project_files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
         self.project_key = 'u/door43/en_tq/12345678'
         for filename in self.project_files:
-            GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, filename), '{0}/{1}'.format(self.project_key,
+            AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, filename), '{0}/{1}'.format(self.project_key,
                                                                                                filename))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
                                          'u/door43/en_tq/project.json')
-        GlobalSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
+        AppSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
                                             'templates/project-page.html')
 
     def mock_s3_tw_project(self):
@@ -253,11 +253,11 @@ class ProjectDeployerTests(unittest.TestCase):
         self.project_files = [f for f in os.listdir(src_dir) if os.path.isfile(os.path.join(src_dir, f))]
         self.project_key = 'u/door43/en_tw/12345678'
         for filename in self.project_files:
-            GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, filename), '{0}/{1}'.format(self.project_key,
+            AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, filename), '{0}/{1}'.format(self.project_key,
                                                                                                    filename))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
                                          'u/door43/en_tw/project.json')
-        GlobalSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
+        AppSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
                                             'templates/project-page.html')
 
     def mock_s3_tn_project(self, part):
@@ -270,17 +270,17 @@ class ProjectDeployerTests(unittest.TestCase):
         build_log = file_utils.load_json_object(os.path.join(src_dir, 'build_log.json'))
         build_log['part'] = part
         file_utils.write_file(os.path.join(src_dir, 'build_log.json'), build_log)
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'build_log.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'build_log.json'),
                                          '{0}/{1}/build_log.json'.format(self.project_key, part))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'index.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'index.json'),
                                          '{0}/{1}/index.json'.format(self.project_key, part))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'build_log.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'build_log.json'),
                                          '{0}/{1}/finished'.format(self.project_key, part))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, '01-GEN.html'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, '01-GEN.html'),
                                          '{0}/{1}/01-GEN.html'.format(self.project_key, part))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(src_dir, 'project.json'),
                                          'u/door43/en_tq/project.json')
-        GlobalSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
+        AppSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
                                             'templates/project-page.html')
 
     def mock_s3_obs_project(self):
@@ -291,11 +291,11 @@ class ProjectDeployerTests(unittest.TestCase):
         self.project_files = [f for f in os.listdir(project_dir) if os.path.isfile(os.path.join(project_dir, f))]
         self.project_key = 'u/door43/en-obs/12345678'
         for filename in self.project_files:
-            GlobalSettings.cdn_s3_handler().upload_file(os.path.join(project_dir, filename), '{0}/{1}'.format(self.project_key,
+            AppSettings.cdn_s3_handler().upload_file(os.path.join(project_dir, filename), '{0}/{1}'.format(self.project_key,
                                                                                                    filename))
-        GlobalSettings.cdn_s3_handler().upload_file(os.path.join(out_dir, 'door43', 'en-obs', 'project.json'),
+        AppSettings.cdn_s3_handler().upload_file(os.path.join(out_dir, 'door43', 'en-obs', 'project.json'),
                                          'u/door43/en-obs/project.json')
-        GlobalSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
+        AppSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
                                             'templates/project-page.html')
 
     def set_deployed_flags(self, project_key, part_count, skip=-1):
@@ -304,7 +304,7 @@ class ProjectDeployerTests(unittest.TestCase):
         for i in range(0, part_count):
             if i != skip:
                 key = '{0}/{1}/deployed'.format(project_key, i)
-                GlobalSettings.cdn_s3_handler().upload_file(tempf, key, cache_time=0)
+                AppSettings.cdn_s3_handler().upload_file(tempf, key, cache_time=0)
         os.remove(tempf)
 
     def mock_s3_bible_project(self, test_file_name, project_key, multi_part=False):
@@ -318,7 +318,7 @@ class ProjectDeployerTests(unittest.TestCase):
         self.project_key = project_key
         for filename in self.project_files:
             sub_path = filename.split(project_dir)[1].replace(os.path.sep, '/')  # Make sure it is a bucket path
-            GlobalSettings.cdn_s3_handler().upload_file(filename, '{0}/{1}'.format(project_key, sub_path))
+            AppSettings.cdn_s3_handler().upload_file(filename, '{0}/{1}'.format(project_key, sub_path))
 
             if multi_part:  # copy files from cdn to door43
                 base_name = os.path.basename(filename)
@@ -332,8 +332,8 @@ class ProjectDeployerTests(unittest.TestCase):
                     html = str(soup)
                     file_utils.write_file(filename, html.encode('ascii', 'xmlcharrefreplace'))
 
-                GlobalSettings.door43_s3_handler().upload_file(filename, '{0}/{1}'.format(project_key, base_name))
+                AppSettings.door43_s3_handler().upload_file(filename, '{0}/{1}'.format(project_key, base_name))
 
         # u, user, repo = project_key
-        GlobalSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
+        AppSettings.door43_s3_handler().upload_file(os.path.join(self.resources_dir, 'templates', 'project-page.html'),
                                           'templates/project-page.html')

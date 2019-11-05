@@ -2,7 +2,7 @@ from datetime import datetime, date
 
 from sqlalchemy import inspect
 
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 
 
 class TxModel:
@@ -11,19 +11,19 @@ class TxModel:
         pass
 
     def insert(self):
-        GlobalSettings.db().add(self)
-        GlobalSettings.db().commit()
-        GlobalSettings.db().close()
+        AppSettings.db().add(self)
+        AppSettings.db().commit()
+        AppSettings.db().close()
 
     def update(self):
-        GlobalSettings.db().merge(self)
-        GlobalSettings.db().commit()
-        GlobalSettings.db().close()
+        AppSettings.db().merge(self)
+        AppSettings.db().commit()
+        AppSettings.db().close()
 
     def delete(self):
-        GlobalSettings.db().delete(self)
-        GlobalSettings.db().commit()
-        GlobalSettings.db().close()
+        AppSettings.db().delete(self)
+        AppSettings.db().commit()
+        AppSettings.db().close()
 
     @classmethod
     def get(cls, *args, **kwargs):
@@ -35,12 +35,12 @@ class TxModel:
         if args:
             kwargs[inspect(cls).primary_key[0].name] = args[0]
         item = cls.query(**kwargs).first()
-        GlobalSettings.db().close()
+        AppSettings.db().close()
         return item
 
     @classmethod
     def query(cls, **kwargs):
-        items = GlobalSettings.db().query(cls).filter_by(**kwargs)
+        items = AppSettings.db().query(cls).filter_by(**kwargs)
         return items
 
     def __iter__(self):

@@ -43,13 +43,13 @@ We recommend you create a Python virtual environment to help manage Python packa
 .. code-block:: bash
 
     cd door43-job-handler
-    python3 -m venv venv
+    python3 -m venv myVenv
 
 Now load that virtual environment and install dependencies:
 
 .. code-block:: bash
 
-    source venv/bin/activate
+    source myVenv/bin/activate
     make dependencies
 
 Deployment
@@ -105,6 +105,14 @@ Running containers can be viewed with (or append --all to see all containers):
 
 The output log can be viewed on the (AWS EC2) host machine at:
     /var/lib/docker/containers/<containerID>/<containerID>-json.log
+
+You can connect to a shell inside the container with commands like:
+
+.. code-block:: bash
+
+	# Gives a shell on the running container -- Note: no bash shell available
+	docker exec -it `docker inspect --format="{{.Id}}" door43_job_handler` sh
+	docker exec -it `docker inspect --format="{{.Id}}" dev-door43_job_handler` sh
 
 The container can be stopped with a command like:
 

@@ -1,9 +1,10 @@
 import os
 from glob import glob
+from yaml.parser import ParserError, ScannerError
 
 from bs4 import BeautifulSoup
 
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from general_tools import file_utils
 from general_tools.file_utils import write_file
 from resource_container.ResourceContainer import RC
@@ -23,31 +24,31 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
     """
     Tries to determine the correct templater for the appropriate repo_subject
     """
-    # GlobalSettings.logger.debug(f"init_template({repo_subject})")
+    # AppSettings.logger.debug(f"init_template({repo_subject})")
     if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
                         'Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
-        GlobalSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
-        GlobalSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
         templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
-        GlobalSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
         templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Questions',):
-        GlobalSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
         templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Words',):
-        GlobalSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
         templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
-        GlobalSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
+        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
         templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
     else:
         if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            GlobalSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
+            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
         else:
-            GlobalSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
         templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
     return templater
 
@@ -61,14 +62,14 @@ class Templater:
                     ]
 
     def __init__(self, repo_subject, source_dir, output_dir, template_file):
-        # GlobalSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
+        # AppSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
         self.repo_subject = repo_subject
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
         assert self.templater_CSS_class # Must be set by subclass
-        GlobalSettings.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
+        AppSettings.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
-            GlobalSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
+            AppSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
         self.classes = [] # These get appended to the templater_CSS_class
 
         self.source_dir = source_dir  # Local directory
@@ -83,10 +84,11 @@ class Templater:
         self.titles = {}
         self.chapters = {}
         self.book_codes = {}
+        self.error_messages = set() # Don't want duplicates
 
 
     def run(self):
-        # GlobalSettings.logger.debug("Templater.run()")
+        # AppSettings.logger.debug("Templater.run()")
         # Get the resource container
         self.rc = RC(self.source_dir)
         with open(self.template_file) as template_file:
@@ -97,7 +99,7 @@ class Templater:
                 for some_class in self.classes: # Check that we don't double unnecessarily
                     assert some_class != self.templater_CSS_class
                 soup.body['class'] = soup.body.get('class', []) + self.classes
-            GlobalSettings.logger.info(f"Have {self.template_file.split('/')[-1]} body class(es)={soup.body.get('class', [])}")
+            AppSettings.logger.info(f"Have {self.template_file.split('/')[-1]} body class(es)={soup.body.get('class', [])}")
             self.template_html = str(soup)
         self.apply_template()
         return True
@@ -122,15 +124,15 @@ class Templater:
 
 
     def build_page_nav(self, filename=None):
-        # GlobalSettings.logger.debug(f"Template.build_page_nav({filename})")
-        # GlobalSettings.logger.debug(f"Have self.titles={self.titles}")
+        # AppSettings.logger.debug(f"Template.build_page_nav({filename})")
+        # AppSettings.logger.debug(f"Have self.titles={self.titles}")
         html = """
             <nav class="affix-top hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
               <ul id="sidebar-nav" class="nav nav-stacked">
                 <li><h1>Navigation</h1></li>
             """
         for fname in self.files:
-            # GlobalSettings.logger.debug(f"build_page_nav: {fname}")
+            # AppSettings.logger.debug(f"build_page_nav: {fname}")
             base_name = os.path.basename(fname)
             title = ""
             if base_name in self.titles:
@@ -142,9 +144,9 @@ class Templater:
             # and not title[0].isdigit():
             #     root_name = os.path.splitext(base_name)[0]
             #     if root_name.isdigit(): # presumably it's a story number -- prepend it
-            #         # GlobalSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
+            #         # AppSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
             #         title = f"{int(root_name)}. {title if len(title)<35 else title[:35]+'…'}"
-            # GlobalSettings.logger.debug(f"build_page_nav adding title='{title}'")
+            # AppSettings.logger.debug(f"build_page_nav adding title='{title}'")
             # Link to other pages but not to myself
             html += f'<li>{title}</li>' if filename == fname \
                     else f'<li><a href="{os.path.basename(fname)}">{title}</a></li>'
@@ -152,7 +154,7 @@ class Templater:
                 </ul>
             </nav>
             """
-        # GlobalSettings.logger.debug(f"Template.build_page_nav returning {html}")
+        # AppSettings.logger.debug(f"Template.build_page_nav returning {html}")
         return html
 
 
@@ -173,7 +175,7 @@ class Templater:
 
 
     def apply_template(self):
-        # GlobalSettings.logger.debug("Templater.apply_template()")
+        # AppSettings.logger.debug("Templater.apply_template()")
         language_code = self.rc.resource.language.identifier
         language_name = self.rc.resource.language.title
         language_dir = self.rc.resource.language.direction
@@ -204,7 +206,7 @@ class Templater:
         # Loop through the html files
         for filepath in self.files:
             if filepath not in self.already_converted:
-                GlobalSettings.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
+                AppSettings.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the downloaded file into a dom abject
                 with open(filepath, 'r') as f:
@@ -273,12 +275,12 @@ class Templater:
 
                 # write to output directory
                 out_file = os.path.join(self.output_dir, os.path.basename(filepath))
-                GlobalSettings.logger.debug(f'Templater writing {out_file} …')
+                AppSettings.logger.debug(f'Templater writing {out_file} …')
                 # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                 write_file(out_file, html)
 
             else:  # if already templated, need to update navigation bar
-                GlobalSettings.logger.debug(f"Applying2 template to {filepath.rsplit('/',1)[-1]}…")
+                AppSettings.logger.debug(f"Applying2 template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the templated file into a dom abject
                 with open(filepath, 'r') as f:
@@ -296,7 +298,7 @@ class Templater:
 
                     # write to output directory
                     out_file = os.path.join(self.output_dir, os.path.basename(filepath))
-                    GlobalSettings.logger.debug(f'Updating nav in {out_file} …')
+                    AppSettings.logger.debug(f'Updating nav in {out_file} …')
                     # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                     write_file(out_file, html)
 # end of class Templater
@@ -377,7 +379,14 @@ class ObsNotesTemplater(Templater):
                 html += f"""
                 <h4>{title}</h4>
                 """
-                toc = load_yaml_object(os.path.join(f'{os.path.splitext(fname)[0]}-toc.yaml'))
+                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
+                try:
+                    toc = load_yaml_object(filepath)
+                except (ParserError, ScannerError) as e:
+                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
+                    AppSettings.logger.critical("ObsNotes"+err_msg)
+                    self.error_messages.add(err_msg)
+                    toc = None
                 if toc:
                     for section in toc['sections']:
                         html += self.build_section_toc(section)
@@ -710,17 +719,24 @@ class TaTemplater(Templater):
         else:
             link = f'section-container-{self.section_container_id}'
             self.section_container_id = self.section_container_id + 1
-        html = f"""
-            <li>
-                <a href="#{link}">{section['title']}</a>
-            """
+        try:
+            html = f"""
+                <li>
+                    <a href="#{link}">{section['title']}</a>
+                """
+        except KeyError: # probably missing section title
+            html = f"""
+                <li>
+                    <a href="#{link}">MISSING TITLE???</a>
+                """
         if 'sections' in section:
             html += f"""
                 <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
                 <ul id="{link}-sub" class="collapse">
             """
-            for subsection in section['sections']:
-                html += self.build_section_toc(subsection)
+            if section['sections']: # covers case of user leaving it empty = None
+                for subsection in section['sections']:
+                    html += self.build_section_toc(subsection)
             html += """
                 </ul>
             """
@@ -753,7 +769,14 @@ class TaTemplater(Templater):
                 html += f"""
                 <h4>{title}</h4>
                 """
-                toc = load_yaml_object(os.path.join(f'{os.path.splitext(fname)[0]}-toc.yaml'))
+                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
+                try:
+                    toc = load_yaml_object(os.path.join(filepath))
+                except (ParserError, ScannerError) as e:
+                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
+                    AppSettings.logger.critical("Ta"+err_msg)
+                    self.error_messages.add(err_msg)
+                    toc = None
                 if toc:
                     for section in toc['sections']:
                         html += self.build_section_toc(section)

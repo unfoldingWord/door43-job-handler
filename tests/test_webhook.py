@@ -6,7 +6,7 @@ import json
 from rq import get_current_job
 
 from rq_settings import prefix, webhook_queue_name
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from webhook import job
 
 
@@ -22,10 +22,10 @@ class TestWebhook(TestCase):
 
     def setUp(self):
         # Make sure that other tests didn't mess up our prefix
-        GlobalSettings(prefix=prefix)
+        AppSettings(prefix=prefix)
 
     def test_prefix(self):
-        self.assertEqual(prefix, GlobalSettings.prefix)
+        self.assertEqual(prefix, AppSettings.prefix)
 
     @skip("Not currently working")
     @patch('webhook.get_current_job', side_effect=my_get_current_job)

@@ -4,12 +4,12 @@ from sqlalchemy import Column, String, Integer, UniqueConstraint, DateTime, Unic
 
 from general_tools.data_utils import convert_string_to_date
 from models.tx_model import TxModel
-from global_settings.global_settings import GlobalSettings
+from app_settings.app_settings import AppSettings
 from models.text_pickle_type import TextPickleType
 
 
-class TxManifest(GlobalSettings.Base, TxModel):
-    __tablename__ = GlobalSettings.manifest_table_name
+class TxManifest(AppSettings.Base, TxModel):
+    __tablename__ = AppSettings.manifest_table_name
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     repo_name = Column(String(100), nullable=False)
     user_name = Column(String(100), nullable=False)

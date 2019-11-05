@@ -15,7 +15,7 @@ from watchtower import CloudWatchLogHandler
 from rq_settings import debug_mode_flag
 
 
-# TODO: Investigate if this GlobalSettings (was tx-Manager App) class still needs to be resetable now
+# TODO: Investigate if this AppSettings (was tx-Manager App) class still needs to be resetable now
 def resetable(cls):
     cls._resetable_cache_ = cls.__dict__.copy()
     return cls
@@ -32,7 +32,7 @@ def reset_class(cls):
         try:
             if key != '_resetable_cache_':
                 setattr(cls, key, value)
-        except AttributeError: # When/Why would we get this
+        except AttributeError: # When/Why would we get this?
             pass
     cls.dirty = False
 
@@ -58,12 +58,12 @@ def setup_logger(logger, watchtower_log_handler, level):
 
 
 @resetable
-class GlobalSettings:
+class AppSettings:
     """
     For all things used for by this app, from DB connection to global handlers
     """
     _resetable_cache_ = {}
-    name = 'Door43-Job-Handler' # Only used for logging and for testing GlobalSettings resets
+    name = 'Door43-Job-Handler' # Only used for logging and for testing AppSettings resets
     dirty = False
 
     # Stage Variables, defaults
@@ -96,7 +96,7 @@ class GlobalSettings:
                        'linter_messaging_name', 'db_name', 'db_user']
 
     # DB related
-    Base = declarative_base()  # To be used in all model classes as the parent class: GlobalSettings.ModelBase
+    Base = declarative_base()  # To be used in all model classes as the parent class: AppSettings.ModelBase
     auto_setup_db = True
     manifest_table_name = 'manifests'
     job_table_name = 'jobs'
@@ -114,9 +114,6 @@ class GlobalSettings:
     _cdn_s3_handler = None
     _door43_s3_handler = None
     _pre_convert_s3_handler = None
-    # _language_stats_db_handler = None
-    # _lambda_handler = None
-    # _gogs_handler = None
 
     # Logger
     logger = logging.getLogger(name)
@@ -125,10 +122,10 @@ class GlobalSettings:
 
     def __init__(self, **kwargs):
         """
-        Using init to set the class variables with GlobalSettings(var=value)
+        Using init to set the class variables with AppSettings(var=value)
         :param kwargs:
         """
-        #print("GlobalSettings.__init__({})".format(kwargs))
+        #print("AppSettings.__init__({})".format(kwargs))
         self.init(**kwargs)
 
     @classmethod
@@ -138,10 +135,10 @@ class GlobalSettings:
         :param bool reset:
         :param kwargs:
         """
-        #print("GlobalSettings.init(reset={}, {})".format(reset,kwargs))
+        #print("AppSettings.init(reset={}, {})".format(reset,kwargs))
         if cls.dirty and reset:
-            GlobalSettings.db_close()
-            reset_class(GlobalSettings)
+            AppSettings.db_close()
+            reset_class(AppSettings)
         if 'prefix' in kwargs and kwargs['prefix'] != cls.prefix:
             cls.__prefix_vars(kwargs['prefix'])
         cls.set_vars(**kwargs)
@@ -160,40 +157,40 @@ class GlobalSettings:
                                                     stream_name=cls.name)
         setup_logger(cls.logger, cls.watchtower_log_handler,
                             logging.DEBUG if debug_mode_flag else logging.INFO)
-        cls.logger.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
+        cls.logger.debug(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
 
 
     @classmethod
     def __prefix_vars(cls, prefix):
         """
-        Prefixes any variables in GlobalSettings.prefixable_variables. This includes URLs
+        Prefixes any variables in AppSettings.prefixable_variables. This includes URLs
         :return:
         """
-        # cls.logger.debug(f"GlobalSettings.prefix_vars with '{prefix}'")
+        # cls.logger.debug(f"AppSettings.prefix_vars with '{prefix}'")
         url_re = re.compile(r'^(https*://)')  # Current prefix in URLs
         for var in cls.prefixable_vars:
-            value = getattr(GlobalSettings, var)
+            value = getattr(AppSettings, var)
             if re.match(url_re, value):
                 value = re.sub(url_re, r'\1{0}'.format(prefix), value)
             else:
                 value = prefix + value
             #print("  With prefix now {}={!r}".format(var,value))
-            setattr(GlobalSettings, var, value)
+            setattr(AppSettings, var, value)
         cls.prefix = prefix
         cls.dirty = True
 
     @classmethod
     def set_vars(cls, **kwargs):
-        #print("GlobalSettings.set_vars()…")
+        #print("AppSettings.set_vars()…")
         # Sets all the given variables for the class, and then marks it as dirty
         for var, value in kwargs.items():
-            if hasattr(GlobalSettings, var):
-                setattr(GlobalSettings, var, value)
+            if hasattr(AppSettings, var):
+                setattr(AppSettings, var, value)
                 cls.dirty = True
 
     @classmethod
     def cdn_s3_handler(cls):
-        #print("GlobalSettings.cdn_s3_handler()…")
+        #print("AppSettings.cdn_s3_handler()…")
         if not cls._cdn_s3_handler:
             cls._cdn_s3_handler = S3Handler(bucket_name=cls.cdn_bucket_name,
                                             aws_access_key_id=cls.aws_access_key_id,
@@ -203,7 +200,7 @@ class GlobalSettings:
 
     @classmethod
     def door43_s3_handler(cls):
-        #print("GlobalSettings.door43_s3_handler()…")
+        #print("AppSettings.door43_s3_handler()…")
         if not cls._door43_s3_handler:
             cls._door43_s3_handler = S3Handler(bucket_name=cls.door43_bucket_name,
                                                aws_access_key_id=cls.aws_access_key_id,
@@ -213,7 +210,7 @@ class GlobalSettings:
 
     @classmethod
     def pre_convert_s3_handler(cls):
-        #print("GlobalSettings.pre_convert_s3_handler()…")
+        #print("AppSettings.pre_convert_s3_handler()…")
         if not cls._pre_convert_s3_handler:
             cls._pre_convert_s3_handler = S3Handler(bucket_name=cls.pre_convert_bucket_name,
                                                     aws_access_key_id=cls.aws_access_key_id,
@@ -227,7 +224,7 @@ class GlobalSettings:
         """
         :param mixed echo:
         """
-        #print("GlobalSettings.db_engine(echo={0}) class method running…".format(echo))
+        #print("AppSettings.db_engine(echo={0}) class method running…".format(echo))
         if echo is None or not isinstance(echo, bool):
             echo = cls.echo
         if not cls._db_engine:
@@ -245,7 +242,7 @@ class GlobalSettings:
         """
         :param mixed echo:
         """
-        #print("GlobalSettings.db(echo={0}) class method running…".format(echo))
+        #print("AppSettings.db(echo={0}) class method running…".format(echo))
         if not cls._db_session:
             cls._db_session = sessionmaker(bind=cls.db_engine(echo), expire_on_commit=False)()
             from models.manifest import TxManifest
@@ -260,7 +257,7 @@ class GlobalSettings:
 
     @classmethod
     def db_close(cls):
-        #print("GlobalSettings.db_close()…")
+        #print("AppSettings.db_close()…")
         if cls._db_session:
             cls._db_session.close_all()
             cls._db_session = None
@@ -271,13 +268,13 @@ class GlobalSettings:
 
     @classmethod
     def db_create_tables(cls, tables=None):
-        #print("GlobalSettings.db_create_tables()…")
+        #print("AppSettings.db_create_tables()…")
         cls.Base.metadata.create_all(cls.db_engine(), tables=tables)
 
 
     @classmethod
     def construct_connection_string(cls):
-        #print("GlobalSettings.construct_connection_string()…")
+        #print("AppSettings.construct_connection_string()…")
         db_connection_string = cls.db_protocol+'://'
         if cls.db_user:
             db_connection_string += cls.db_user
