@@ -3,7 +3,7 @@ import re
 import json
 from glob import glob
 from shutil import copy, copytree
-from typing import Dict, Any
+from typing import Dict, List, Tuple, Any
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -14,7 +14,7 @@ from preprocessors.converters import txt2md
 
 
 
-def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
+def do_preprocess(repo_subject:str, commit_url:str, rc:RC, repo_dir:str, output_dir:str) -> Tuple[int, List[str]]:
     if repo_subject == 'Open_Bible_Stories':
         AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_dir, output_dir)
@@ -874,7 +874,7 @@ class TaPreprocessor(Preprocessor):
         :return:
         """
         # if prefix and debug_mode_flag:
-        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
+        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' {level=} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -967,6 +967,9 @@ class TaPreprocessor(Preprocessor):
 
 
     def fix_links(self, content):
+        """
+        For tA
+        """
         # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
                          r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
@@ -983,7 +986,7 @@ class TaPreprocessor(Preprocessor):
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
         content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
         # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
         # URLS wth just www at the start, no http
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
@@ -1258,7 +1261,10 @@ class TwPreprocessor(Preprocessor):
     # end of TwPreprocessor run()
 
 
-    def fix_links(self, content, section):
+    def fix_links(self, content:str, section:str) -> str:
+        """
+        For tW
+        """
         # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
                          r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
@@ -1279,12 +1285,15 @@ class TwPreprocessor(Preprocessor):
             content = re.sub(pattern, replace, content)
         # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
-        content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
+        content = re.sub(r'\]\(([^# :/)]+)\)',
+                         r'](#\1)', content)
         # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
-        # URLS wth just www at the start, no http
-        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
+        # URLs wth just www at the start, no http
+        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
 # end of class TwPreprocessor
@@ -1316,25 +1325,61 @@ class TnPreprocessor(Preprocessor):
             'chapters': {},
             'book_codes': {}
         }
+        try:
+            language_id = self.rc.manifest['dublin_core']['language']['identifier']
+            AppSettings.logger.debug(f"tN preprocessor: Got {language_id=}")
+        except (KeyError, TypeError):
+            language_id = 'en'
+            AppSettings.logger.debug(f"tN preprocessor: Defaulted to {language_id=}")
+        EXPECTED_TSV_SOURCE_TAB_COUNT = 8 # So there's one more column than this
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"tN preprocessor: Copying file(s) for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
                 html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
                 index_json['book_codes'][html_file] = book
                 name = BOOK_NAMES[book]
                 index_json['titles'][html_file] = name
-                # If there's a TSV file, copy it directly across
+                # If there's a TSV file, copy it across
                 found_tsv = False
                 tsv_filename_end = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv_filename_end): # We have the tsv file
                         found_tsv = True
                         AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
-                        copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        # if 0: # old code
+                        #     # TODO: Why aren't we fixing links here ???
+                        #     copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        # else: # new code
+                        # Rewrite the TSV, fixing links and removing unneeded columns as we go
+                        line_number = 1
+                        field_id_list:List[str] = []
+                        with open(this_filepath, 'rt') as tsv_source_file:
+                            with open(os.path.join(self.output_dir, os.path.basename(this_filepath)), 'wt') as tsv_output_file:
+                                for tsv_line in tsv_source_file:
+                                    tsv_line = tsv_line.rstrip('\n')
+                                    tab_count = tsv_line.count('\t')
+                                    if line_number == 1:
+                                        # AppSettings.logger.debug(f"TSV header line is '{tsv_line}")
+                                        if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
+                                            self.warnings.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
+                                    elif tab_count != EXPECTED_TSV_SOURCE_TAB_COUNT:
+                                        # NOTE: This is not added to warnings because that will be done at convert time (don't want double warnings)
+                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                    B, C, V, field_id, _SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
+                                    if field_id in field_id_list:
+                                        self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
+                                    field_id_list.append(field_id)
+                                    if '://' in OccurrenceNote or '[[' in OccurrenceNote:
+                                        OccurrenceNote = self.fix_links(OccurrenceNote, language_id)
+                                    if 'rc://' in OccurrenceNote:
+                                        self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
+                                    tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
+                                    line_number += 1
+                        AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
                         self.num_files_written += 1
-                        break
+                        break # Don't bother looking for other files
                 # NOTE: This code will create an .md file if there is a missing TSV file
                 if not found_tsv: # Look for markdown or json .txt
                     markdown = ''
@@ -1430,7 +1475,9 @@ class TnPreprocessor(Preprocessor):
                                         self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
                     if not found_something:
                         self.warnings.append(f"tN Preprocessor didn't find any valid source files for {book}")
-                    markdown = self.fix_links(markdown)
+                    markdown = self.fix_links(markdown, language_id)
+                    if 'rc://' in markdown:
+                        self.warnings.append(f"Unable to all process 'rc://' links in {book}")
                     book_file_name = f'{BOOK_NUMBERS[book]}-{book.upper()}.md'
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
@@ -1454,7 +1501,7 @@ class TnPreprocessor(Preprocessor):
     # end of TnPreprocessor run()
 
 
-    def move_to_front(self, files, move_str):
+    def move_to_front(self, files:List[str], move_str:str) -> None:
         if files:
             last_file = files[-1]
             if move_str in last_file:  # move intro to front
@@ -1462,23 +1509,42 @@ class TnPreprocessor(Preprocessor):
                 files.insert(0, last_file)
 
 
-    def fix_links(self, content):
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
+    def fix_links(self, content:str, language_code:str) -> str:
+        """
+        For tN (MD and TSV)
+        """
+        # Convert wildcard tA RC links, e.g. rc://*/ta/man/translate/figs-euphemism
+        #               => https://git.door43.org/unfoldingWord/LL_ta/src/master/translate/figs-euphemism/01.md
+        content = re.sub(r'rc://\*/ta/([^/]+)/([^\s)\]\n$]+)',
+                         rf'https://git.door43.org/unfoldingWord/{language_code}_ta/src/master/\2/01.md',
+                         content, flags=re.IGNORECASE)
+        # Convert non-wildcard tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
+        #               => https://git.door43.org/unfoldingWord/en_ta/src/master/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
-                         flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
+                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md',
+                         content, flags=re.IGNORECASE)
+        # Convert other wildcard RC links, e.g. rc://*/tn/help/1sa/16/02
+        #               => https://git.door43.org/unfoldingWord/LL_tn/src/master/1sa/16/02.md
+        content = re.sub(r'rc://\*/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
+                         rf'https://git.door43.org/unfoldingWord/{language_code}_\1/src/master/\3.md',
+                         content, flags=re.IGNORECASE)
+        # Convert other non-wildcard RC links, e.g. rc://en/tn/help/1sa/16/02
+        #               => https://git.door43.org/unfoldingWord/en_tn/src/master/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content,
-                         flags=re.IGNORECASE)
-        # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
+                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md',
+                         content, flags=re.IGNORECASE)
+
+        # Fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
-        content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
-        # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        content = re.sub(r'\]\(([^# :/)]+)\)',
+                         r'](#\1)', content)
+        # Convert URLs to links if not already
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
         # URLS wth just www at the start, no http
-        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
+        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
 # end of class TnPreprocessor
