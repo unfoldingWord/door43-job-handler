@@ -210,7 +210,7 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
 
     Can return None if we can't determine one.
     """
-    AppSettings.logger.debug(f"get_tX_subject('{gts_repo_name}', rc)…")
+    # AppSettings.logger.debug(f"get_tX_subject('{gts_repo_name}', rc)…")
     # AppSettings.logger.debug(f"gts_rc.resource.identifier={gts_rc.resource.identifier}")
     # AppSettings.logger.debug(f"gts_rc.resource.file_ext={gts_rc.resource.file_ext}")
     # AppSettings.logger.debug(f"gts_rc.resource.type={gts_rc.resource.type}")
