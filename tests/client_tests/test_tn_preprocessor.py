@@ -36,7 +36,7 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        do_preprocess('Translation_Notes', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Notes', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())
@@ -59,7 +59,7 @@ class TestTnPreprocessor(unittest.TestCase):
         # repo_name = 'dummy_repo'
 
         # when
-        do_preprocess('Translation_Notes', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Notes', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())
@@ -83,21 +83,22 @@ class TestTnPreprocessor(unittest.TestCase):
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
 
         language_code = 'pq-xy'
-        tn_preprocessor = TnPreprocessor(commit_url=None, rc=rc, source_dir=None, output_dir=self.out_dir)
+        repo_owner = 'dummyOwner'
+        tn_preprocessor = TnPreprocessor(commit_url=None, rc=rc, repo_owner=repo_owner, source_dir=None, output_dir=self.out_dir)
         for given_input, expected_output in (
             ('Some random string', 'Some random string'),
             ('rc://*/ta/man/translate/figs-euphemism',
-                f'https://git.door43.org/unfoldingWord/{language_code}_ta/src/master/translate/figs-euphemism/01.md'),
+                f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/figs-euphemism/01.md'),
             ('rc://*/ta/man/translate/figs-abstractnouns',
-                f'https://git.door43.org/unfoldingWord/{language_code}_ta/src/master/translate/figs-abstractnouns/01.md'),
+                f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/figs-abstractnouns/01.md'),
             ('rc://en/ta/man/translate/figs-euphemism',
-                'https://git.door43.org/unfoldingWord/en_ta/src/master/translate/figs-euphemism/01.md'),
+                f'https://git.door43.org/{repo_owner}/en_ta/src/branch/master/translate/figs-euphemism/01.md'),
             ('rc://*/tn/help/1sa/16/02',
-                f'https://git.door43.org/unfoldingWord/{language_code}_tn/src/master/1sa/16/02.md'),
+                f'https://git.door43.org/{repo_owner}/{language_code}_tn/src/branch/master/1sa/16/02.md'),
             ('rc://en/tn/help/1sa/16/02',
-                'https://git.door43.org/unfoldingWord/en_tn/src/master/1sa/16/02.md'),
+                f'https://git.door43.org/{repo_owner}/en_tn/src/branch/master/1sa/16/02.md'),
             ):
-                actual_output = tn_preprocessor.fix_links(given_input, language_code)
+                actual_output = tn_preprocessor.fix_links('Gen 2:3', given_input, repo_owner, language_code)
                 self.assertEqual(actual_output, expected_output)
 
     @classmethod

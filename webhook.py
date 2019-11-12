@@ -596,7 +596,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     # Preprocess the files
     AppSettings.logger.debug("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
-    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_data_url, rc, repo_dir, preprocess_dir)
+    num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
     # Save the warnings for the user -- put any RC messages in front
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list

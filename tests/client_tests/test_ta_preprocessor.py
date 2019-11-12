@@ -33,7 +33,7 @@ class TestTaPreprocessor(unittest.TestCase):
         repo_name = 'en_ta'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
-        do_preprocess('Translation_Academy', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Academy', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '01-intro.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-process.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '03-translate.md')))
@@ -56,49 +56,50 @@ class TestTaPreprocessor(unittest.TestCase):
         self.assertTrue('../' not in translate)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '04-checking-toc.yaml')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '04-checking-config.yaml')))
-        preprocessor = TaPreprocessor('dummyURL', rc, repo_dir, self.out_dir)
+        preprocessor = TaPreprocessor('dummyURL', rc, 'dummyOwner', repo_dir, self.out_dir)
         self.assertEqual(preprocessor.get_title(rc.project('checking'), 'fake-link', 'My Title'), 'My Title')
         self.assertEqual(preprocessor.get_title(rc.project('checking'), 'fake-link'), 'Fake Link')
 
     def test_fix_links(self):
         rc = RC(os.path.join(self.resources_dir, 'manifests', 'ta'))
-        ta = TaPreprocessor('dummyURL', rc, tempfile.gettempdir(), tempfile.gettempdir())
+        repo_owner = 'dummyOwner'
+        ta = TaPreprocessor('dummyURL', rc, repo_owner, tempfile.gettempdir(), tempfile.gettempdir())
         content = "This has [links](../section1/01.md) to the same [manual](../section2/01.md)"
         expected = "This has [links](#section1) to the same [manual](#section2)"
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
         content = """This has links to
         [other](../../checking/section1/01.md) [manuals](../../translate/section2/01.md)"""
         expected = """This has links to
         [other](04-checking.html#section1) [manuals](03-translate.html#section2)"""
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
         content = """This has links to both this [manual](../section1/01.md),
          this [page](section2) and [another manual](../../process/section3/01.md)."""
         expected = """This has links to both this [manual](#section1),
          this [page](#section2) and [another manual](02-process.html#section3)."""
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
         content = """This link should NOT be converted: [webpage](http://example.com/somewhere/outthere) """
         expected = """This link should NOT be converted: [webpage](http://example.com/somewhere/outthere) """
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
         content = """This [link](rc://en/tw/dict/bible/other/dream) is a rc link that should go to
             other/dream.md in the en_tw repo"""
-        expected = """This [link](https://git.door43.org/unfoldingWord/en_tw/src/master/bible/other/dream.md) is a rc link that should go to
+        expected = f"""This [link](https://git.door43.org/{repo_owner}/en_tw/src/branch/master/bible/other/dream.md) is a rc link that should go to
             other/dream.md in the en_tw repo"""
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
         content = """This url should be made into a link: http://example.com/somewhere/outthere and so should www.example.com/asdf.html?id=5&view=dashboard#report."""
         expected = """This url should be made into a link: [http://example.com/somewhere/outthere](http://example.com/somewhere/outthere) and so should [www.example.com/asdf.html?id=5&view=dashboard#report](http://www.example.com/asdf.html?id=5&view=dashboard#report)."""
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
-        # Tests https://git.door43.org/unfoldingWord/en_ta/raw/master/translate/translate-source-text/01.md
+        # Tests https://git.door43.org/{repo_owner}/en_ta/raw/master/translate/translate-source-text/01.md
         content = """
 ### Factors to Consider for a Source Text
 
@@ -129,7 +130,7 @@ When choosing a source text, there are a number of factors that must be consider
 
 It is important the the leaders of the churches in the language group agree that the source text is a good one. The Open Bible Stories are available in many source languages on [http://ufw.io/stories/](http://ufw.io/stories/). There are also translations of the Bible there to be used as sources for translation in English, and soon other languages, as well.
 """
-        converted = ta.fix_links(content)
+        converted = ta.fix_links(content, repo_owner)
         self.assertEqual(converted, expected)
 
     @classmethod

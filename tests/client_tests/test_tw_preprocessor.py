@@ -37,7 +37,7 @@ class TestTwPreprocessor(unittest.TestCase):
     #     self.out_dir = tempfile.mkdtemp(prefix='output_')
 
     #     # when
-    #     results = do_preprocess('Translation_Words', 'dummyURL', rc, repo_dir, self.out_dir)
+    #     results = do_preprocess('Translation_Words', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
 
     #     # then
     #     self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
@@ -69,15 +69,15 @@ class TestTwPreprocessor(unittest.TestCase):
         # rc = RC(os.path.join(self.resources_dir, 'manifests', 'tw')) # RJH: this folder doesn't exist
                                     # NOTE: This causes RC to find details for language 'tw' ('Twi')
         rc = RC()
-        repo_name = 'Door43'
+        repo_owner, repo_name = 'dummyOwner', 'Door43'
         current_category = 'names'
-        tw = TwPreprocessor('dummyURL', rc, tempfile.gettempdir(), tempfile.gettempdir())
+        tw = TwPreprocessor('dummyURL', rc, repo_owner, tempfile.gettempdir(), tempfile.gettempdir())
         tw.repo_name = repo_name
         content = "This has links to the same category: (See also: [titus](../names/titus.md), [timothy](../names/timothy.md)"
         expected = "This has links to the same category: (See also: [titus](#titus), [timothy](#timothy)"
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
@@ -89,7 +89,7 @@ class TestTwPreprocessor(unittest.TestCase):
         (See also:[lamb](kt.html#lamb), [license](other.html#license)"""
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
@@ -103,7 +103,7 @@ class TestTwPreprocessor(unittest.TestCase):
         [license](other.html#license)"""
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
@@ -113,7 +113,7 @@ class TestTwPreprocessor(unittest.TestCase):
         expected = """This link should NOT be converted: [webpage](http://example.com/somewhere/outthere) """
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
@@ -121,11 +121,11 @@ class TestTwPreprocessor(unittest.TestCase):
         # given
         content = """This [link](rc://en/tn/help/ezr/09/01) is a rc link that should go to
             ezr/09/01.md in the en_tn repo"""
-        expected = """This [link](https://git.door43.org/unfoldingWord/en_tn/src/master/ezr/09/01.md) is a rc link that should go to
+        expected = f"""This [link](https://git.door43.org/{repo_owner}/en_tn/src/branch/master/ezr/09/01.md) is a rc link that should go to
             ezr/09/01.md in the en_tn repo"""
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
@@ -135,7 +135,7 @@ class TestTwPreprocessor(unittest.TestCase):
         expected = """This url should be made into a link: [http://example.com/somewhere/outthere](http://example.com/somewhere/outthere) and so should [www.example.com/asdf.html?id=5&view=dashboard#report](http://www.example.com/asdf.html?id=5&view=dashboard#report)."""
 
         # when
-        converted = tw.fix_links(content, current_category)
+        converted = tw.fix_links(content, current_category, repo_owner)
 
         # then
         self.assertEqual(converted, expected)
