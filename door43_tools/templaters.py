@@ -1,6 +1,7 @@
 import os
 from glob import glob
 from yaml.parser import ParserError, ScannerError
+from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -434,8 +435,8 @@ class TqTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2')
-            self.chapters[key] = [c['id'] for c in chapters if 'id' in c]
+            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
+            self.chapters[key] = [c['id'] for c in chapters]
 
 
     def build_page_nav(self, filename=None):
@@ -564,11 +565,11 @@ class TnTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2')
-            self.chapters[key] = [c['id'] for c in chapters if 'id' in c]
+            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
+            self.chapters[key] = [c['id'] for c in chapters]
 
 
-    def build_page_nav(self, filename=None):
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
         html = """
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
@@ -647,8 +648,8 @@ class BibleTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2', {'c-num'})
-            self.chapters[key] = [c['id'] for c in chapters if 'id' in c]
+            chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
+            self.chapters[key] = [c['id'] for c in chapters]
 
 
     def build_page_nav(self, filename=None):
