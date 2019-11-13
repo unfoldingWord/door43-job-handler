@@ -1,6 +1,7 @@
 import os
 from glob import glob
 from yaml.parser import ParserError, ScannerError
+from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -362,7 +363,7 @@ class ObsNotesTemplater(Templater):
         """
         for fname in self.files:
             with open(fname, 'r') as f:
-                soup = BeautifulSoup(f.read(), 'html.parser')
+                _soup = BeautifulSoup(f.read(), 'html.parser')
             # if soup.select('div#content h1'):
             #     title = soup.select('div#content h1')[0].text.strip()
             #     print(f"Got title1='{title}'")
@@ -402,7 +403,7 @@ class ObsNotesTemplater(Templater):
 
 
 class TqTemplater(Templater):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'tq'
         super(TqTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
@@ -411,7 +412,7 @@ class TqTemplater(Templater):
             self.chapters = index['chapters']
             self.book_codes = index['book_codes']
 
-    def get_page_navigation(self):
+    def get_page_navigation(self) -> None:
         for fname in self.files:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
@@ -434,7 +435,7 @@ class TqTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2')
+            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 
@@ -531,7 +532,7 @@ class TwTemplater(Templater):
 
 
 class TnTemplater(Templater):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'tn'
         super(TnTemplater, self).__init__(*args, **kwargs)
         index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
@@ -541,7 +542,7 @@ class TnTemplater(Templater):
             self.book_codes = index['book_codes']
 
 
-    def get_page_navigation(self):
+    def get_page_navigation(self) -> None:
         for fname in self.files:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
@@ -564,11 +565,11 @@ class TnTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2')
+            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 
-    def build_page_nav(self, filename=None):
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
         html = """
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
@@ -647,7 +648,7 @@ class BibleTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2', {'c-num'})
+            chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 

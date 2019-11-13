@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 from datetime import datetime
+from typing import Dict, List, Any
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -11,7 +12,8 @@ from general_tools.file_utils import write_file, remove_tree
 
 class ClientLinterCallback:
 
-    def __init__(self, job_dict, identifier, success, info, warnings, errors): #, s3_results_key):
+    def __init__(self, job_dict:Dict[str,Any], identifier:str, success:bool,
+                        info:List[str], warnings:List[str], errors:List[str]) -> None:
         """
         :param identifier: either
                     job_id/part_count/part_id/book if multi-part job
@@ -47,7 +49,7 @@ class ClientLinterCallback:
         # self.s3_results_key = s3_results_key
         self.job = None
 
-    def do_post_processing(self):
+    def do_post_processing(self) -> Dict[str,Any]:
         AppSettings.logger.debug(f"ClientLinterCallback.do_post_processing()…")
         if not self.identifier:
             error = 'No identifier found'

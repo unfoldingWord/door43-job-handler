@@ -3,45 +3,47 @@ import re
 import json
 from glob import glob
 from shutil import copy, copytree
-from typing import Dict, Any
+from typing import Dict, List, Tuple, Any, Optional
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir
+from general_tools.url_utils import get_url
 from resource_container.ResourceContainer import RC
 from preprocessors.converters import txt2md
 
 
 
-def do_preprocess(repo_subject, commit_url, rc, repo_dir, output_dir):
+def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
+                                        repo_dir:str, output_dir:str) -> Tuple[int, List[str]]:
     if repo_subject == 'Open_Bible_Stories':
         AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
-        preprocessor = ObsPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = ObsPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
         AppSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
-        preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
         AppSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
-        preprocessor = BiblePreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = BiblePreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Academy':
         AppSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
-        preprocessor = TaPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = TaPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Questions':
         AppSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
-        preprocessor = TqPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = TqPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
         AppSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
-        preprocessor = TwPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = TwPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
         AppSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
-        preprocessor = TnPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = TnPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         AppSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
-        preprocessor = LexiconPreprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = LexiconPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     else:
         AppSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
-        preprocessor = Preprocessor(commit_url, rc, repo_dir, output_dir)
+        preprocessor = Preprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     return preprocessor.run()
 # end of do_preprocess()
 
@@ -52,7 +54,8 @@ class Preprocessor:
     ignoreDirectories = ['.apps', '.git', '.github', '00']
     ignoreFiles = ['.DS_Store', 'reference.txt', 'title.txt', 'LICENSE.md', 'README.md', 'README.rst']
 
-    def __init__(self, commit_url, rc, source_dir, output_dir):
+
+    def __init__(self, commit_url:str, rc:RC, repo_owner:str, source_dir:str, output_dir:str) -> None:
         """
         :param URLString commit_url:    URL of this commit on DCS -- used for fixing links
         :param RC rc:
@@ -61,10 +64,11 @@ class Preprocessor:
         """
         self.commit_url = commit_url
         self.rc = rc
+        self.repo_owner = repo_owner
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
         self.num_files_written = 0
-        self.warnings = []
+        self.warnings:List[str] = []
 
         # Check that we had a manifest (or equivalent) file
         # found_manifest = False
@@ -78,7 +82,8 @@ class Preprocessor:
         # Write out the new manifest file based on the resource container
         write_file(os.path.join(self.output_dir, 'manifest.yaml'), self.rc.as_dict())
 
-    def run(self):
+
+    def run(self) -> Tuple[int, List[str]]:
         """
         Default Preprocessor
 
@@ -138,15 +143,15 @@ class Preprocessor:
     # end of DefaultPreprocessor run()
 
 
-    def mark_chapter(self, ident, chapter, text):
+    def mark_chapter(self, ident:int, chapter:str, text:str) -> str:
         return text  # default does nothing to text
 
 
-    def mark_chunk(self, ident, chapter, chunk, text):
+    def mark_chunk(self, ident:int, chapter:str, chunk:str, text:str) -> str:
         return text  # default does nothing to text
 
 
-    def is_multiple_jobs(self):
+    def is_multiple_jobs(self) -> bool:
         return False
 
 
@@ -157,12 +162,12 @@ class Preprocessor:
 
 
 class ObsPreprocessor(Preprocessor):
-    def __init__(self, *args, **kwargs):
-        super(ObsPreprocessor, self).__init__(*args, **kwargs)
+    # def __init__(self, *args, **kwargs) -> None:
+    #     super(ObsPreprocessor, self).__init__(*args, **kwargs)
 
     @staticmethod
-    def get_chapters(project_path):
-        chapters = []
+    def get_chapters(project_path:str) -> List[Dict[str,Any]]:
+        chapters:List[Dict[str,Any]] = []
         for chapter in sorted(os.listdir(project_path)):
             if os.path.isdir(os.path.join(project_path, chapter)) and chapter not in ObsPreprocessor.ignoreDirectories:
                 chapters.append({
@@ -175,7 +180,7 @@ class ObsPreprocessor(Preprocessor):
 
 
     @staticmethod
-    def get_chapter_title(project_path, chapter):
+    def get_chapter_title(project_path:str, chapter) -> str:
         """
         Get a chapter title.
         if the title file does not exist, it will hand back the number with a period only.
@@ -190,7 +195,7 @@ class ObsPreprocessor(Preprocessor):
 
 
     @staticmethod
-    def get_chapter_reference(project_path, chapter):
+    def get_chapter_reference(project_path:str, chapter:str) -> str:
         """Get the chapters reference text"""
         reference_file = os.path.join(project_path, chapter, 'reference.txt')
         reference = ''
@@ -201,8 +206,8 @@ class ObsPreprocessor(Preprocessor):
 
 
     @staticmethod
-    def get_chapter_frames(project_path, chapter):
-        frames = []
+    def get_chapter_frames(project_path:str, chapter:str) -> List[Dict[str,Any]]:
+        frames:List[Dict[str,Any]] = []
         chapter_dir = os.path.join(project_path, chapter)
         for frame in sorted(os.listdir(chapter_dir)):
             if frame not in ObsPreprocessor.ignoreFiles:
@@ -214,7 +219,7 @@ class ObsPreprocessor(Preprocessor):
         return frames
 
 
-    def is_chunked(self, project):
+    def is_chunked(self, project) -> bool:
         chapters = self.rc.chapters(project.identifier)
         if chapters and len(chapters):
             chunks = self.rc.chunks(project.identifier, chapters[0])
@@ -224,7 +229,7 @@ class ObsPreprocessor(Preprocessor):
         return False
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             AppSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
@@ -269,12 +274,12 @@ class ObsPreprocessor(Preprocessor):
 
 
 class ObsNotesPreprocessor(Preprocessor):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(ObsNotesPreprocessor, self).__init__(*args, **kwargs)
         self.section_container_id = 1
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             AppSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
@@ -299,7 +304,7 @@ class ObsNotesPreprocessor(Preprocessor):
                     # if rc_count: print(f"Story number {story_number_string} has {rc_count} 'rc://' links")
                     # double_bracket_count = markdown.count('[[')
                     # if double_bracket_count: print(f"Story number {story_number_string} has {double_bracket_count} '[[…]]' links")
-                    markdown = self.fix_links(markdown)
+                    markdown = self.fix_links(markdown, self.repo_owner)
                     rc_count = markdown.count('rc://')
                     if rc_count:
                         AppSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
@@ -323,16 +328,16 @@ class ObsNotesPreprocessor(Preprocessor):
     # end of ObsNotesPreprocessor run()
 
 
-    def fix_links(self, content):
+    def fix_links(self, content:str, repo_owner:str) -> str:
         """
         OBS Translation Notes contain links to translationAcademy
 
         (OBS Translation Questions don't seem to have any links)
         """
         # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
-        #   => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
+        #   => https://git.door43.org/{repo_owner}/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md',
+                         rf'https://git.door43.org/{repo_owner}/\1_ta/src/branch/master/\3/01.md',
                          content,
                          flags=re.IGNORECASE)
         return content
@@ -342,9 +347,9 @@ class ObsNotesPreprocessor(Preprocessor):
 
 
 class BiblePreprocessor(Preprocessor):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
-        self.book_filenames = []
+        self.book_filenames:List[str] = []
 
 
     def is_multiple_jobs(self):
@@ -695,7 +700,7 @@ class BiblePreprocessor(Preprocessor):
     # end of clean_copy function
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
@@ -821,11 +826,11 @@ class TaPreprocessor(Preprocessor):
         'translate': 'Translation Manual'
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(TaPreprocessor, self).__init__(*args, **kwargs)
         self.section_container_id = 1
 
-    def get_title(self, project, link, alt_title=None):
+    def get_title(self, project, link:str, alt_title:Optional[str]=None) -> str:
         proj = None
         project_config = project.config()
         if project_config and link in project_config:
@@ -844,7 +849,7 @@ class TaPreprocessor(Preprocessor):
         else:
             return link.replace('-', ' ').title()
 
-    def get_ref(self, project, link):
+    def get_ref(self, project, link:str) -> str:
         project_config = project.config()
         if project_config and link in project_config:
             return f'#{link}'
@@ -854,7 +859,7 @@ class TaPreprocessor(Preprocessor):
                 return f'{p.identifier}.html#{link}'
         return f'#{link}'
 
-    def get_question(self, project, slug):
+    def get_question(self, project, slug:str) -> str:
         subtitle_file = os.path.join(self.source_dir, project.path, slug, 'sub-title.md')
         if os.path.isfile(subtitle_file):
             return read_file(subtitle_file)
@@ -874,7 +879,7 @@ class TaPreprocessor(Preprocessor):
         :return:
         """
         # if prefix and debug_mode_flag:
-        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' level={level} …")
+        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' {level=} …")
         if 'link' in section:
             link = section['link']
         else:
@@ -927,7 +932,7 @@ class TaPreprocessor(Preprocessor):
     # end of compile_ta_section(self, project, section, level)
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             AppSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
@@ -941,7 +946,7 @@ class TaPreprocessor(Preprocessor):
             if toc:
                 for section in toc['sections']:
                     markdown += self.compile_ta_section(project, section, 2)
-            markdown = self.fix_links(markdown)
+            markdown = self.fix_links(markdown, self.repo_owner)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
             self.num_files_written += 1
@@ -966,10 +971,14 @@ class TaPreprocessor(Preprocessor):
     # end of TaPreprocessor run()
 
 
-    def fix_links(self, content):
-        # convert RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
+    def fix_links(self, content:str, repo_owner:str) -> str:
+        """
+        For tA
+        """
+        # convert RC links, e.g. rc://en/tn/help/1sa/16/02
+        #                           => https://git.door43.org/{repo_owner}/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s\\p{P})\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content, flags=re.IGNORECASE)
+                         rf'https://git.door43.org/{repo_owner}/\1_\2/src/branch/master/\4.md', content, flags=re.IGNORECASE)
         # fix links to other sections within the same manual (only one ../ and a section name)
         # e.g. [Section 2](../section2/01.md) => [Section 2](#section2)
         content = re.sub(r'\]\(\.\./([^/)]+)/01.md\)', r'](#\1)', content)
@@ -983,7 +992,7 @@ class TaPreprocessor(Preprocessor):
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
         content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
         # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
         # URLS wth just www at the start, no http
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
@@ -996,7 +1005,7 @@ class TaPreprocessor(Preprocessor):
 
 class TqPreprocessor(Preprocessor):
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
@@ -1015,7 +1024,7 @@ class TqPreprocessor(Preprocessor):
                 index_json['titles'][html_file] = name
                 chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                 markdown += f'# <a id="tq-{book}"/> {name}\n\n'
-                index_json['chapters'][html_file] = []
+                index_json['chapters'][html_file]:List[str] = []
                 if chapter_dirs:
                     for chapter_dir in chapter_dirs:
                         # AppSettings.logger.debug(f"tQ preprocessor: Processing {chapter_dir} for '{project.identifier}' {book} …")
@@ -1107,7 +1116,7 @@ class TwPreprocessor(Preprocessor):
         'other': 'Other'
     }
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
@@ -1184,7 +1193,7 @@ class TwPreprocessor(Preprocessor):
                     markdown += '<hr>\n\n'
                 markdown += f"{term_text[term]}\n\n"
             markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n{markdown}'
-            markdown = self.fix_links(markdown, section)
+            markdown = self.fix_links(markdown, section, self.repo_owner)
             output_file = os.path.join(self.output_dir, f'{section}.md')
             write_file(output_file, markdown)
             self.num_files_written += 1
@@ -1236,7 +1245,7 @@ class TwPreprocessor(Preprocessor):
                             markdown += '<hr>\n\n'
                         markdown += term_text[term] + '\n\n'
                     markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n' + markdown
-                    markdown = self.fix_links(markdown, section)
+                    markdown = self.fix_links(markdown, section, self.repo_owner)
                     output_file = os.path.join(self.output_dir, f'{section}.md')
                     write_file(output_file, markdown)
                     self.num_files_written += 1
@@ -1258,14 +1267,19 @@ class TwPreprocessor(Preprocessor):
     # end of TwPreprocessor run()
 
 
-    def fix_links(self, content, section):
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
+    def fix_links(self, content:str, section:str, repo_owner:str) -> str:
+        """
+        For tW
+        """
+        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
+        #                           => https://git.door43.org/{repo_owner}/en_ta/translate/figs-euphemism/01.md
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
+                         rf'https://git.door43.org/{repo_owner}/\1_ta/src/branch/master/\3/01.md', content,
                          flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
+        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02
+        #                           => https://git.door43.org/{repo_owner}/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content,
+                         rf'https://git.door43.org/{repo_owner}/\1_\2/src/branch/master/\4.md', content,
                          flags=re.IGNORECASE)
         # fix links to other sections within the same manual (only one ../ and a section name that matches section_link)
         # e.g. [covenant](../kt/covenant.md) => [covenant](#covenant)
@@ -1279,12 +1293,15 @@ class TwPreprocessor(Preprocessor):
             content = re.sub(pattern, replace, content)
         # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
-        content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
+        content = re.sub(r'\]\(([^# :/)]+)\)',
+                         r'](#\1)', content)
         # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
-        # URLS wth just www at the start, no http
-        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
+        # URLs wth just www at the start, no http
+        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
 # end of class TwPreprocessor
@@ -1298,9 +1315,10 @@ class TnPreprocessor(Preprocessor):
         'book_codes': {}
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(TnPreprocessor, self).__init__(*args, **kwargs)
-        self.book_filenames = []
+        self.book_filenames:List[str] = []
+        self.title_cache = {}
 
     def is_multiple_jobs(self):
         return True
@@ -1309,38 +1327,73 @@ class TnPreprocessor(Preprocessor):
         return self.book_filenames
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
             'book_codes': {}
         }
+        try:
+            language_id = self.rc.manifest['dublin_core']['language']['identifier']
+            AppSettings.logger.debug(f"tN preprocessor: Got {language_id=}")
+        except (KeyError, TypeError):
+            language_id = 'en'
+            AppSettings.logger.debug(f"tN preprocessor: Defaulted to {language_id=}")
+        EXPECTED_TSV_SOURCE_TAB_COUNT = 8 # So there's one more column than this
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"tN preprocessor: Copying files for '{project.identifier}' …")
+            AppSettings.logger.debug(f"tN preprocessor: Adjusting/Copying file(s) for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
                 html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
                 index_json['book_codes'][html_file] = book
                 name = BOOK_NAMES[book]
                 index_json['titles'][html_file] = name
-                # If there's a TSV file, copy it directly across
+                # If there's a TSV file, copy it across
                 found_tsv = False
                 tsv_filename_end = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv_filename_end): # We have the tsv file
                         found_tsv = True
                         AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
-                        copy(this_filepath, os.path.join(self.output_dir, os.path.basename(this_filepath)))
+                        line_number = 1
+                        lastB = lastC = lastV = None
+                        field_id_list:List[str] = []
+                        with open(this_filepath, 'rt') as tsv_source_file:
+                            with open(os.path.join(self.output_dir, os.path.basename(this_filepath)), 'wt') as tsv_output_file:
+                                for tsv_line in tsv_source_file:
+                                    tsv_line = tsv_line.rstrip('\n')
+                                    tab_count = tsv_line.count('\t')
+                                    if line_number == 1:
+                                        # AppSettings.logger.debug(f"TSV header line is '{tsv_line}")
+                                        if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
+                                            self.warnings.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
+                                    elif tab_count != EXPECTED_TSV_SOURCE_TAB_COUNT:
+                                        # NOTE: This is not added to warnings because that will be done at convert time (don't want double warnings)
+                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                    B, C, V, field_id, _SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
+                                    if B!=lastB or C!=lastC or V!=lastV:
+                                        field_id_list:List[str] = [] # IDs only need to be unique within each verse
+                                        lastB, lastC, lastV = B, C, V
+                                    if field_id in field_id_list:
+                                        self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
+                                    field_id_list.append(field_id)
+                                    if '://' in OccurrenceNote or '[[' in OccurrenceNote:
+                                        OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
+                                    if 'rc://' in OccurrenceNote:
+                                        self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
+                                    tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
+                                    line_number += 1
+                        AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
                         self.num_files_written += 1
-                        break
+                        break # Don't bother looking for other files since we found our TSV one for this book
                 # NOTE: This code will create an .md file if there is a missing TSV file
                 if not found_tsv: # Look for markdown or json .txt
                     markdown = ''
                     chapter_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                     markdown += f'# <a id="tn-{book}"/> {name}\n\n'
-                    index_json['chapters'][html_file] = []
+                    index_json['chapters'][html_file]:List[str] = []
                     for move_str in ['front', 'intro']:
                         self.move_to_front(chapter_dirs, move_str)
                     found_something = False
@@ -1430,7 +1483,9 @@ class TnPreprocessor(Preprocessor):
                                         self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
                     if not found_something:
                         self.warnings.append(f"tN Preprocessor didn't find any valid source files for {book}")
-                    markdown = self.fix_links(markdown)
+                    markdown = self.fix_links(book, markdown, self.repo_owner, language_id)
+                    if 'rc://' in markdown:
+                        self.warnings.append(f"Unable to all process 'rc://' links in {book}")
                     book_file_name = f'{BOOK_NUMBERS[book]}-{book.upper()}.md'
                     self.book_filenames.append(book_file_name)
                     file_path = os.path.join(self.output_dir, book_file_name)
@@ -1454,7 +1509,7 @@ class TnPreprocessor(Preprocessor):
     # end of TnPreprocessor run()
 
 
-    def move_to_front(self, files, move_str):
+    def move_to_front(self, files:List[str], move_str:str) -> None:
         if files:
             last_file = files[-1]
             if move_str in last_file:  # move intro to front
@@ -1462,24 +1517,153 @@ class TnPreprocessor(Preprocessor):
                 files.insert(0, last_file)
 
 
-    def fix_links(self, content):
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism => https://git.door43.org/unfoldingWord/en_ta/translate/figs-euphemism/01.md
+    def fix_links(self, BCV:str, content:str, repo_owner:str, language_code:str) -> str:
+        """
+        For tN (MD and TSV)
+        """
+        # assert content.count('(') == content.count(')')
+        # assert content.count('[') == content.count(']')
+
+        # Convert wildcard tA RC links, e.g. rc://*/ta/man/translate/figs-euphemism
+        #               => https://git.door43.org/{repo_owner}/LL_ta/src/branch/master/translate/figs-euphemism/01.md
+        # content1 = content
+        content = re.sub(r'rc://\*/ta/([^/]+)/([^\s)\]\n$]+)',
+                         rf'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/\2/01.md',
+                         content, flags=re.IGNORECASE)
+        # if content != content1: print(f"1: was {content1}\nnow {content}")
+        # Convert non-wildcard tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
+        #               => https://git.door43.org/{repo_owner}/en_ta/src/branch/master/translate/figs-euphemism/01.md
+        # content2 = content
         content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_ta/src/master/\3/01.md', content,
-                         flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02 => https://git.door43.org/unfoldingWord/en_tn/1sa/16/02.md
+                         rf'https://git.door43.org/{repo_owner}/\1_ta/src/branch/master/\3/01.md',
+                         content, flags=re.IGNORECASE)
+        # if content != content2: print(f"2: was {content2}\nnow {content}")
+        # Convert other wildcard RC links, e.g. rc://*/tn/help/1sa/16/02
+        #               => https://git.door43.org/{repo_owner}/LL_tn/src/branch/master/1sa/16/02.md
+        # content3 = content
+        content = re.sub(r'rc://\*/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
+                         rf'https://git.door43.org/{repo_owner}/{language_code}_\1/src/branch/master/\3.md',
+                         content, flags=re.IGNORECASE)
+        # if content != content3: print(f"3: was {content3}\nnow {content}")
+        # Convert other non-wildcard RC links, e.g. rc://en/tn/help/1sa/16/02
+        #               => https://git.door43.org/{repo_owner}/en_tn/src/branch/master/1sa/16/02.md
+        # content4 = content
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
-                         r'https://git.door43.org/unfoldingWord/\1_\2/src/master/\4.md', content,
-                         flags=re.IGNORECASE)
-        # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
+                         rf'https://git.door43.org/{repo_owner}/\1_\2/src/branch/master/\4.md',
+                         content, flags=re.IGNORECASE)
+        # if content != content4: print(f"4: was {content4}\nnow {content}")
+
+        # Fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
-        content = re.sub(r'\]\(([^# :/)]+)\)', r'](#\1)', content)
-        # convert URLs to links if not already
-        content = re.sub(r'([^"(])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](\2)',
+        # content5 = content
+        content = re.sub(r'\]\(([^# :/)]+)\)',
+                         r'](#\1)', content)
+        # if content != content5: print(f"5: was {content5}\nnow {content}")
+        # Convert URLs to links if not already
+        # content6 = content
+        content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
+        # if content != content6: print(f"6: was {content6}\nnow {content}")
         # URLS wth just www at the start, no http
-        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
+        # content7 = content
+        content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
+                         r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
+        # if content != content7: print(f"7: was {content7}\nnow {content}")
+
+        # [[Links inside double-brackets]] => [short-text](url)
+        # content8 = content
+        # content = re.sub(r'\[\[https://(.+?)/src/branch/master/(.+?)/01\.md\]\]',
+        #                  r'[\2](https://\1/src/branch/master/\2/01\.md)',
+        #                  content, flags=re.IGNORECASE)
+        while (match := re.search(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)/01\.md\]\]',
+                                                 content, flags=re.IGNORECASE)):
+            # print(f"Match8a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match8b: {match.groups()}")
+            file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}/01.md'
+            # print(f"Match8c: file URL='{file_url}'")
+            try:
+                link_text = self.title_cache[file_url]
+            except:
+                repo_type = match.group(1).split('_')[-1].upper() # e.g., TA or TW
+                link_text = f'{repo_type}:{match.group(2)}' # default
+                title_file_url = file_url.replace('src','raw').replace('01','title')
+                # print(f"Match8d: title file URL='{title_file_url}'")
+                try:
+                    file_contents = get_url(title_file_url)
+                except Exception as e:
+                    AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
+                    self.warnings.append(f"{BCV} error with tA '{match.group(2)}' link {title_file_url}: {e}")
+                    link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
+                    file_contents = None
+                if file_contents:
+                    link_text = file_contents
+                    if '\n' in link_text or '\r' in link_text or '\t' in link_text:
+                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
+                        self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
+                        link_text = link_text.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
+                    if not link_text:
+                        AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                        self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
+                        link_text = f'BLANK from {match.group(2)}'
+                    self.title_cache[file_url] = link_text
+                    # print(f"cache length = {len(self.title_cache)}")
+            # new_link_markdown = f'[{link_text}]({file_url})'
+            # print(f"Match8e: New tA link = {new_link_markdown}")
+            content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
+        # if content != content8: print(f"8: was {content8}\nnow {content}")
+        # assert content.count('(') == content.count(')')
+        # assert content.count('[') == content.count(']')
+
+        # content9 = content
+        # content = re.sub(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
+        #                  r'[\2](https://\1/src/branch/master/\2\.md)',
+        #                  content, flags=re.IGNORECASE)
+        while (match := re.search(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
+                                                 content, flags=re.IGNORECASE)):
+            # print(f"Match9a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match9b: {match.groups()}")
+            file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}.md'
+            # print(f"Match9c: file URL='{file_url}'")
+            try:
+                link_text = self.title_cache[file_url]
+            except:
+                repo_type = match.group(1).split('_')[-1].upper() # e.g., TA or TW
+                link_text = f'{repo_type}:{match.group(2)}' # default
+                title_file_url = file_url.replace('src','raw')
+                # print(f"Match9d: title file URL='{title_file_url}'")
+                try:
+                    file_contents = get_url(title_file_url)
+                except Exception as e:
+                    AppSettings.logger.debug(f"tN {BCV} fix_linkB fetching {title_file_url} got: {e}")
+                    self.warnings.append(f"{BCV} error with tW '{match.group(2)}' link {title_file_url}: {e}")
+                    link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
+                    file_contents = None
+                if file_contents:
+                    try:
+                        link_text = file_contents.split('\n',1)[0].lstrip() # Get the first line
+                        if link_text.startswith('# '):
+                            link_text = link_text[2:]
+                        if '\n' in link_text or '\r' in link_text or '\t' in link_text:
+                            AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
+                            self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
+                            link_text = link_text.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
+                        if not link_text:
+                            AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                            self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
+                            link_text = f'BLANK from {match.group(2)}'
+                        self.title_cache[file_url] = link_text
+                        # print(f"cache length = {len(self.title_cache)}")
+                    except Exception as e:
+                        AppSettings.logger.debug(f"tN fix_linkB getting title from {file_contents} got: {e}")
+            # new_link_markdown = f'[{link_text}]({file_url})'
+            # print(f"Match9e: New tW link = {new_link_markdown}")
+            content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
+        # if content != content9: print(f"9: was {content9}\nnow {content}")
+
+        # assert content.count('(') == content.count(')')
+        # assert content.count('[') == content.count(']')
         return content
 # end of class TnPreprocessor
 
@@ -1487,7 +1671,7 @@ class TnPreprocessor(Preprocessor):
 
 class LexiconPreprocessor(Preprocessor):
 
-    # def __init__(self, *args, **kwargs):
+    # def __init__(self, *args, **kwargs) -> None:
     #     super(LexiconPreprocessor, self).__init__(*args, **kwargs)
 
 
@@ -1526,7 +1710,7 @@ class LexiconPreprocessor(Preprocessor):
     # end of compile_lexicon_entry(self, project, section, level)
 
 
-    def run(self):
+    def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             project_path = os.path.join(self.source_dir, project.path)
@@ -1606,7 +1790,7 @@ class LexiconPreprocessor(Preprocessor):
         """
         # AppSettings.logger.debug("LexiconPreprocessor.fix_index_links(…)…")
 
-        newLines = []
+        newLines:List[str] = []
         for line in content.split('\n'):
             # print("line:", line)
             if '](' in line:
@@ -1628,13 +1812,13 @@ class LexiconPreprocessor(Preprocessor):
     # end of LexiconPreprocessor fix_index_links(content)
 
 
-    def change_index_entries(self, project_path, content):
+    def change_index_entries(self, project_path:str, content:str) -> str:
         """
         """
         # AppSettings.logger.debug(f"LexiconPreprocessor.change_index_entries({project_path}, …)…")
 
         # Change Strongs numbers to lemma entries
-        newLines = []
+        newLines:List[str] = []
         for line in content.split('\n'):
             # print("line:", line)
             if '](' in line:

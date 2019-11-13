@@ -1,12 +1,12 @@
 import os
 import tempfile
 from datetime import datetime
+from typing import Dict, List, Any, Optional, Tuple
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from general_tools.file_utils import unzip, write_file, remove_tree, remove_file
 from general_tools.url_utils import download_file
-# from client_linter_callback import ClientLinterCallback
 
 
 
@@ -14,7 +14,7 @@ class LocalJob:
     """
     This is a temporary class to replace the basic functionality of TxJob
     """
-    def __init__(self, job_dict):
+    def __init__(self, job_dict:Dict[str,Any]) -> None:
         # self.job_dict = job_dict
         self.job_id = job_dict['job_id']
         self.convert_module = job_dict['convert_module']
@@ -25,15 +25,15 @@ class LocalJob:
         self.started_at = datetime.strptime(job_dict['started_at'], '%Y-%m-%dT%H:%M:%SZ')
         self.log, self.warnings, self.errors = [], [], []
 
-    def log_message(self, msg):
+    def log_message(self, msg:str) -> None:
         self.log.append(msg)
         AppSettings.logger.debug(msg) # DEBUG coz we don't need all these displayed in production mode
 
-    def warnings_message(self, msg):
+    def warnings_message(self, msg:str) -> None:
         self.warnings.append(msg)
         AppSettings.logger.warning(msg)
 
-    def error_message(self, msg):
+    def error_message(self, msg:str) -> None:
         self.errors.append(msg)
         AppSettings.logger.error(msg)
 
@@ -41,7 +41,8 @@ class LocalJob:
 
 class ClientConverterCallback:
 
-    def __init__(self, job_dict, identifier, success, info, warnings, errors, output_dir):
+    def __init__(self, job_dict:Dict[str,Any], identifier:str, success:bool,
+                        info:List[str], warnings:List[str], errors:List[str], output_dir:str) -> None:
         """
         :param string identifier:
         :param bool success:
@@ -65,11 +66,9 @@ class ClientConverterCallback:
             self.warnings = []
         if not self.errors:
             self.errors = []
-        # self.temp_dir = tempfile.mkdtemp(suffix='',
-        #                     prefix='Door43_converter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
 
 
-    def do_post_processing(self):
+    def do_post_processing(self) -> Tuple[Optional[str], Dict[str,Any]]:
         AppSettings.logger.debug(f"ClientConverterCallback.do_post_processing()…")
         self.job.ended_at = datetime.utcnow()
         self.job.success = self.success
@@ -137,13 +136,13 @@ class ClientConverterCallback:
 
         if download_success:
             # Unzip the archive
-            unzip_dir = self.unzip_converted_files(converted_zip_file)
+            unzip_dirpath = self.unzip_converted_files(converted_zip_file)
 
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
             # This is required for the print function to work
-            self.upload_converted_files_to_CDN(upload_key, unzip_dir)
+            self.upload_converted_files_to_CDN(upload_key, unzip_dirpath)
         else:
-            unzip_dir = None # So we have something to return (fail later -- is that an advantage?)
+            unzip_dirpath = None # So we have something to return (fail later -- is that an advantage?)
 
         # TODO: Do we really need this now?
         # Now download the existing build_log.json file, update it and upload it back to S3 as convert_log
@@ -163,24 +162,24 @@ class ClientConverterCallback:
         #     AppSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
         # else:
         #     remove_tree(self.temp_dir)  # cleanup
-        return unzip_dir, converter_build_log
+        return unzip_dirpath, converter_build_log
     # end of ClientConverterCallback.do_post_processing()
 
 
-    def unzip_converted_files(self, converted_zip_file):
-        AppSettings.logger.debug(f"ClientConverterCallback.unzip_converted_files({converted_zip_file})…")
-        unzip_dir = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
+    def unzip_converted_files(self, converted_zip_filepath:str) -> str:
+        AppSettings.logger.debug(f"ClientConverterCallback.unzip_converted_files({converted_zip_filepath})…")
+        unzip_dirpath = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
         try:
-            AppSettings.logger.debug(f"Unzipping {converted_zip_file} …")
-            unzip(converted_zip_file, unzip_dir)
+            AppSettings.logger.debug(f"Unzipping {converted_zip_filepath} …")
+            unzip(converted_zip_filepath, unzip_dirpath)
         finally:
             AppSettings.logger.debug("Unzip finished.")
-        return unzip_dir
+        return unzip_dirpath
     # end of ClientConverterCallback.unzip_converted_files function
 
 
     @staticmethod
-    def upload_converted_files_to_CDN(s3_commit_key, unzip_dir):
+    def upload_converted_files_to_CDN(s3_commit_key:str, unzip_dir:str) -> None:
         """
         Uploads the converted (but not templated) files to the cdn.door43.org bucket
 
@@ -203,7 +202,7 @@ class ClientConverterCallback:
     #     return build_log_json
 
 
-    def make_our_build_log(self):
+    def make_our_build_log(self) -> Dict[str,Any]:
         AppSettings.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
         build_log_dict = {}
         if self.job.started_at:
@@ -264,26 +263,18 @@ class ClientConverterCallback:
     #     self.cdn_upload_contents(build_log_json, build_log_key)
     #     return build_log_json
 
-    def cdn_upload_contents(self, contents, key):
-        AppSettings.logger.debug(f"ClientConverterCallback.cdn_upload_contents({contents}, {key})…")
-        file_name = os.path.join(self.temp_dir, 'contents.json')
-        write_file(file_name, contents)
-        AppSettings.logger.debug(f"Uploading file to S3:{AppSettings.cdn_bucket_name}/{key} …")
-        AppSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
+    # def cdn_upload_contents(self, contents:str, key:str) -> None:
+    #     AppSettings.logger.debug(f"ClientConverterCallback.cdn_upload_contents({contents}, {key})…")
+    #     file_name = os.path.join(self.temp_dir, 'contents.json')
+    #     write_file(file_name, contents)
+    #     AppSettings.logger.debug(f"Uploading file to S3:{AppSettings.cdn_bucket_name}/{key} …")
+    #     AppSettings.cdn_s3_handler().upload_file(file_name, key, cache_time=0)
 
-    def get_build_log(self, s3_base_key, part=''):
-        AppSettings.logger.debug(f"ClientConverterCallback.get_build_log({s3_base_key}, {part})…")
-        assert not part
-        build_log_key = self.get_build_log_key(s3_base_key, part)
-        # AppSettings.logger.debug('Reading build log from ' + build_log_key)
-        build_log_json = AppSettings.cdn_s3_handler().get_json(build_log_key)
-        # AppSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
-        return build_log_json
-
-    @staticmethod
-    def get_build_log_key(s3_base_key, part='', name='build_log.json'):
-        assert not part
-        AppSettings.logger.debug(f"ClientConverterCallback.get_build_log_key({s3_base_key}, {part}, {name})…")
-        upload_key = f'{s3_base_key}/{part}{name}'
-        return upload_key
+    # def get_build_log(self, s3_base_key:str) -> Dict[str,Any]:
+    #     AppSettings.logger.debug(f"ClientConverterCallback.get_build_log({s3_base_key})…")
+    #     build_log_key = f'{s3_base_key}/build_log.json'
+    #     # AppSettings.logger.debug('Reading build log from ' + build_log_key)
+    #     build_log_json = AppSettings.cdn_s3_handler().get_json(build_log_key)
+    #     # AppSettings.logger.debug('build_log contents: ' + json.dumps(build_log_json))
+    #     return build_log_json
 # end of ClientConverterCallback class

@@ -30,7 +30,7 @@ class TestPreprocessor(unittest.TestCase):
         repo_name = 'en_tw'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
-        do_preprocess('Translation_Words', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Words', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'kt.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'names.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'other.md')))
@@ -40,7 +40,7 @@ class TestPreprocessor(unittest.TestCase):
         repo_name = 'en_tq_two_books'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
-        do_preprocess('Translation_Questions', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Questions', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '57-TIT.md')))
 
@@ -49,7 +49,7 @@ class TestPreprocessor(unittest.TestCase):
         repo_name = 'en_tq'
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
-        do_preprocess('Translation_Questions', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Questions', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
 
     @classmethod

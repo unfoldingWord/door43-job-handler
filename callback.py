@@ -9,10 +9,9 @@ import os
 from datetime import datetime
 import time
 import json
-# from ast import literal_eval
 import tempfile
 import traceback
-from typing import Dict, List, Any, Optional, Tuple, Union, Literal
+from typing import Dict, List, Tuple, Any, Optional, Union, Literal
 
 # Library (PyPi) imports
 from rq import get_current_job
@@ -90,15 +89,20 @@ def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[Dict[str,
 # end of verify_expected_job
 
 
-def merge_results_logs(build_log:Dict[str,Any], file_results:Dict[str,Any], converter_flag:bool) -> Dict[str,Any]:
+def merge_results_logs(build_log:Dict[str,Any], file_results:Dict[str,Any],
+                                        converter_flag:bool) -> Dict[str,Any]:
     """
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
     """
     AppSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {converter_flag})…")
+    # AppSettings.logger.debug(f"Callback.merge_results_logs({build_log}, {file_results}, {converter_flag})…")
+    # saved_build_log = build_log.copy()
     if not build_log:
+        AppSettings.logger.debug(f"Callback.merge_results_logs() about to return file_results={file_results}")
         return file_results
     if file_results:
+        # The following four lines modify build_log as a side-effect!
         merge_dicts_lists(build_log, file_results, 'message')
         merge_dicts_lists(build_log, file_results, 'log')
         merge_dicts_lists(build_log, file_results, 'warnings')
@@ -107,6 +111,10 @@ def merge_results_logs(build_log:Dict[str,Any], file_results:Dict[str,Any], conv
         and ('success' in file_results) \
         and (file_results['success'] is False):
             build_log['success'] = file_results['success']
+    # if build_log == saved_build_log:
+    #     AppSettings.logger.debug(f"Callback.merge_results_logs() about to return build_log WITHOUT CHANGES\n\n")
+    # else:
+    #     AppSettings.logger.debug(f"Callback.merge_results_logs() about to return build_log={build_log}\n\n")
     return build_log
 # end of merge_results_logs function
 
@@ -121,14 +129,20 @@ def merge_dicts_lists(build_log:Dict[str,Any], file_results:Dict[str,Any], key:s
 
     Alters first parameter build_log in place.
     """
-    # AppSettings.logger.debug(f"Callback.merge_dicts({build_log}, {file_results}, '{key}')…")
+    # AppSettings.logger.debug(f"Callback.merge_dicts_lists({build_log}, {file_results}, '{key}')…")
+    # saved_build_log = build_log.copy()
     if key in file_results:
         value = file_results[key]
         if value:
+            # assert isinstance(value, (list, str)) # Oh, it can be str for 'message'!
             if (key in build_log) and (build_log[key]):
-                build_log[key] += value
+                build_log[key] += value # Concatenate 2nd list to the build_log one
             else:
                 build_log[key] = value
+    # if build_log == saved_build_log:
+    #     AppSettings.logger.debug(f"Callback.merge_dicts_lists(…, {key}) returning with UNCHANGED BUILD_LOG\n")
+    # else:
+    #     AppSettings.logger.debug(f"Callback.merge_dicts_lists(…, {key}) returning with build_log={build_log}\n")
 # end of merge_dicts_lists function
 
 
@@ -164,7 +178,7 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) ->
 # end of clear_commit_directory_from_bucket function
 
 
-def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dict]:
+def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dict[str,Any]]:
     """
     Given a list of commits (oldest first),
         remove the unnecessary ones from the list
@@ -175,45 +189,50 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[dic
             to tag and branch names.
     """
     MAX_WANTED_COMMITS = 1
-    MAX_DEBUG_DISPLAYS = 10
-    DELETE_ENABLED = True
+    # MAX_DEBUG_DISPLAYS = 10
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
-    new_commits:List[dict] = []
+    new_commits:List[Dict[str,Any]] = []
+    removed_commits_count = 0
     # Process it backwards in case we want to count how many we have as we go
-    for commit in reversed(commits_list):
-        if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-            AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
-        elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-            AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
+    for n, commit in enumerate( reversed(commits_list) ):
+        # if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        # elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+            # AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         if len(new_commits) >= MAX_WANTED_COMMITS \
         and commit['type'] in ('hash','artifact',): # but not 'unknown' -- can delete old master branches
-            if DELETE_ENABLED: # really do it
-                # Delete the commit hash folders from both CDN and D43 buckets
-                commit_key = f"{project_folder_key}{commit['id']}"
-                AppSettings.logger.info(f"    Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
-                clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
-                AppSettings.logger.info(f"    Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
-                clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
-                # Delete the pre-convert .zip file (available on Download button) from its bucket
-                if commit['job_id']:
-                    zipFile_key = f"preconvert/{commit['job_id']}.zip"
-                    AppSettings.logger.info(f"    Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
-                    clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
-                else: # don't know the job_id (or the zip file was already deleted)
-                    AppSettings.logger.warning("  No job_id so pre-convert zip file not deleted.")
-                # Setup redirects (so users don't get 404 errors from old saved links)
-                old_repo_key = f"{project_folder_key}{commit['id']}"
-                latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
-                AppSettings.logger.info(f"    Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
-                AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
-                AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
-            else:
-                if len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-                    AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
-                new_commits.insert(0, commit) # Insert at beginning to get the order correct again
+            # if DELETE_ENABLED: # really do it
+            # Delete the commit hash folders from both CDN and D43 buckets
+            commit_key = f"{project_folder_key}{commit['id']}"
+            AppSettings.logger.info(f"    {n} Removing {prefix} CDN & D43 '{commit['type']}' '{commit['id']}' commits! …")
+            # AppSettings.logger.info(f"    {n} Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
+            clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
+            # AppSettings.logger.info(f"    {n} Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
+            clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
+            # Delete the pre-convert .zip file (available on Download button) from its bucket
+            if commit['job_id']:
+                zipFile_key = f"preconvert/{commit['job_id']}.zip"
+                AppSettings.logger.info(f"    {n} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
+            else: # don't know the job_id (or the zip file was already deleted)
+                AppSettings.logger.warning("  {n} No job_id so pre-convert zip file not deleted.")
+            # Setup redirects (so users don't get 404 errors from old saved links)
+            old_repo_key = f"{project_folder_key}{commit['id']}"
+            latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
+            AppSettings.logger.info(f"    {n} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+            AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+            AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+            # else:
+            #     if len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
+            #         AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
+            #     new_commits.insert(0, commit) # Insert at beginning to get the order correct again
+            removed_commits_count += 1
         else:
             AppSettings.logger.debug("    Keeping this one.")
             new_commits.insert(0, commit) # Insert at beginning to get the order correct again
+    if removed_commits_count > 9:
+        len_new_commits = len(new_commits)
+        AppSettings.logger.info(f"{removed_commits_count} commit folders deleted and redirected. (Returning {len_new_commits} commit{'' if len_new_commits==1 else 's'}.")
     return new_commits
 # end of remove_excess_commits
 
@@ -263,7 +282,8 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     AppSettings.logger.debug("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
-    commits:List[dict] = []
+    commits:List[Dict[str,Any]] = []
+    no_job_id_count = 0
     for c in project_json['commits']:
         AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
         # if c['id'] == commit_id: # the old entry for the current commit id
@@ -279,11 +299,15 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             if 'job_id' not in c: # Might be able to remove this eventually
                 c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, c['id'])
                 # Returned job id might have been None
+                if not c['job_id']: no_job_id_count += 1
             if 'type' not in c: # Might be able to remove this eventually
                 c['type'] = 'hash' if is_hash(c['id']) \
                       else 'artifact' if c['id']in ('latest','OhDear') \
                       else 'unknown'
             commits.append(c)
+    if no_job_id_count > 10:
+        len_commits = len(commits)
+        AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
     commits.append(current_commit)
     cleaned_commits = remove_excess_commits(commits, project_folder_key)
     if len(cleaned_commits) < len(commits): # Then we removed some
@@ -450,7 +474,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")
         if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings'):
-            AppSettings.logger.info(f"  or uncached at http://{AppSettings.door43_bucket_name}.s3-website-us-west-2.amazonaws.com/{url_part2}/")
+            AppSettings.logger.debug(f"  or uncached at http://{AppSettings.door43_bucket_name}.s3-website-us-west-2.amazonaws.com/{url_part2}/")
     return job_descriptive_name, matched_job_dict['door43_webhook_received_at']
 #end of process_callback_job function
 

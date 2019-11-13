@@ -4,7 +4,7 @@ import unittest
 import shutil
 
 from resource_container.ResourceContainer import RC
-from preprocessors.preprocessors import do_preprocess
+from preprocessors.preprocessors import do_preprocess, TnPreprocessor
 from general_tools.file_utils import unzip, read_file
 
 
@@ -26,7 +26,7 @@ class TestTnPreprocessor(unittest.TestCase):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     @unittest.skip("Skip test for time reasons - takes too long for automated tests - leave for standalone testing")
-    def test_tn_preprocessor(self):
+    def test_tn_preprocessor_long(self):
         # given
         repo_name = 'en_tn'
         file_name = os.path.join('raw_sources', repo_name + '.zip')
@@ -36,7 +36,7 @@ class TestTnPreprocessor(unittest.TestCase):
         repo_name = 'dummy_repo'
 
         # when
-        results = do_preprocess('Translation_Notes', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Notes', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())
@@ -56,10 +56,10 @@ class TestTnPreprocessor(unittest.TestCase):
         rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
         repo_dir = os.path.join(repo_dir)
         self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
-        repo_name = 'dummy_repo'
+        # repo_name = 'dummy_repo'
 
         # when
-        results = do_preprocess('Translation_Notes', 'dummyURL', rc, repo_dir, self.out_dir)
+        do_preprocess('Translation_Notes', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
 
         # then
         # self.assertTrue(preproc.is_multiple_jobs())
@@ -69,11 +69,37 @@ class TestTnPreprocessor(unittest.TestCase):
         self.assertFalse(os.path.isfile(os.path.join(self.out_dir, '67-REV.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-EXO.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '03-LEV.md')))
-        index_json = read_file(os.path.join(self.out_dir, 'index.json'))
+        read_file(os.path.join(self.out_dir, 'index.json'))
         exo = read_file(os.path.join(self.out_dir, '02-EXO.md'))
         self.assertGreater(len(exo), 1000)
         lev = read_file(os.path.join(self.out_dir, '03-LEV.md'))
         self.assertGreater(len(lev), 1000)
+
+    def test_tn_links(self):
+        repo_name = 'en_tn_2books'
+        file_name = os.path.join('raw_sources', repo_name + '.zip')
+        rc, _repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
+        # repo_dir = os.path.join(repo_dir)
+        self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
+
+        language_code = 'pq-xy'
+        repo_owner = 'dummyOwner'
+        tn_preprocessor = TnPreprocessor(commit_url=None, rc=rc, repo_owner=repo_owner, source_dir=None, output_dir=self.out_dir)
+        for given_input, expected_output in (
+            ('Some random string', 'Some random string'),
+            ('rc://*/ta/man/translate/figs-euphemism',
+                f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/figs-euphemism/01.md'),
+            ('rc://*/ta/man/translate/figs-abstractnouns',
+                f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/figs-abstractnouns/01.md'),
+            ('rc://en/ta/man/translate/figs-euphemism',
+                f'https://git.door43.org/{repo_owner}/en_ta/src/branch/master/translate/figs-euphemism/01.md'),
+            ('rc://*/tn/help/1sa/16/02',
+                f'https://git.door43.org/{repo_owner}/{language_code}_tn/src/branch/master/1sa/16/02.md'),
+            ('rc://en/tn/help/1sa/16/02',
+                f'https://git.door43.org/{repo_owner}/en_tn/src/branch/master/1sa/16/02.md'),
+            ):
+                actual_output = tn_preprocessor.fix_links('Gen 2:3', given_input, repo_owner, language_code)
+                self.assertEqual(actual_output, expected_output)
 
     @classmethod
     def extractFiles(cls, file_name, repo_name):
