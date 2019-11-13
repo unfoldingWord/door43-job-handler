@@ -215,7 +215,7 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
                 AppSettings.logger.info(f"    {n} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
                 clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
             else: # don't know the job_id (or the zip file was already deleted)
-                AppSettings.logger.warning("  {n} No job_id so pre-convert zip file not deleted.")
+                AppSettings.logger.warning(f"  {n} No job_id so pre-convert zip file not deleted.")
             # Setup redirects (so users don't get 404 errors from old saved links)
             old_repo_key = f"{project_folder_key}{commit['id']}"
             latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
