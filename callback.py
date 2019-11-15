@@ -153,7 +153,7 @@ def merge_dicts_lists(build_log:Dict[str,Any], file_results:Dict[str,Any], key:s
 # end of merge_dicts_lists function
 
 
-def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Optional[str]:
+def get_jobID_from_commit_buildLog(project_folder_key:str, ix:int, commit_id:str) -> Optional[str]:
     """
     Look for build_log.json in the Door43 bucket
         and extract the job_id from it.
@@ -171,7 +171,7 @@ def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Opt
         json_content = json.loads(file_content)
         return json_content['job_id']
     except Exception as e:
-        AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
+        AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 {ix} '{file_key}': {e}")
         return None
 # end of get_jobID_from_commit_buildLog function
 
@@ -196,7 +196,8 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
             to tag and branch names.
     """
     MIN_WANTED_COMMITS = 1
-    MAX_ALLOWED_REMOVED_COMMITS = 1200 # Don't want to get job timeouts -- at least project.json will slowly get smaller
+    MAX_ALLOWED_REMOVED_COMMITS = 1500 # Don't want to get job timeouts -- typically can do 1700+ in 600s
+                                       #    at least project.json will slowly get smaller if we limit this
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits:List[Dict[str,Any]] = []
     removed_commits_count = 0
@@ -287,7 +288,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits'])}) for project.json…")
     commits:List[Dict[str,Any]] = []
     no_job_id_count = 0
-    for c in project_json['commits']:
+    for ix, c in enumerate(project_json['commits']):
         AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
         # if c['id'] == commit_id: # the old entry for the current commit id
             # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
@@ -300,7 +301,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             # Not appended to commits here coz it happens below instead
         if c['id'] != commit_id: # a different commit from the current one
             if 'job_id' not in c: # Might be able to remove this eventually
-                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, c['id'])
+                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
                 # Returned job id might have been None
                 if not c['job_id']: no_job_id_count += 1
             if 'type' not in c: # Might be able to remove this eventually
