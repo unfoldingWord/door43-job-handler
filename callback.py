@@ -4,6 +4,13 @@
 # NOTE: rq_settings.py is executed at program start-up, reads some environment variables, and sets queue name, etc.
 #       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
+# NOTE: a number of other services depend on the outputs of this module,
+#           e.g., Door43.org reads project.json to find the rendered branches/releases,
+#                   and build_log.json
+#           (This means that changing variable names in those dicts
+#               might have unintended consequences.)
+
+
 # Python imports
 import os
 from datetime import datetime
@@ -146,7 +153,7 @@ def merge_dicts_lists(build_log:Dict[str,Any], file_results:Dict[str,Any], key:s
 # end of merge_dicts_lists function
 
 
-def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Optional[str]:
+def get_jobID_from_commit_buildLog(project_folder_key:str, ix:int, commit_id:str) -> Optional[str]:
     """
     Look for build_log.json in the Door43 bucket
         and extract the job_id from it.
@@ -164,7 +171,7 @@ def get_jobID_from_commit_buildLog(project_folder_key:str, commit_id:str) -> Opt
         json_content = json.loads(file_content)
         return json_content['job_id']
     except Exception as e:
-        AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 '{file_key}': {e}")
+        AppSettings.logger.critical(f"get_jobID_from_commit_buildLog threw an exception while getting {prefix}D43 {ix} '{file_key}': {e}")
         return None
 # end of get_jobID_from_commit_buildLog function
 
@@ -188,20 +195,21 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
         This was especially important as we moved from hash numbers
             to tag and branch names.
     """
-    MAX_WANTED_COMMITS = 1
-    # MAX_DEBUG_DISPLAYS = 10
+    MIN_WANTED_COMMITS = 1
+    MAX_ALLOWED_REMOVED_COMMITS = 1500 # Don't want to get job timeouts -- typically can do 1700+ in 600s
+                                       #    at least project.json will slowly get smaller if we limit this
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits:List[Dict[str,Any]] = []
     removed_commits_count = 0
     # Process it backwards in case we want to count how many we have as we go
     for n, commit in enumerate( reversed(commits_list) ):
         # if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want max of {MAX_WANTED_COMMITS})")
+        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want min of {MIN_WANTED_COMMITS})")
         # elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
             # AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
-        if len(new_commits) >= MAX_WANTED_COMMITS \
+        if len(new_commits) >= MIN_WANTED_COMMITS \
+        and removed_commits_count < MAX_ALLOWED_REMOVED_COMMITS \
         and commit['type'] in ('hash','artifact',): # but not 'unknown' -- can delete old master branches
-            # if DELETE_ENABLED: # really do it
             # Delete the commit hash folders from both CDN and D43 buckets
             commit_key = f"{project_folder_key}{commit['id']}"
             AppSettings.logger.info(f"    {n} Removing {prefix} CDN & D43 '{commit['type']}' '{commit['id']}' commits! …")
@@ -215,17 +223,13 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
                 AppSettings.logger.info(f"    {n} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
                 clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
             else: # don't know the job_id (or the zip file was already deleted)
-                AppSettings.logger.warning("  {n} No job_id so pre-convert zip file not deleted.")
+                AppSettings.logger.warning(f"  {n} No job_id so pre-convert zip file not deleted.")
             # Setup redirects (so users don't get 404 errors from old saved links)
             old_repo_key = f"{project_folder_key}{commit['id']}"
             latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
             AppSettings.logger.info(f"    {n} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
             AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
             AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
-            # else:
-            #     if len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-            #         AppSettings.logger.warning(f"    CURRENTLY DISABLED Need to remove '{commit['type']}' '{commit['id']}' commit (and files) but CURRENTLY DISABLED…")
-            #     new_commits.insert(0, commit) # Insert at beginning to get the order correct again
             removed_commits_count += 1
         else:
             AppSettings.logger.debug("    Keeping this one.")
@@ -272,19 +276,19 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
 
     def is_hash(commit_str:str) -> bool:
         """
-        Checks to see if this looks like a hexadecimal (abbreviated) hash
+        Checks to see if this looks like a hexadecimal (abbreviated to 10 chars) hash
         """
         if len(commit_str) != 10: return False
         for char in commit_str:
             if char not in 'abcdef1234567890': return False
         return True
 
-    AppSettings.logger.debug("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
         project_json['commits'] = []
+    AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits'])}) for project.json…")
     commits:List[Dict[str,Any]] = []
     no_job_id_count = 0
-    for c in project_json['commits']:
+    for ix, c in enumerate(project_json['commits']):
         AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
         # if c['id'] == commit_id: # the old entry for the current commit id
             # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
@@ -297,7 +301,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             # Not appended to commits here coz it happens below instead
         if c['id'] != commit_id: # a different commit from the current one
             if 'job_id' not in c: # Might be able to remove this eventually
-                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, c['id'])
+                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
                 # Returned job id might have been None
                 if not c['job_id']: no_job_id_count += 1
             if 'type' not in c: # Might be able to remove this eventually
