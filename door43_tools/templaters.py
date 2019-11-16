@@ -435,7 +435,7 @@ class TqTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
+            chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 
@@ -565,7 +565,7 @@ class TnTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
+            chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 
