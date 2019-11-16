@@ -196,15 +196,16 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
             to tag and branch names.
     """
     MIN_WANTED_COMMITS = 1
-    MAX_ALLOWED_REMOVED_FOLDERS = 1400 # Don't want to get job timeouts -- typically can do 1700+ in 600s
-                                       #    at least project.json will slowly get smaller if we limit this
+    MAX_ALLOWED_REMOVED_FOLDERS = 2400 # Don't want to get job timeouts -- typically can do 3500+ in 600s
+                                       #    at least project.json will slowly get smaller if we limit this.
+                                       # Each commit hash to be deleted has three folders to remove.
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
     new_commits:List[Dict[str,Any]] = []
     removed_folder_count = 0
     # Process it backwards in case we want to count how many we have as we go
     for n, commit in enumerate( reversed(commits_list) ):
         # if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-        AppSettings.logger.debug(f"  Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want min of {MIN_WANTED_COMMITS})")
+        AppSettings.logger.debug(f" Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want min of {MIN_WANTED_COMMITS})")
         # elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
             # AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         if len(new_commits) >= MIN_WANTED_COMMITS \
@@ -212,29 +213,29 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
         and commit['type'] in ('hash','artifact',): # but not 'unknown' -- can delete old master branches
             # Delete the commit hash folders from both CDN and D43 buckets
             commit_key = f"{project_folder_key}{commit['id']}"
-            AppSettings.logger.info(f"    {n:,} Removing {prefix} CDN & D43 '{commit['type']}' '{commit['id']}' commits! …")
-            # AppSettings.logger.info(f"    {n:,} Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
+            AppSettings.logger.info(f"  {n:,} Removing {prefix} CDN & D43 '{commit['type']}' '{commit['id']}' commits! …")
+            # AppSettings.logger.info(f"  {n:,} Removing {prefix}CDN '{commit['type']}' '{commit['id']}' commit! …")
             clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
             removed_folder_count += 1
-            # AppSettings.logger.info(f"    {n",} Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
+            # AppSettings.logger.info(f"  {n",} Removing {prefix}D43 '{commit['type']}' '{commit['id']}' commit! …")
             clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
             removed_folder_count += 1
             # Delete the pre-convert .zip file (available on Download button) from its bucket
             if commit['job_id']:
                 zipFile_key = f"preconvert/{commit['job_id']}.zip"
-                AppSettings.logger.info(f"    {n:,} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                AppSettings.logger.info(f"  {n:,} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
                 clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
                 removed_folder_count += 1
             else: # don't know the job_id (or the zip file was already deleted)
-                AppSettings.logger.warning(f"  {n:,} No job_id so pre-convert zip file not deleted.")
+                AppSettings.logger.warning(f" {n:,} No job_id so pre-convert zip file not deleted.")
             # Setup redirects (so users don't get 404 errors from old saved links)
             old_repo_key = f"{project_folder_key}{commit['id']}"
             latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
-            AppSettings.logger.info(f"    {n:,} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+            AppSettings.logger.info(f"  {n:,} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
             AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
             AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
         else:
-            AppSettings.logger.debug("    Keeping this one.")
+            AppSettings.logger.debug("  Keeping this one.")
             new_commits.insert(0, commit) # Insert at beginning to get the order correct again
     if removed_folder_count > 9:
         len_new_commits = len(new_commits)
