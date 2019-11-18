@@ -1,3 +1,5 @@
+# DOOR43 RQ Settings
+
 from os import getenv, environ
 
 # NOTE: Most of these variable names are defined by the rq package
