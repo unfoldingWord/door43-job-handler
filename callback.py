@@ -21,11 +21,11 @@ import traceback
 from typing import Dict, List, Tuple, Any, Optional, Union, Literal
 
 # Library (PyPi) imports
-from rq import get_current_job
+from rq import get_current_job, Queue
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST
+from rq_settings import prefix, debug_mode_flag, REDIS_JOB_LIST, callback_queue_name
 from app_settings.app_settings import AppSettings
 from client_converter_callback import ClientConverterCallback
 from client_linter_callback import ClientLinterCallback
@@ -37,7 +37,9 @@ from general_tools.file_utils import write_file, remove_tree
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
-general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler" # Can't add .callback here coz we also have .total
+door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
+job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler" # Can't add .callback here coz we also have .total
+callback_stats_prefix = f"{job_handler_stats_prefix}.callback"
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -335,7 +337,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
-project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
+project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
 def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis_connection):
     """
     The job info is retrieved from REDIS and matched/checked
@@ -409,7 +411,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     # user_projects_invoked_string = matched_job_dict['user_projects_invoked_string'] \
     #                     if 'user_projects_invoked_string' in matched_job_dict \
     #                     else f'??{identifier}??'
-    project_types_invoked_string = f"{general_stats_prefix}.types.invoked.{matched_job_dict['resource_type']}"
+    project_types_invoked_string = f"{job_handler_stats_prefix}.types.invoked.{matched_job_dict['resource_type']}"
 
     # NOTE: matched_job_dict gets merged into build_log below
     matched_job_dict['log'] = []
@@ -497,13 +499,20 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     AppSettings.logger.info("Door43-Job-Handler received a callback" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time.time()
-    stats_client.incr(f'{general_stats_prefix}.callback.jobs.attempted')
+    stats_client.incr(f'{callback_stats_prefix}.jobs.attempted')
 
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
     #print("id",current_job.id) # Displays job number
     #print("origin",current_job.origin) # Displays queue name
     #print("meta",current_job.meta) # Empty dict
+
+    # AppSettings.logger.info(f"Updating queue statistics…")
+    our_queue= Queue(callback_queue_name, connection=current_job.connection)
+    len_our_queue = len(our_queue) # Should normally sit at zero here
+    # AppSettings.logger.debug(f"Queue '{callback_queue_name}' length={len_our_queue}")
+    stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.callback.queue.length.current', len_our_queue)
+    AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.callback.queue.length.current' to {len_our_queue}")
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
@@ -549,7 +558,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time.time() - start_time) * 1000)
-    stats_client.timing(f'{general_stats_prefix}.callback.job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{callback_stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         AppSettings.logger.info(f"{prefix}Door43 callback handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
@@ -560,12 +569,12 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
                          datetime.strptime(door43_webhook_received_at,
                                            '%Y-%m-%dT%H:%M:%SZ')
     AppSettings.logger.info(f"{prefix}Door43 total job for {job_descriptive_name} completed in {round(total_elapsed_time.total_seconds())} seconds.")
-    stats_client.timing(f'{general_stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
+    stats_client.timing(f'{job_handler_stats_prefix}.total.job.duration', round(total_elapsed_time.total_seconds() * 1000))
 
     # NOTE: following line removed as stats recording used too much disk space
     # stats_client.gauge(user_projects_invoked_string, 0) # Mark as 'succeeded'
     stats_client.gauge(project_types_invoked_string, 0) # Mark as 'succeeded'
-    stats_client.incr(f'{general_stats_prefix}.callback.jobs.succeeded')
+    stats_client.incr(f'{callback_stats_prefix}.jobs.succeeded')
     AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 

@@ -991,10 +991,10 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     #print("origin",current_job.origin) # Displays queue name
     #print("meta",current_job.meta) # Empty dict
 
-    AppSettings.logger.info(f"Updating queue statistics…")
+    # AppSettings.logger.info(f"Updating queue statistics…")
     our_queue= Queue(webhook_queue_name, connection=current_job.connection)
     len_our_queue = len(our_queue) # Should normally sit at zero here
-    AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
+    # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
     stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
     AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
 
