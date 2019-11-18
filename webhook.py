@@ -1,3 +1,5 @@
+# DOOR43 WEBHOOK
+#
 # NOTE: This module name and function name are defined by the rq package and our own door43-enqueue-job package
 # This code adapted by RJH June 2018 from tx-manager/client_webhook/ClientWebhook/process_webhook
 
@@ -19,12 +21,12 @@ from typing import Dict, List, Any, Optional, Union
 
 # Library (PyPi) imports
 import requests
-from rq import get_current_job
+from rq import get_current_job, Queue
 from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url, REDIS_JOB_LIST
+from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url, REDIS_JOB_LIST, webhook_queue_name
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -76,8 +78,9 @@ RESOURCE_SUBJECT_MAP = {
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
-general_stats_prefix = f"door43.{'dev' if prefix else 'prod'}.job-handler"
-stats_prefix = f'{general_stats_prefix}.webhook'
+door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
+job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler"
+webhook_stats_prefix = f'{job_handler_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
@@ -496,7 +499,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
-project_types_invoked_string = f'{general_stats_prefix}.types.invoked.unknown'
+project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
@@ -546,7 +549,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
     # Use the RC to set the resource_subject and input_format parameters for tX
     resource_subject = get_tX_subject(repo_name, rc) # use the subject to set the resource type more intelligently
-    project_types_invoked_string = f'{general_stats_prefix}.types.invoked.{resource_subject}'
+    project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.{resource_subject}'
     input_format = rc.resource.file_ext
     if resource_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',) \
     and input_format not in ('usfm','usfm3',):
@@ -754,17 +757,17 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
     try:
-        stats_client.set(f'{stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
+        stats_client.set(f'{webhook_stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.repo_ids', 'No id')
+        stats_client.set(f'{webhook_stats_prefix}.repo_ids', 'No id')
     try:
-        stats_client.set(f'{stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
+        stats_client.set(f'{webhook_stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.owner_ids', 'No id')
+        stats_client.set(f'{webhook_stats_prefix}.owner_ids', 'No id')
     try:
-        stats_client.set(f'{stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
+        stats_client.set(f'{webhook_stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{stats_prefix}.pusher_ids', 'No id')
+        stats_client.set(f'{webhook_stats_prefix}.pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
@@ -916,10 +919,10 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
     # ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     # adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'{stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
+    stats_client.incr(f'{webhook_stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     # NOTE: following line removed as stats recording used too much disk space
-    # user_projects_invoked_string = f'{general_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
+    # user_projects_invoked_string = f'{job_handler_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
 
 
     if queued_json_payload['DCS_event'] == 'delete':
@@ -957,7 +960,8 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     AppSettings.logger.debug(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr(f'{stats_prefix}.jobs.attempted')
+    stats_client.incr(f'{webhook_stats_prefix}.jobs.attempted')
+
 
     AppSettings.logger.info(f"Clearing /tmp folder…")
     empty_folder('/tmp/', only_prefix='Door43_') # Stops failed jobs from accumulating in /tmp
@@ -965,12 +969,34 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     current_job = get_current_job()
     #print(f"Current job: {current_job}") # Mostly just displays the job number and payload
     #print("dir",dir(current_job))
-    #   dir ['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_args', '_data', '_dependency_id', '_execute', '_func_name', '_get_status', '_id', '_instance', '_kwargs', '_result', '_set_status', '_status', '_unpickle_data', 'args', 'cancel', 'cleanup', 'connection', 'create', 'created_at', 'data', 'delete', 'delete_dependents', 'dependency', 'dependent_ids', 'dependents_key', 'dependents_key_for', 'description', 'ended_at', 'enqueued_at', 'exc_info', 'exists', 'fetch', 'func', 'func_name', 'get_call_string', 'get_id', 'get_result_ttl', 'get_status', 'get_ttl', 'id', 'instance', 'is_failed', 'is_finished', 'is_queued', 'is_started', 'key', 'key_for', 'kwargs', 'meta', 'origin', 'perform', 'redis_job_namespace_prefix', 'refresh', 'register_dependency', 'result', 'result_ttl', 'return_value', 'save', 'save_meta', 'set_id', 'set_status', 'started_at', 'status', 'timeout', 'to_dict', 'ttl']
+    #   dir ['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__',
+    #       '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__',
+    #       '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__',
+    #       '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__',
+    #       '__str__', '__subclasshook__', '__weakref__', '_args', '_data', '_dependency_id',
+    #       '_execute', '_func_name', '_get_status', '_id', '_instance', '_kwargs', '_result',
+    #       '_set_status', '_status', '_unpickle_data', 'args', 'cancel', 'cleanup',
+    #       'connection', 'create', 'created_at', 'data', 'delete', 'delete_dependents',
+    #       'dependency', 'dependent_ids', 'dependents_key', 'dependents_key_for',
+    #       'description', 'ended_at', 'enqueued_at', 'exc_info', 'exists', 'fetch', 'func',
+    #       'func_name', 'get_call_string', 'get_id', 'get_result_ttl', 'get_status',
+    #       'get_ttl', 'id', 'instance', 'is_failed', 'is_finished', 'is_queued', 'is_started',
+    #       'key', 'key_for', 'kwargs', 'meta', 'origin', 'perform',
+    #       'redis_job_namespace_prefix', 'refresh', 'register_dependency', 'result',
+    #       'result_ttl', 'return_value', 'save', 'save_meta', 'set_id', 'set_status',
+    #       'started_at', 'status', 'timeout', 'to_dict', 'ttl']
     #for fieldname in current_job.__dict__:
         #print(f"{fieldname}: {current_job.__dict__[fieldname]}")
     #print("id",current_job.id) # Displays job number
     #print("origin",current_job.origin) # Displays queue name
     #print("meta",current_job.meta) # Empty dict
+
+    AppSettings.logger.info(f"Updating queue statistics…")
+    our_queue= Queue(webhook_queue_name, connection=current_job.connection)
+    len_our_queue = len(our_queue) # Should normally sit at zero here
+    AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
+    stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
+    AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
@@ -980,7 +1006,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         job_descriptive_name = process_job(queued_json_payload, current_job.connection)
     except Exception as e:
         # Catch most exceptions here so we can log them to CloudWatch
-        AppSettings.logger.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
+        AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
         AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
         AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
         # Now attempt to log it to an additional, separate FAILED log
@@ -1005,7 +1031,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         logger2.addHandler(watchtower_log_handler)
         logger2.setLevel(logging.DEBUG)
         logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
-        logger2.critical(f"{prefixed_our_name} threw an exception while processing: {queued_json_payload}")
+        logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
         watchtower_log_handler.close()
         # NOTE: following line removed as stats recording used too much disk space
@@ -1014,13 +1040,13 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing(f'{stats_prefix}.job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{webhook_stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
         AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
-    stats_client.incr(f'{stats_prefix}.jobs.completed')
+    stats_client.incr(f'{webhook_stats_prefix}.jobs.completed')
     AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
