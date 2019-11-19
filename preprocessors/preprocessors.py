@@ -137,7 +137,7 @@ class Preprocessor:
             AppSettings.logger.error(f"Default preprocessor didn't write any files")
             self.warnings.append("No source files discovered")
         else:
-            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files")
+            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of DefaultPreprocessor run()
@@ -265,7 +265,7 @@ class ObsPreprocessor(Preprocessor):
             AppSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
             self.warnings.append("No OBS source files discovered")
         else:
-            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of ObsPreprocessor run()
@@ -322,7 +322,7 @@ class ObsNotesPreprocessor(Preprocessor):
             AppSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
             self.warnings.append("No OBSNotes source files discovered")
         else:
-            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of ObsNotesPreprocessor run()
@@ -809,7 +809,7 @@ class BiblePreprocessor(Preprocessor):
             AppSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
             self.warnings.append("No Bible source files discovered")
         else:
-            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files")
+            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.num_files_written, self.warnings
@@ -965,7 +965,7 @@ class TaPreprocessor(Preprocessor):
             AppSettings.logger.error("tA preprocessor didn't write any markdown files")
             self.warnings.append("No tA source files discovered")
         else:
-            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TaPreprocessor run()
@@ -1097,7 +1097,7 @@ class TqPreprocessor(Preprocessor):
             AppSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
             self.warnings.append("No tQ source files discovered")
         else:
-            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
@@ -1261,7 +1261,7 @@ class TwPreprocessor(Preprocessor):
             AppSettings.logger.error(f"tW preprocessor didn't write any markdown files")
             self.warnings.append("No tW source files discovered")
         else:
-            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TwPreprocessor run()
@@ -1499,7 +1499,7 @@ class TnPreprocessor(Preprocessor):
             AppSettings.logger.error(f"tN preprocessor didn't write any markdown files")
             self.warnings.append("No tN source files discovered")
         else:
-            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
         # Write out index.json
         output_file = os.path.join(self.output_dir, 'index.json')
@@ -1517,6 +1517,10 @@ class TnPreprocessor(Preprocessor):
                 files.insert(0, last_file)
 
 
+    compiled_re1 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)/01\.md\]\]',
+                                            flags=re.IGNORECASE)
+    compiled_re2 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
+                                            flags=re.IGNORECASE)
     def fix_links(self, BCV:str, content:str, repo_owner:str, language_code:str) -> str:
         """
         For tN (MD and TSV)
@@ -1577,8 +1581,9 @@ class TnPreprocessor(Preprocessor):
         # content = re.sub(r'\[\[https://(.+?)/src/branch/master/(.+?)/01\.md\]\]',
         #                  r'[\2](https://\1/src/branch/master/\2/01\.md)',
         #                  content, flags=re.IGNORECASE)
-        while (match := re.search(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)/01\.md\]\]',
-                                                 content, flags=re.IGNORECASE)):
+        start_index = 0
+        bad_file_count = 0
+        while (match := TnPreprocessor.compiled_re1.search(content, start_index)):
             # print(f"Match8a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
             # print(f"Match8b: {match.groups()}")
             file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}/01.md'
@@ -1593,8 +1598,10 @@ class TnPreprocessor(Preprocessor):
                 try:
                     file_contents = get_url(title_file_url)
                 except Exception as e:
-                    AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
-                    self.warnings.append(f"{BCV} error with tA '{match.group(2)}' link {title_file_url}: {e}")
+                    bad_file_count += 1
+                    if bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
+                        self.warnings.append(f"{BCV} error with tA '{match.group(2)}' link {title_file_url}: {e}")
                     link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
                     file_contents = None
                 if file_contents:
@@ -1612,6 +1619,7 @@ class TnPreprocessor(Preprocessor):
             # new_link_markdown = f'[{link_text}]({file_url})'
             # print(f"Match8e: New tA link = {new_link_markdown}")
             content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
+            start_index = match.start() + 1
         # if content != content8: print(f"8: was {content8}\nnow {content}")
         # assert content.count('(') == content.count(')')
         # assert content.count('[') == content.count(']')
@@ -1620,8 +1628,9 @@ class TnPreprocessor(Preprocessor):
         # content = re.sub(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
         #                  r'[\2](https://\1/src/branch/master/\2\.md)',
         #                  content, flags=re.IGNORECASE)
-        while (match := re.search(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
-                                                 content, flags=re.IGNORECASE)):
+        start_index = 0
+        bad_file_count = 0
+        while (match := TnPreprocessor.compiled_re2.search(content, start_index)):
             # print(f"Match9a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
             # print(f"Match9b: {match.groups()}")
             file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}.md'
@@ -1636,8 +1645,10 @@ class TnPreprocessor(Preprocessor):
                 try:
                     file_contents = get_url(title_file_url)
                 except Exception as e:
-                    AppSettings.logger.debug(f"tN {BCV} fix_linkB fetching {title_file_url} got: {e}")
-                    self.warnings.append(f"{BCV} error with tW '{match.group(2)}' link {title_file_url}: {e}")
+                    bad_file_count += 1
+                    if bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tN {BCV} fix_linkB fetching {title_file_url} got: {e}")
+                        self.warnings.append(f"{BCV} error with tW '{match.group(2)}' link {title_file_url}: {e}")
                     link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
                     file_contents = None
                 if file_contents:
@@ -1660,6 +1671,7 @@ class TnPreprocessor(Preprocessor):
             # new_link_markdown = f'[{link_text}]({file_url})'
             # print(f"Match9e: New tW link = {new_link_markdown}")
             content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
+            start_index = match.start() + 1
         # if content != content9: print(f"9: was {content9}\nnow {content}")
 
         # assert content.count('(') == content.count(')')
@@ -1774,7 +1786,7 @@ class LexiconPreprocessor(Preprocessor):
             AppSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
             self.warnings.append("No lexicon source files discovered")
         else:
-            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files")
+            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
         str_list = str(os.listdir(self.output_dir))
         str_list_adjusted = str_list if len(str_list)<1500 \

@@ -497,12 +497,13 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 # end of handle_branch_delete function
 
 
-def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], our_queue) -> Tuple[bool,str]:
+def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], our_queue) -> Tuple[bool,Optional[str]]:
     """
     If there's already another push queued for the same repo,
         let's abort this one.
 
-    Returns True if we can safely abort.
+    Returns True if we can safely abort this build
+                        and let a follow-up push trigger the repo rebuild.
     """
     len_our_queue = len(our_queue)
     if submitted_json_payload['DCS_event'] == 'push' \
@@ -634,9 +635,11 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
     # Save the warnings for the user -- put any RC messages in front
+    if rc.error_messages or preprocessor_warning_list:
+        AppSettings.logger.debug(f"Prepending {len(rc.error_messages)} RC warnings to {len(preprocessor_warning_list)} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
     if preprocessor_warning_list:
-        AppSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
+        AppSettings.logger.debug(f"Preprocessor warning list is ({len(preprocessor_warning_list)}) {preprocessor_warning_list}")
 
     # Copy the ReadMe file if it seems that this repo is just minimal
     if num_preprocessor_files_written < 3:
