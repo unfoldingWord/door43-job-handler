@@ -492,6 +492,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
 def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     This function is called by the rq package to process a job in the queue(s).
+        (Don't rename this function.)
 
     The job is removed from the queue before the job is started,
         but if the job throws an exception or times out (timeout specified in enqueue process)
