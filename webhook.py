@@ -953,6 +953,7 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
 def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     This function is called by the rq package to process a job in the queue(s).
+        (Don't rename this function.)
 
     The job is removed from the queue before the job is started,
         but if the job throws an exception or times out (timeout specified in enqueue process)
@@ -994,50 +995,76 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     # AppSettings.logger.info(f"Updating queue statistics…")
     our_queue= Queue(webhook_queue_name, connection=current_job.connection)
     len_our_queue = len(our_queue) # Should normally sit at zero here
-    # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
-    stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
-    AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
 
-    #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
-    #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
-    #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
-    #assert queue_prefix == prefix
-    try:
-        job_descriptive_name = process_job(queued_json_payload, current_job.connection)
-    except Exception as e:
-        # Catch most exceptions here so we can log them to CloudWatch
-        AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
-        AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
-        AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
-        # Now attempt to log it to an additional, separate FAILED log
-        import logging
-        from boto3 import Session
-        from watchtower import CloudWatchLogHandler
-        logger2 = logging.getLogger(prefixed_our_name)
-        test_mode_flag = os.getenv('TEST_MODE', '')
-        travis_flag = os.getenv('TRAVIS_BRANCH', '')
-        log_group_name = f"FAILED_{'' if test_mode_flag or travis_flag else prefix}tX" \
-                         f"{'_DEBUG' if debug_mode_flag else ''}" \
-                         f"{'_TEST' if test_mode_flag else ''}" \
-                         f"{'_TravisCI' if travis_flag else ''}"
-        aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-        boto3_session = Session(aws_access_key_id=aws_access_key_id,
-                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-                            region_name='us-west-2')
-        watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
-                                                    use_queues=False,
-                                                    log_group=log_group_name,
-                                                    stream_name=prefixed_our_name)
-        logger2.addHandler(watchtower_log_handler)
-        logger2.setLevel(logging.DEBUG)
-        logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
-        logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
-        logger2.critical(f"{e}: {traceback.format_exc()}")
-        watchtower_log_handler.close()
-        # NOTE: following line removed as stats recording used too much disk space
-        # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
-        stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
-        raise e # We raise the exception again so it goes into the failed queue
+    abort_duplicate = False
+    if queued_json_payload['DCS_event'] == 'push' \
+    and len(queued_json_payload['commits']) == 1 \
+    and len_our_queue: # Have other entries
+        AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
+        for j, queued_job in enumerate(our_queue.jobs, start=1):
+            print(f"{j}/ {queued_job!r}")
+            # print(dir(queued_job))
+            print(f"Status = '{queued_job.get_status()}'")
+            # print(f"Args {type(queued_job.args)} ({len(queued_job.args)}) = {queued_job.args}") # tuple containing one dict
+            # print(f"KWArgs = {queued_job.kwargs}") # empty dict
+            if queued_job.get_status() == 'queued':
+                queued_job_args = queued_job.args # tuple
+                assert len(queued_job_args) == 1
+                queued_job_parameter_dict = queued_job_args[0]
+                if queued_job_parameter_dict['DCS_event'] == 'push' \
+                and len(queued_job_parameter_dict['commits']) == 1 \
+                and queued_job_parameter_dict['commits'][0]['url'] == queued_json_payload['commits'][0]['url']:
+                    AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
+                    job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
+                    AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
+                    abort_duplicate = True
+                    break
+
+    if not abort_duplicate:
+        # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
+        stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
+        AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
+
+        #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
+        #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
+        #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
+        #assert queue_prefix == prefix
+        try:
+            job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+        except Exception as e:
+            # Catch most exceptions here so we can log them to CloudWatch
+            AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
+            AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+            AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
+            # Now attempt to log it to an additional, separate FAILED log
+            import logging
+            from boto3 import Session
+            from watchtower import CloudWatchLogHandler
+            logger2 = logging.getLogger(prefixed_our_name)
+            test_mode_flag = os.getenv('TEST_MODE', '')
+            travis_flag = os.getenv('TRAVIS_BRANCH', '')
+            log_group_name = f"FAILED_{'' if test_mode_flag or travis_flag else prefix}tX" \
+                            f"{'_DEBUG' if debug_mode_flag else ''}" \
+                            f"{'_TEST' if test_mode_flag else ''}" \
+                            f"{'_TravisCI' if travis_flag else ''}"
+            aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+            boto3_session = Session(aws_access_key_id=aws_access_key_id,
+                                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                                region_name='us-west-2')
+            watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                        use_queues=False,
+                                                        log_group=log_group_name,
+                                                        stream_name=prefixed_our_name)
+            logger2.addHandler(watchtower_log_handler)
+            logger2.setLevel(logging.DEBUG)
+            logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
+            logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
+            logger2.critical(f"{e}: {traceback.format_exc()}")
+            watchtower_log_handler.close()
+            # NOTE: following line removed as stats recording used too much disk space
+            # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
+            stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
+            raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
     stats_client.timing(f'{webhook_stats_prefix}.job.duration', elapsed_milliseconds)
