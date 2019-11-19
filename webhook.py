@@ -510,6 +510,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
     and len(submitted_json_payload['commits']) == 1 \
     and len_our_queue: # Have other entries
         AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
+        my_url_bits = submitted_json_payload['commits'][0]['url'].split('/')
         for j, queued_job in enumerate(our_queue.jobs, start=1):
             # print(f"{j}/ {queued_job!r}")
             # print(f"    status = '{queued_job.get_status()}'")
@@ -520,12 +521,13 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
                 assert len(queued_job_args) == 1
                 queued_job_parameter_dict = queued_job_args[0]
                 if queued_job_parameter_dict['DCS_event'] == 'push' \
-                and len(queued_job_parameter_dict['commits']) == 1 \
-                and queued_job_parameter_dict['commits'][0]['url'] == submitted_json_payload['commits'][0]['url']:
-                    AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
-                    job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
-                    AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
-                    return True, job_descriptive_name
+                and len(queued_job_parameter_dict['commits']) == 1:
+                    queued_url_bits = queued_job_parameter_dict['commits'][0]['url'].split('/')
+                    if queued_url_bits[:6] == my_url_bits[:6]: # commit number at end can be different
+                        AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
+                        job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
+                        AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
+                        return True, job_descriptive_name
     return False, None
 # end of check_for_forthcoming_pushes_in_queue function
 
