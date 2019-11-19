@@ -14,10 +14,9 @@ import hashlib
 import shutil
 from datetime import datetime, timedelta
 from time import time, sleep
-# from ast import literal_eval
 import traceback
 from zipfile import BadZipFile
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Tuple, Any, Optional, Union
 
 # Library (PyPi) imports
 import requests
@@ -498,12 +497,45 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 # end of handle_branch_delete function
 
 
+def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], our_queue) -> Tuple[bool,str]:
+    """
+    If there's already another push queued for the same repo,
+        let's abort this one.
+
+    Returns True if we can safely abort.
+    """
+    len_our_queue = len(our_queue)
+    if submitted_json_payload['DCS_event'] == 'push' \
+    and len(submitted_json_payload['commits']) == 1 \
+    and len_our_queue: # Have other entries
+        AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
+        for j, queued_job in enumerate(our_queue.jobs, start=1):
+            # print(f"{j}/ {queued_job!r}")
+            # print(f"    status = '{queued_job.get_status()}'")
+            # # print(f"Args {type(queued_job.args)} ({len(queued_job.args)}) = {queued_job.args}") # tuple containing one dict
+            # # print(f"KWArgs = {queued_job.kwargs}") # empty dict
+            if queued_job.get_status() == 'queued':
+                queued_job_args = queued_job.args # tuple
+                assert len(queued_job_args) == 1
+                queued_job_parameter_dict = queued_job_args[0]
+                if queued_job_parameter_dict['DCS_event'] == 'push' \
+                and len(queued_job_parameter_dict['commits']) == 1 \
+                and queued_job_parameter_dict['commits'][0]['url'] == submitted_json_payload['commits'][0]['url']:
+                    AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
+                    job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
+                    AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
+                    return True, job_descriptive_name
+    return False, None
+# end of check_for_forthcoming_pushes_in_queue function
+
+
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
-                        source_url_base:str, our_identifier:str) -> str:
+                        source_url_base:str, our_identifier:str,
+                        our_queue) -> str:
     """
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
         and then creates a ResourceContainer (RC) object.
@@ -624,121 +656,124 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     # Seems we should always process, even if no files
     #   so that at least any errors/warnings get displayed
 
-    # Zip up the massaged files
-    AppSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
-    preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
-    AppSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
-    add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
-    AppSettings.logger.debug("Zipping finished.")
 
-    # Upload zipped file to the S3 pre-convert bucket
-    AppSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
-    our_job_id = get_unique_job_id()
-    file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
+    abort_duplicate_flag, unwanted_job_descriptive_name = check_for_forthcoming_pushes_in_queue(submitted_json_payload, our_queue)
+    if not abort_duplicate_flag:
+        # Zip up the massaged files
+        AppSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")
+        preprocessed_zip_file = tempfile.NamedTemporaryFile(dir=base_temp_dir_name, prefix='preprocessed_', suffix='.zip', delete=False)
+        AppSettings.logger.debug(f'Zipping files from {preprocess_dir} to {preprocessed_zip_file.name} …')
+        add_contents_to_zip(preprocessed_zip_file.name, preprocess_dir)
+        AppSettings.logger.debug("Zipping finished.")
+
+        # Upload zipped file to the S3 pre-convert bucket
+        AppSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
+        our_job_id = get_unique_job_id()
+        file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
 
 
-    # We no longer use txJob class but just create our own Python dict
-    #   This gets saved in Redis so it can be recalled by the callback function
-    #       (only a very small subset gets posted to the tX-enqueue-job)
-    AppSettings.logger.debug("Webhook.process_job setting up job dict…")
-    pj_job_dict:Dict[str,Any] = {}
-    pj_job_dict['job_id'] = our_job_id
-    pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-    pj_job_dict['repo_owner_username'] = repo_owner_username
-    pj_job_dict['repo_name'] = repo_name
-    pj_job_dict['commit_type'] = commit_type
-    pj_job_dict['commit_id'] = commit_id
-    pj_job_dict['commit_hash'] = commit_hash
-    pj_job_dict['manifests_id'] = tx_manifest.id
-    pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
-    pj_job_dict['input_format'] = input_format
-    pj_job_dict['source'] = f'{source_url_base}/{file_key}'
-    pj_job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
-    pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
-    pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
-    pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-    pj_job_dict['output_format'] = 'html'
-    # NOTE: following line removed as stats recording used too much disk space
-    # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
-    pj_job_dict['links'] = {
-        'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
-        'rel': 'self',
-        'method': 'GET'
-    }
-    pj_job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
-    if preprocessor_warning_list:
-        pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-    if 'echoed_from_production' in submitted_json_payload: # helps us keep track of where jobs are coming from in dev- chain
-        pj_job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
-    pj_job_dict['status'] = None
-    pj_job_dict['success'] = False
-
-    # Save the job info in Redis for the callback to use
-    remember_job(pj_job_dict, redis_connection)
-
-    # Get S3 cdn bucket/dir and empty it
-    s3_commit_key = f"u/{pj_job_dict['repo_owner_username']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
-    clear_commit_directory_in_cdn(s3_commit_key)
-
-    # Pass the work request onto the tX system
-    AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
-    tx_payload = {
-        'job_id': our_job_id,
-        'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-        'resource_type': resource_subject, # This used to be rc.resource.identifier
-        'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
-                            else input_format, # special case for .txt Bibles
-        'output_format': 'html',
-        'source': source_url_base + '/' + file_key,
-        'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                        if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                    else DOOR43_CALLBACK_URL,
-        'user_token': gogs_user_token, # Checked by tX enqueue job
+        # We no longer use txJob class but just create our own Python dict
+        #   This gets saved in Redis so it can be recalled by the callback function
+        #       (only a very small subset gets posted to the tX-enqueue-job)
+        AppSettings.logger.debug("Webhook.process_job setting up job dict…")
+        pj_job_dict:Dict[str,Any] = {}
+        pj_job_dict['job_id'] = our_job_id
+        pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
+        pj_job_dict['repo_owner_username'] = repo_owner_username
+        pj_job_dict['repo_name'] = repo_name
+        pj_job_dict['commit_type'] = commit_type
+        pj_job_dict['commit_id'] = commit_id
+        pj_job_dict['commit_hash'] = commit_hash
+        pj_job_dict['manifests_id'] = tx_manifest.id
+        pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
+        pj_job_dict['input_format'] = input_format
+        pj_job_dict['source'] = f'{source_url_base}/{file_key}'
+        pj_job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
+        pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+        pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
+        pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
+        pj_job_dict['output_format'] = 'html'
+        # NOTE: following line removed as stats recording used too much disk space
+        # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+        pj_job_dict['links'] = {
+            'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
+            'rel': 'self',
+            'method': 'GET'
         }
-    if 'options' in pj_job_dict and pj_job_dict['options']:
-        AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
-        tx_payload['options'] = pj_job_dict['options']
+        pj_job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
+        if preprocessor_warning_list:
+            pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
+        if 'echoed_from_production' in submitted_json_payload: # helps us keep track of where jobs are coming from in dev- chain
+            pj_job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
+        pj_job_dict['status'] = None
+        pj_job_dict['success'] = False
 
-    AppSettings.logger.debug(f"Payload for tX: {tx_payload}")
-    response:Optional[requests.Response]
-    try:
-        response = requests.post(tx_post_url, json=tx_payload)
-    except requests.exceptions.ConnectionError as e:
-        AppSettings.logger.critical(f"Callback connection error: {e}")
-        response = None
-    if response:
-        #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-        #AppSettings.logger.debug(f"response.headers = {response.headers}")
+        # Save the job info in Redis for the callback to use
+        remember_job(pj_job_dict, redis_connection)
+
+        # Get S3 cdn bucket/dir and empty it
+        s3_commit_key = f"u/{pj_job_dict['repo_owner_username']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
+        clear_commit_directory_in_cdn(s3_commit_key)
+
+        # Pass the work request onto the tX system
+        AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
+        tx_payload = {
+            'job_id': our_job_id,
+            'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
+            'resource_type': resource_subject, # This used to be rc.resource.identifier
+            'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
+                                else input_format, # special case for .txt Bibles
+            'output_format': 'html',
+            'source': source_url_base + '/' + file_key,
+            'callback': 'http://127.0.0.1:8080/tx-callback/' \
+                            if prefix and debug_mode_flag and ':8090' in tx_post_url \
+                        else DOOR43_CALLBACK_URL,
+            'user_token': gogs_user_token, # Checked by tX enqueue job
+            }
+        if 'options' in pj_job_dict and pj_job_dict['options']:
+            AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
+            tx_payload['options'] = pj_job_dict['options']
+
+        AppSettings.logger.debug(f"Payload for tX: {tx_payload}")
+        response:Optional[requests.Response]
         try:
-            AppSettings.logger.info(f"response.json = {response.json()}")
-        except json.decoder.JSONDecodeError:
-            AppSettings.logger.info("No valid response JSON found")
-            AppSettings.logger.debug(f"response.text = {response.text}")
-        if response.status_code != 200:
-            AppSettings.logger.critical(f"Failed to submit job to tX:"
-                                        f" {response.status_code}={response.reason}")
-    else: # no response
-        error_msg = "Submission of job to tX system got no response"
-        AppSettings.logger.critical(error_msg)
-        raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
+            response = requests.post(tx_post_url, json=tx_payload)
+        except requests.exceptions.ConnectionError as e:
+            AppSettings.logger.critical(f"Callback connection error: {e}")
+            response = None
+        if response:
+            #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+            #AppSettings.logger.debug(f"response.headers = {response.headers}")
+            try:
+                AppSettings.logger.info(f"response.json = {response.json()}")
+            except json.decoder.JSONDecodeError:
+                AppSettings.logger.info("No valid response JSON found")
+                AppSettings.logger.debug(f"response.text = {response.text}")
+            if response.status_code != 200:
+                AppSettings.logger.critical(f"Failed to submit job to tX:"
+                                            f" {response.status_code}={response.reason}")
+        else: # no response
+            error_msg = "Submission of job to tX system got no response"
+            AppSettings.logger.critical(error_msg)
+            raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
 
-    # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BibleDropBox
-    #     if prefix and not debug_mode_flag: # Only for dev- chain
-    #         # This was intended for comparing USFM linting during development of that area of code
-    #         AppSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-    #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-    #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-    #         # Not using the preprocessed files (only the originals above)
-    #         # AppSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-    #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
+        # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BibleDropBox
+        #     if prefix and not debug_mode_flag: # Only for dev- chain
+        #         # This was intended for comparing USFM linting during development of that area of code
+        #         AppSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
+        #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
+        #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
+        #         # Not using the preprocessed files (only the originals above)
+        #         # AppSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
+        #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
 
     return job_descriptive_name
 # end of handle_page_build function
 
 
-def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
+def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) -> str:
     """
     Parameters:
         queued_json_payload is a dict
@@ -935,7 +970,8 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection) -> str:
             deliberateFailureForTesting  # type: ignore
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
                             commit_type, commit_id, commit_hash, repo_data_url,
-                            repo_owner_username, repo_name, source_url_base, our_identifier)
+                            repo_owner_username, repo_name, source_url_base,
+                            our_identifier, our_queue)
     else:
         AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
 
@@ -996,31 +1032,8 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     our_queue= Queue(webhook_queue_name, connection=current_job.connection)
     len_our_queue = len(our_queue) # Should normally sit at zero here
 
-    abort_duplicate = False
-    if queued_json_payload['DCS_event'] == 'push' \
-    and len(queued_json_payload['commits']) == 1 \
-    and len_our_queue: # Have other entries
-        AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
-        for j, queued_job in enumerate(our_queue.jobs, start=1):
-            print(f"{j}/ {queued_job!r}")
-            # print(dir(queued_job))
-            print(f"Status = '{queued_job.get_status()}'")
-            # print(f"Args {type(queued_job.args)} ({len(queued_job.args)}) = {queued_job.args}") # tuple containing one dict
-            # print(f"KWArgs = {queued_job.kwargs}") # empty dict
-            if queued_job.get_status() == 'queued':
-                queued_job_args = queued_job.args # tuple
-                assert len(queued_job_args) == 1
-                queued_job_parameter_dict = queued_job_args[0]
-                if queued_job_parameter_dict['DCS_event'] == 'push' \
-                and len(queued_job_parameter_dict['commits']) == 1 \
-                and queued_job_parameter_dict['commits'][0]['url'] == queued_json_payload['commits'][0]['url']:
-                    AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
-                    job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
-                    AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
-                    abort_duplicate = True
-                    break
-
-    if not abort_duplicate:
+    abort_duplicate_flag, job_descriptive_name = check_for_forthcoming_pushes_in_queue(queued_json_payload, our_queue)
+    if not abort_duplicate_flag:
         # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
         stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
         AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
@@ -1030,7 +1043,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
         #assert queue_prefix == prefix
         try:
-            job_descriptive_name = process_job(queued_json_payload, current_job.connection)
+            job_descriptive_name = process_job(queued_json_payload, current_job.connection, our_queue)
         except Exception as e:
             # Catch most exceptions here so we can log them to CloudWatch
             AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
