@@ -497,18 +497,20 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 # end of handle_branch_delete function
 
 
-def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], our_queue) -> Tuple[bool,str]:
+def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], our_queue) -> Tuple[bool,Optional[str]]:
     """
     If there's already another push queued for the same repo,
         let's abort this one.
 
-    Returns True if we can safely abort.
+    Returns True if we can safely abort this build
+                        and let a follow-up push trigger the repo rebuild.
     """
     len_our_queue = len(our_queue)
     if submitted_json_payload['DCS_event'] == 'push' \
     and len(submitted_json_payload['commits']) == 1 \
     and len_our_queue: # Have other entries
         AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
+        my_url_bits = submitted_json_payload['commits'][0]['url'].split('/')
         for j, queued_job in enumerate(our_queue.jobs, start=1):
             # print(f"{j}/ {queued_job!r}")
             # print(f"    status = '{queued_job.get_status()}'")
@@ -519,12 +521,13 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
                 assert len(queued_job_args) == 1
                 queued_job_parameter_dict = queued_job_args[0]
                 if queued_job_parameter_dict['DCS_event'] == 'push' \
-                and len(queued_job_parameter_dict['commits']) == 1 \
-                and queued_job_parameter_dict['commits'][0]['url'] == submitted_json_payload['commits'][0]['url']:
-                    AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
-                    job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
-                    AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
-                    return True, job_descriptive_name
+                and len(queued_job_parameter_dict['commits']) == 1:
+                    queued_url_bits = queued_job_parameter_dict['commits'][0]['url'].split('/')
+                    if queued_url_bits[:6] == my_url_bits[:6]: # commit number at end can be different
+                        AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
+                        job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
+                        AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
+                        return True, job_descriptive_name
     return False, None
 # end of check_for_forthcoming_pushes_in_queue function
 
@@ -634,9 +637,11 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
     # Save the warnings for the user -- put any RC messages in front
+    if rc.error_messages or preprocessor_warning_list:
+        AppSettings.logger.debug(f"Prepending {len(rc.error_messages)} RC warnings to {len(preprocessor_warning_list)} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
     if preprocessor_warning_list:
-        AppSettings.logger.debug(f"Preprocessor warning list is {preprocessor_warning_list}")
+        AppSettings.logger.debug(f"Preprocessor warning list is ({len(preprocessor_warning_list)}) {preprocessor_warning_list}")
 
     # Copy the ReadMe file if it seems that this repo is just minimal
     if num_preprocessor_files_written < 3:
