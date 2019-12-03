@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from time import time, sleep
 import traceback
 from zipfile import BadZipFile
+# from urllib.error import HTTPError
 from typing import Dict, List, Tuple, Any, Optional, Union
 
 # Library (PyPi) imports
@@ -155,8 +156,11 @@ def get_repo_files(base_temp_dir_name:str, commit_url:str, repo_name:str) -> str
 def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
     """
     Downloads and unzips a git repository from Github or git.door43.org
-    :param str commit_url: The URL of the repository to download
-    :param str repo_dir:   The directory where the downloaded file should be unzipped
+        Has a number of tries
+            (in case that Gitea hasn't actually finished building the .zip file yet)
+
+    :param commit_url: The URL of the repository to download
+    :param repo_dir:   The directory where the downloaded file should be unzipped
     :return: None
     """
     repo_zip_url = commit_url if commit_url.endswith('.zip') \
@@ -187,8 +191,17 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
             finally:
                 AppSettings.logger.debug("  Unzipping finished.")
             break # Get out of lopp
-        except BadZipFile: # I suspect a race condition within Gitea ???
-            AppSettings.logger.error(f"Try {try_number}: Got bad zip file when downloading repo from {repo_zip_url}")
+        # except HTTPError as e: # Could this also be a race condition within Gitea ???
+        #     # We do less tries for this condition (with shorter waits also)
+        #     AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
+        #     if try_number < MAX_TRIES-1:
+        #         AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
+        #         sleep(SECONDS_BETWEEN_TRIES-1) # Try again after a few seconds
+        #         try_number += 1
+        #     else:
+        #         raise HTTPError(f"Unable to download file from {repo_zip_url} after {try_number} tries")
+        except BadZipFile as e: # I suspect a race condition within Gitea ???
+            AppSettings.logger.error(f"Try {try_number}: Got bad zip file when downloading repo from {repo_zip_url}: {e}")
             if try_number < MAX_TRIES:
                 AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
                 sleep(SECONDS_BETWEEN_TRIES) # Try again after a few seconds
@@ -509,7 +522,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
     if submitted_json_payload['DCS_event'] == 'push' \
     and len(submitted_json_payload['commits']) == 1 \
     and len_our_queue: # Have other entries
-        AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entries…")
+        AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entr{'y' if len_our_queue==1 else 'ies'}…")
         my_url_bits = submitted_json_payload['commits'][0]['url'].split('/')
         for j, queued_job in enumerate(our_queue.jobs, start=1):
             # print(f"{j}/ {queued_job!r}")

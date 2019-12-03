@@ -1,10 +1,14 @@
+# Python imports
+from typing import Dict, List, Tuple, Any, Optional
 import os
 import re
 import json
 from glob import glob
 from shutil import copy, copytree
-from typing import Dict, List, Tuple, Any, Optional
+from urllib.request import urlopen
+from urllib.error import HTTPError
 
+# Local imports
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
@@ -350,6 +354,7 @@ class BiblePreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs) -> None:
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
         self.book_filenames:List[str] = []
+        self.RC_links:List[tuple] = []
 
 
     def is_multiple_jobs(self):
@@ -361,16 +366,15 @@ class BiblePreprocessor(Preprocessor):
         return self.book_filenames
 
 
-    def remove_closed_w_field(self, B: str, C: str, V: str, line: str, marker: str, text: str) -> str:
+    def remove_closed_w_field(self, B:str, C:str, V:str, line:str, marker:str, text:str) -> str:
         """
-        Extract words out of \\w or \\+w fields
+        Extract words out of either \\w or \\+w fields
         """
         assert marker in ('w', '+w')
 
         ixW = text.find(f'\\{marker} ')
         while ixW != -1:
             ixEnd = text.find(f'\\{marker}*', ixW)
-            # assert ixEnd != -1 # Fail if closing marker is missing from the line -- fails on UGNT ROM 8:28
             if ixEnd != -1:
                 field = text[ixW+len(marker)+2:ixEnd]
                 # AppSettings.logger.debug(f"Cleaning \\w field: {field!r} from '{line}'")
@@ -385,11 +389,16 @@ class BiblePreprocessor(Preprocessor):
                 text = text.replace(f'\\{marker} ', '', 1) # Attempt to limp on
             ixW = text.find(f'\\{marker} ', ixW) # Might be another one
         return text
+    # end of BiblePreprocessor.remove_closed_w_field function
 
 
     def write_clean_file(self, file_name: str, file_contents: str) -> None:
         """
         Cleans the USFM text as it writes it.
+
+        Also saves a list of RC links for later checking
+            (from inside \w fields of original Heb/Grk texts,
+                e.g., x-tw="rc://*/tw/dict/bible/names/paul)
 
         TODO: Check/Remove some of this code once tC export is fixed
         TODO: Remove most of this once tX Job Handler handles full USFM3
@@ -443,7 +452,7 @@ class BiblePreprocessor(Preprocessor):
                              ):
             cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
             if cnt1 != cnt2:
-                error_msg = f"{B} - Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
                 AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
@@ -461,6 +470,7 @@ class BiblePreprocessor(Preprocessor):
                                     ('\\rb ', '\\rb*'),
                                     ('\\sup ', '\\sup*'),
                                     ('\\wa ', '\\wa*'),
+                                    ('\\va ', '\\va*'),
                                     # Milestones
                                     ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
                                     ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
@@ -470,12 +480,12 @@ class BiblePreprocessor(Preprocessor):
                                  ):
                 cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
                 if cnt1 != cnt2:
-                    error_msg = f"{B} - Mismatched '{opener}' ({cnt1}) and '{closer}' ({cnt2}) field counts"
+                    error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
                     AppSettings.logger.error(error_msg)
                     self.warnings.append(error_msg)
 
             # Do some global adjustments to make things easier
-            preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', r'', preadjusted_file_contents) # Remove \zaln start milestones
+            preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', preadjusted_file_contents) # Remove \zaln start milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
 
@@ -511,9 +521,14 @@ class BiblePreprocessor(Preprocessor):
                     AppSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-e field")
 
-                # Remove \w fields (just leaving the word)
+                # Find and save any RC links (from inside \w fields)
+                if (match := re.search(r'x-tw="(.+?)"', line)):
+                    # print(f"Found RC link {match.group(1)} at {B} {C}:{V}")
+                    self.RC_links.append( (B,C,V,'tW',match.group(1)) )
+
+                # Remove any \w fields (just leaving the word)
                 adjusted_line = self.remove_closed_w_field(B, C, V, line, 'w', adjusted_line)
-                # Remove \+w fields (just leaving the word)
+                # Remove any \+w fields (just leaving the word)
                 adjusted_line = self.remove_closed_w_field(B, C, V, line, '+w', adjusted_line)
                 # Be careful not to mess up on \wj
                 # assert '\\w ' not in adjusted_line and '\\w\t' not in adjusted_line and '\\w\n' not in adjusted_line
@@ -527,21 +542,19 @@ class BiblePreprocessor(Preprocessor):
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
                         #  AppSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
-                    adjusted_file_contents += ' ' + adjusted_line
+                    adjusted_file_contents += ('' if adjusted_line.startswith('\\f ') else ' ') \
+                                                + adjusted_line
                     needs_new_line = True
-                    continue
-                #unneeded: assert adjusted_line == line # No \k \w or \z fields encountered
-
-                if needs_new_line:
-                    adjusted_file_contents += '\n'
-                    needs_new_line = False
-                    needs_global_check = True
-
-                # Copy across unchanged lines
-                adjusted_file_contents += line + '\n'
+                else: # the line didn't change (no \k \w or \z fields encountered)
+                    if needs_new_line:
+                        adjusted_file_contents += '\n'
+                        needs_new_line = False
+                        needs_global_check = True
+                    # Copy across unchanged lines
+                    adjusted_file_contents += line + '\n'
 
 
-        else: # Not USFM3
+        else: # Not marked as USFM3
             # old code to handle bad tC USFM
             # First do global fixes to bad tC USFM
             # Hide good \q# markers
@@ -681,7 +694,7 @@ class BiblePreprocessor(Preprocessor):
             assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
-    # end of write_clean_file function
+    # end of BiblePreprocessor.write_clean_file function
 
 
     def clean_copy(self, source_pathname: str, destination_pathname: str) -> None:
@@ -697,7 +710,64 @@ class BiblePreprocessor(Preprocessor):
         with open(source_pathname, 'rt') as in_file:
             source_contents = in_file.read()
         self.write_clean_file(destination_pathname, source_contents)
-    # end of clean_copy function
+    # end of BiblePreprocessor.clean_copy function
+
+
+    def process_RC_links(self):
+        """
+        Process the RC links that have been stored in self.RC_links.
+        """
+        num_links = len(self.RC_links)
+        AppSettings.logger.info(f"process_RC_links for {num_links:,} links…")
+        done_type_error = False
+        cached_links = set()
+        handled_count = 0
+        for B,C,V, link_type,link_text in self.RC_links:
+            handled_count += 1
+            if handled_count % 1_000 == 0:
+                AppSettings.logger.info(f"  Handled {handled_count:,} links = {handled_count*100 // num_links}% (Got {len(cached_links):,} in cache)")
+            # AppSettings.logger.debug(f"Got {B} {C}:{V} {link_type}={link_text}")
+            if not link_type == 'tW':
+                if not done_type_error:
+                    err_msg = f"{B} {C}:{V} - Unexpected '{link_type}' error '{link_text}'"
+                    AppSettings.logger.error(err_msg)
+                    self.warnings.append(err_msg)
+                    done_type_error = True
+                    continue
+            if not link_text.startswith('rc://*/tw/dict/bible/'):
+                err_msg = f"{B} {C}:{V} - Bad {link_type} link format: '{link_text}'"
+                AppSettings.logger.error(err_msg)
+                self.warnings.append(err_msg)
+                continue
+            link_word = link_text[21:]
+            if link_word in cached_links: # we've already checked it
+                # print(f"Found '{link_word}' in cache")
+                continue
+            # TODO: How can we know what the language should be ???
+            link_url = f'https://git.door43.org/unfoldingWord/en_tw/raw/branch/master/bible/{link_word}.md'
+            # file_contents = get_url(url)
+            try:
+                with urlopen(link_url) as f:
+                    file_start_byte = f.read(1) # Only need to download/read one byte from the file
+            except HTTPError:
+                cached_links.add(link_word) # So we only get one error per link_word
+                err_msg = f"{B} {C}:{V} - Missing {link_type} file for '{link_word}' expected at {link_url[8:]}" # Skip https:// part
+                AppSettings.logger.error(err_msg)
+                self.warnings.append(err_msg)
+                continue
+            # print(url, repr(file_start_byte))
+            if file_start_byte == b'#': # Expected start of markdown file
+                cached_links.add(link_word)
+                # if not len(cached_links) % 100:
+                #     AppSettings.logger.info(f"  Got {len(cached_links)} links in cache")
+            else:
+                cached_links.add(link_word) # So we only get one error per link_word
+                err_msg = f"{B} {C}:{V} - Possible bad {link_type} file: '{link_text}'"
+                AppSettings.logger.error(err_msg)
+                self.warnings.append(err_msg)
+        # Not needed any more -- empty the list to mark them as "processed"
+        self.RC_links = []
+    # end of BiblePreprocessor.clean_copy function
 
 
     def run(self) -> Tuple[int, List[str]]:
@@ -810,10 +880,14 @@ class BiblePreprocessor(Preprocessor):
             self.warnings.append("No Bible source files discovered")
         else:
             AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.warnings)} warnings")
+
+        if self.RC_links:
+            self.process_RC_links()
+
         AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.num_files_written, self.warnings
-    # end of BiblePreprocessor run()
+    # end of BiblePreprocessor.run()
 # end of class BiblePreprocessor
 
 
