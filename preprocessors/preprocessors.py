@@ -24,7 +24,7 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
     if repo_subject == 'Open_Bible_Stories':
         AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
-    elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
+    elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions','OBS_Translation_Notes','OBS_Translation_Questions'):
         AppSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
         preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
@@ -299,7 +299,7 @@ class ObsNotesPreprocessor(Preprocessor):
                     if filename.endswith('.md'):
                         file_contents = read_file(filepath)
                         file_basename = filename[:-3] # Remove the .md
-                        markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {story_number_string}-{file_basename}\n\n' + file_contents
+                        markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {story_number_string}-{file_basename}\n\n{file_contents}\n\n'
                         toc_contents += f'  - title: "{story_number_string}-{file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
                     else:
                         self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")

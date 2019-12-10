@@ -30,7 +30,7 @@ def init_template(repo_subject, source_dir, output_dir, template_file):
                         'Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
         AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions'):
+    elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions','OBS_Translation_Notes','OBS_Translation_Questions'):
         AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
         templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
@@ -435,7 +435,7 @@ class TqTemplater(Templater):
                 title = f'{book_code}.'
             self.titles[key] = title
             self.book_codes[key] = book_code
-            chapters = soup.find_all('h2') # Returns a list of bs4.element.Tag's
+            chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
 
 
