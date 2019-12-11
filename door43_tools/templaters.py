@@ -1,7 +1,7 @@
+from typing import Dict, List, Optional
 import os
 from glob import glob
 from yaml.parser import ParserError, ScannerError
-from typing import Optional
 
 from bs4 import BeautifulSoup
 
@@ -13,48 +13,6 @@ from general_tools.file_utils import load_yaml_object
 
 
 
-def do_template(repo_subject, source_dir, output_dir, template_file):
-    """
-    Only used by test_templaters.py
-    """
-    templater = init_template(repo_subject, source_dir, output_dir, template_file)
-    return templater.run()
-
-
-def init_template(repo_subject, source_dir, output_dir, template_file):
-    """
-    Tries to determine the correct templater for the appropriate repo_subject
-    """
-    # AppSettings.logger.debug(f"init_template({repo_subject})")
-    if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
-                        'Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
-        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
-        templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions','OBS_Translation_Notes','OBS_Translation_Questions'):
-        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
-        templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Academy',):
-        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
-        templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Questions',):
-        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
-        templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Words',):
-        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
-        templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
-        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
-        templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
-    else:
-        if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
-        else:
-            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
-        templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
-    return templater
-
-
-
 class Templater:
     NO_NAV_TITLES = ['',
                     'Conversion requested…', 'Conversion started…', 'Conversion successful',
@@ -62,7 +20,7 @@ class Templater:
                     'View lexicon entry', # For Hebrew and Greek lexicons
                     ]
 
-    def __init__(self, repo_subject, source_dir, output_dir, template_file):
+    def __init__(self, repo_subject:str, source_dir:str, output_dir:str, template_file:str) -> None:
         # AppSettings.logger.debug(f"Templater.__init__(repo_subject={repo_subject}, source_dir={source_dir}, output_dir={output_dir}, template_file={template_file})…")
         self.repo_subject = repo_subject
         # This templater_CSS_class is used to set the html body class
@@ -71,7 +29,7 @@ class Templater:
         AppSettings.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
             AppSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
-        self.classes = [] # These get appended to the templater_CSS_class
+        self.classes:List[str] = [] # These get appended to the templater_CSS_class
 
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
@@ -82,13 +40,13 @@ class Templater:
         self.template_html = ''
         self.already_converted = []
         # The following three dictionaries will be used by the deployer to build the right-side Navigation bar
-        self.titles = {}
-        self.chapters = {}
-        self.book_codes = {}
+        self.titles:Dict[str,str] = {}
+        self.chapters:Dict[str,str] = {}
+        self.book_codes:Dict[str,str] = {}
         self.error_messages = set() # Don't want duplicates
 
 
-    def run(self):
+    def run(self) -> bool:
         # AppSettings.logger.debug("Templater.run()")
         # Get the resource container
         self.rc = RC(self.source_dir)
@@ -104,10 +62,11 @@ class Templater:
             self.template_html = str(soup)
         self.apply_template()
         return True
+    # end of Templater.run()
 
 
     @staticmethod
-    def build_left_sidebar(filename=None):
+    def build_left_sidebar(filename:Optional[str]=None) -> str:
         html = """
             <nav class="affix-top hidden-print hidden-xs hidden-sm" id="left-sidebar-nav">
                 <div class="nav nav-stacked" id="revisions-div">
@@ -117,49 +76,21 @@ class Templater:
             </nav>
             """
         return html
+    # end of Templater.build_left_sidebar static function
 
 
-    def build_right_sidebar(self, filename=None):
+    def build_right_sidebar(self, filename:Optional[str]=None) -> str:
         html = self.build_page_nav(filename)
         return html
+    # end of Templater.build_right_sidebar function
 
 
-    def build_page_nav(self, filename=None):
-        # AppSettings.logger.debug(f"Template.build_page_nav({filename})")
-        # AppSettings.logger.debug(f"Have self.titles={self.titles}")
-        html = """
-            <nav class="affix-top hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
-              <ul id="sidebar-nav" class="nav nav-stacked">
-                <li><h1>Navigation</h1></li>
-            """
-        for fname in self.files:
-            # AppSettings.logger.debug(f"build_page_nav: {fname}")
-            base_name = os.path.basename(fname)
-            title = ""
-            if base_name in self.titles:
-                title = self.titles[base_name]
-            if title in self.NO_NAV_TITLES:
-                continue
-            # # Add OBS story numbers to OBS tN and OBS tQ navigation links
-            # if self.repo_subject in ('OBS_Translation_Notes','OBS_Translation_Questions') \
-            # and not title[0].isdigit():
-            #     root_name = os.path.splitext(base_name)[0]
-            #     if root_name.isdigit(): # presumably it's a story number -- prepend it
-            #         # AppSettings.logger.debug(f"build_page_nav: prepend '{root_name}' to '{title}'")
-            #         title = f"{int(root_name)}. {title if len(title)<35 else title[:35]+'…'}"
-            # AppSettings.logger.debug(f"build_page_nav adding title='{title}'")
-            # Link to other pages but not to myself
-            html += f'<li>{title}</li>' if filename == fname \
-                    else f'<li><a href="{os.path.basename(fname)}">{title}</a></li>'
-        html += """
-                </ul>
-            </nav>
-            """
-        # AppSettings.logger.debug(f"Template.build_page_nav returning {html}")
-        return html
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
+        raise Exception("Programmer Error: You must subclass this build_page_nav function!")
+    # end of Templater.build_right_sidebar function
 
 
-    def get_page_navigation(self):
+    def get_page_navigation(self) -> None:
         for fname in self.files:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
@@ -173,9 +104,10 @@ class Templater:
                 title = os.path.splitext(os.path.basename(fname))[0].replace('_', ' ').capitalize()
 
             self.titles[key] = title
+    # end of Templater.get_page_navigation()
 
 
-    def apply_template(self):
+    def apply_template(self) -> None:
         # AppSettings.logger.debug("Templater.apply_template()")
         language_code = self.rc.resource.language.identifier
         language_name = self.rc.resource.language.title
@@ -302,29 +234,60 @@ class Templater:
                     AppSettings.logger.debug(f'Updating nav in {out_file} …')
                     # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                     write_file(out_file, html)
+    # end of Template.apply_template()
 # end of class Templater
 
 
 
 class ObsTemplater(Templater):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'obs'
         super(ObsTemplater, self).__init__(*args, **kwargs)
+    # end of ObsTemplater.__init__ function
+
+
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
+        # AppSettings.logger.debug(f"Template.build_page_nav({filename})")
+        # AppSettings.logger.debug(f"Have self.titles={self.titles}")
+        html = """
+            <nav class="affix-top hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
+              <ul id="sidebar-nav" class="nav nav-stacked">
+                <li><h1>Navigation</h1></li>
+            """
+        for fname in self.files:
+            # AppSettings.logger.debug(f"ObsTemplater.build_page_nav: {fname}")
+            base_name = os.path.basename(fname)
+            title = ""
+            if base_name in self.titles:
+                title = self.titles[base_name]
+            if title in self.NO_NAV_TITLES:
+                continue
+            # Link to other pages but not to myself
+            html += f'<li>{title}</li>' if filename == fname \
+                    else f'<li><a href="{os.path.basename(fname)}">{title}</a></li>'
+        html += """
+                </ul>
+            </nav>
+            """
+        # AppSettings.logger.debug(f"ObsTemplater.build_page_nav returning {html}")
+        return html
+    # end of ObsTemplater.build_page_nav function
 # end of class ObsTemplater
 
 
 
 class ObsNotesTemplater(Templater):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'obs'
         super(ObsNotesTemplater, self).__init__(*args, **kwargs)
-        if self.repo_subject == 'OBS_Translation_Notes':
+        if self.repo_subject in ('OBS_Study_Notes','OBS_Translation_Notes'):
             self.classes=['tn']
-        elif self.repo_subject == 'OBS_Translation_Questions':
+        elif self.repo_subject in ('OBS_Study_Questions','OBS_Translation_Questions'):
             self.classes=['tq']
+    # end of ObsNotesTemplater.__init__ function
 
 
-    def build_section_toc(self, section):
+    def build_section_toc(self, section:str) -> str:
         """
         Recursive section toc builder
         :param dict section:
@@ -353,17 +316,18 @@ class ObsNotesTemplater(Templater):
             </li>
         """
         return html
+    # end of ObsNotesTemplater.build_section_toc function
 
 
-    def build_page_nav(self, filename=None):
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
         self.section_container_id = 1
         html = """
             <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
                 <ul class="nav nav-stacked">
         """
         for fname in self.files:
-            with open(fname, 'r') as f:
-                _soup = BeautifulSoup(f.read(), 'html.parser')
+            # with open(fname, 'r') as f:
+            #     soup = BeautifulSoup(f.read(), 'html.parser')
             # if soup.select('div#content h1'):
             #     title = soup.select('div#content h1')[0].text.strip()
             #     print(f"Got title1='{title}'")
@@ -398,6 +362,7 @@ class ObsNotesTemplater(Templater):
             </nav>
         """
         return html
+    # end of ObsNotesTemplater.build_page_nav function
 # end of class ObsNotesTemplater
 
 
@@ -437,136 +402,7 @@ class TqTemplater(Templater):
             self.book_codes[key] = book_code
             chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
-
-
-    def build_page_nav(self, filename=None):
-        html = """
-        <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
-            <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
-            """
-        for fname in self.files:
-            key = os.path.basename(fname)
-            book_code = ""
-            if key in self.book_codes:
-                book_code = self.book_codes[key]
-            title = ""
-            if key in self.titles:
-                title = self.titles[key]
-            if title in self.NO_NAV_TITLES:
-                continue
-            html += f"""
-                <div class="panel panel-default">
-                    <div class="panel-heading">
-                        <h4 class="panel-title">
-                            <a class="accordion-toggle" data-toggle="collapse" data-parent="#sidebar-nav" href="#collapse{book_code}">{title}</a>
-                        </h4>
-                    </div>
-                    <div id="collapse{book_code}" class="panel-collapse collapse{' in' if fname == filename else ''}">
-                        <ul class="panel-body chapters">
-                    """
-            chapters = {}
-            if key in self.chapters:
-                chapters = self.chapters[key]
-            for chapter in chapters:
-                chapter_parts = chapter.split('-')
-                label = chapter if len(chapter_parts) < 4 else chapter_parts[3].lstrip('0')
-                html += f"""
-                       <li class="chapter"><a href="{os.path.basename(fname) if fname != filename else ''}#{chapter}">{label}</a></li>
-                    """
-            html += """
-                        </ul>
-                    </div>
-                </div>
-                    """
-        html += """
-            </ul>
-        </nav>
-            """
-        return html
-# end of class TqTemplater
-
-
-
-class TwTemplater(Templater):
-    def __init__(self, *args, **kwargs):
-        self.templater_CSS_class = 'tw'
-        super(TwTemplater, self).__init__(*args, **kwargs)
-        index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
-        if index:
-            self.titles = index['titles']
-            self.chapters = index['chapters']
-
-
-    def build_page_nav(self, filename=None):
-        if not self.files or not self.titles or not self.chapters:
-            return ""
-        html = """
-            <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
-                <ul class="nav nav-stacked">
-        """
-        for fname in self.files:
-            key = os.path.basename(fname)
-            section = os.path.splitext(key)[0]
-            html += f"""
-                    <li{' class="active"' if fname == filename else ''}><a href="{key if fname != filename else ''}#tw-section-{section}">{self.titles[key]}</a>
-                        <a class="content-nav-expand collapsed" data-target="#section-{section}-sub" data-toggle="collapse" href="#"></a>
-                        <ul class="collapse" id="section-{section}-sub">
-            """
-            titles = self.chapters[key]
-            terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
-            for term in terms_sorted_by_title:
-                html += f"""
-                            <li><a href="{key if fname != filename else ''}#{term}">{titles[term]}</a></li>
-                """
-            html += """
-                        </ul>
-                    </li>
-            """
-        html += """
-                </ul>
-            </nav>
-        """
-        return html
-# end of class TwTemplater
-
-
-
-class TnTemplater(Templater):
-    def __init__(self, *args, **kwargs) -> None:
-        self.templater_CSS_class = 'tn'
-        super(TnTemplater, self).__init__(*args, **kwargs)
-        index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
-        if index:
-            self.titles = index['titles']
-            self.chapters = index['chapters']
-            self.book_codes = index['book_codes']
-
-
-    def get_page_navigation(self) -> None:
-        for fname in self.files:
-            key = os.path.basename(fname)
-            if key in self.titles:  # skip if we already have data
-                continue
-            filebase = os.path.splitext(os.path.basename(fname))[0]
-            # Getting the book code for HTML tag references
-            fileparts = filebase.split('-')
-            if len(fileparts) == 2:
-                # Assuming filename of ##-<name>.usfm, such as 01-GEN.usfm
-                book_code = fileparts[1].lower()
-            else:
-                # Assuming filename of <name.usfm, such as GEN.usfm
-                book_code = fileparts[0].lower()
-            book_code.replace(' ', '-').replace('.', '-')  # replacing spaces and periods since used as tag class
-            with open(fname, 'r') as f:
-                soup = BeautifulSoup(f.read(), 'html.parser')
-            if soup.select('div#content h1'):
-                title = soup.select('div#content h1')[0].text.strip()
-            else:
-                title = f'{book_code}.'
-            self.titles[key] = title
-            self.book_codes[key] = book_code
-            chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
-            self.chapters[key] = [c['id'] for c in chapters]
+    # end of TqTemplater.get_page_navigation()
 
 
     def build_page_nav(self, filename:Optional[str]=None) -> str:
@@ -613,19 +449,249 @@ class TnTemplater(Templater):
         </nav>
             """
         return html
+    # end of TqTemplater.build_page_nav function
+# end of class TqTemplater
+
+
+
+class TwTemplater(Templater):
+    def __init__(self, *args, **kwargs) -> None:
+        self.templater_CSS_class = 'tw'
+        super(TwTemplater, self).__init__(*args, **kwargs)
+        index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
+        if index:
+            self.titles = index['titles']
+            self.chapters = index['chapters']
+    # end of TwTemplater.__init__ function
+
+
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
+        if not self.files or not self.titles or not self.chapters:
+            return ""
+        html = """
+            <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
+                <ul class="nav nav-stacked">
+        """
+        for fname in self.files:
+            key = os.path.basename(fname)
+            section = os.path.splitext(key)[0]
+            html += f"""
+                    <li{' class="active"' if fname == filename else ''}><a href="{key if fname != filename else ''}#tw-section-{section}">{self.titles[key]}</a>
+                        <a class="content-nav-expand collapsed" data-target="#section-{section}-sub" data-toggle="collapse" href="#"></a>
+                        <ul class="collapse" id="section-{section}-sub">
+            """
+            titles = self.chapters[key]
+            terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
+            for term in terms_sorted_by_title:
+                html += f"""
+                            <li><a href="{key if fname != filename else ''}#{term}">{titles[term]}</a></li>
+                """
+            html += """
+                        </ul>
+                    </li>
+            """
+        html += """
+                </ul>
+            </nav>
+        """
+        return html
+    # end of TwTemplater.build_page_nav function
+# end of class TwTemplater
+
+
+
+class TnTemplater(Templater):
+    def __init__(self, *args, **kwargs) -> None:
+        self.templater_CSS_class = 'tn'
+        super(TnTemplater, self).__init__(*args, **kwargs)
+        index = file_utils.load_json_object(os.path.join(self.source_dir, 'index.json'))
+        if index:
+            self.titles = index['titles']
+            self.chapters = index['chapters']
+            self.book_codes = index['book_codes']
+    # end of TnTemplater.__init__ function
+
+
+    def get_page_navigation(self) -> None:
+        for fname in self.files:
+            key = os.path.basename(fname)
+            if key in self.titles:  # skip if we already have data
+                continue
+            filebase = os.path.splitext(os.path.basename(fname))[0]
+            # Getting the book code for HTML tag references
+            fileparts = filebase.split('-')
+            if len(fileparts) == 2:
+                # Assuming filename of ##-<name>.usfm, such as 01-GEN.usfm
+                book_code = fileparts[1].lower()
+            else:
+                # Assuming filename of <name.usfm, such as GEN.usfm
+                book_code = fileparts[0].lower()
+            book_code.replace(' ', '-').replace('.', '-')  # replacing spaces and periods since used as tag class
+            with open(fname, 'r') as f:
+                soup = BeautifulSoup(f.read(), 'html.parser')
+            if soup.select('div#content h1'):
+                title = soup.select('div#content h1')[0].text.strip()
+            else:
+                title = f'{book_code}.'
+            self.titles[key] = title
+            self.book_codes[key] = book_code
+            chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
+            self.chapters[key] = [c['id'] for c in chapters]
+    # end of TnTemplater.get_page_navigation()
+
+
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
+        html = """
+        <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
+            <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
+            """
+        for fname in self.files:
+            key = os.path.basename(fname)
+            book_code = ""
+            if key in self.book_codes:
+                book_code = self.book_codes[key]
+            title = ""
+            if key in self.titles:
+                title = self.titles[key]
+            if title in self.NO_NAV_TITLES:
+                continue
+            html += f"""
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title">
+                            <a class="accordion-toggle" data-toggle="collapse" data-parent="#sidebar-nav" href="#collapse{book_code}">{title}</a>
+                        </h4>
+                    </div>
+                    <div id="collapse{book_code}" class="panel-collapse collapse{' in' if fname == filename else ''}">
+                        <ul class="panel-body chapters">
+                    """
+            chapters = {}
+            if key in self.chapters:
+                chapters = self.chapters[key]
+            for chapter in chapters:
+                chapter_parts = chapter.split('-')
+                label = chapter if len(chapter_parts) < 4 else chapter_parts[3].lstrip('0')
+                html += f"""
+                       <li class="chapter"><a href="{os.path.basename(fname) if fname != filename else ''}#{chapter}">{label}</a></li>
+                    """
+            html += """
+                        </ul>
+                    </div>
+                </div>
+                    """
+        html += """
+            </ul>
+        </nav>
+            """
+        return html
+    # end of TnTemplater.build_page_nav function
 # end of class TnTemplater
 
 
 
+class TaTemplater(Templater):
+    def __init__(self, *args, **kwargs) -> None:
+        self.templater_CSS_class = 'ta'
+        super(TaTemplater, self).__init__(*args, **kwargs)
+        self.section_container_id = 1
+    # end of TaTemplater.__init__ function
+
+
+    def build_section_toc(self, section:str) -> str:
+        """
+        Recursive section toc builder
+        :param dict section:
+        :return:
+        """
+        if 'link' in section:
+            link = section['link']
+        else:
+            link = f'section-container-{self.section_container_id}'
+            self.section_container_id = self.section_container_id + 1
+        try:
+            html = f"""
+                <li>
+                    <a href="#{link}">{section['title']}</a>
+                """
+        except KeyError: # probably missing section title
+            html = f"""
+                <li>
+                    <a href="#{link}">MISSING TITLE???</a>
+                """
+        if 'sections' in section:
+            html += f"""
+                <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
+                <ul id="{link}-sub" class="collapse">
+            """
+            if section['sections']: # covers case of user leaving it empty = None
+                for subsection in section['sections']:
+                    html += self.build_section_toc(subsection)
+            html += """
+                </ul>
+            """
+        html += """
+            </li>
+        """
+        return html
+    # end of TaTemplater.build_section_toc function
+
+
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
+        self.section_container_id = 1
+        html = """
+            <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
+                <ul class="nav nav-stacked">
+        """
+        for fname in self.files:
+            with open(fname, 'r') as f:
+                soup = BeautifulSoup(f.read(), 'html.parser')
+            if soup.select('div#content h1'):
+                title = soup.select('div#content h1')[0].text.strip()
+            else:
+                title = os.path.splitext(os.path.basename(fname))[0].title()
+            if title in self.NO_NAV_TITLES:
+                continue
+            if fname != filename:
+                html += f"""
+                <h4><a href="{os.path.basename(fname)}">{title}</a></h4>
+                """
+            else:
+                html += f"""
+                <h4>{title}</h4>
+                """
+                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
+                try:
+                    toc = load_yaml_object(os.path.join(filepath))
+                except (ParserError, ScannerError) as e:
+                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
+                    AppSettings.logger.critical("Ta"+err_msg)
+                    self.error_messages.add(err_msg)
+                    toc = None
+                if toc:
+                    for section in toc['sections']:
+                        html += self.build_section_toc(section)
+                html += """
+                """
+        html += """
+                </ul>
+            </nav>
+        """
+        return html
+    # end of TaTemplater.build_page_nav function
+# end of class TaTemplater
+
+
+
 class BibleTemplater(Templater):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'bible'
         super(BibleTemplater, self).__init__(*args, **kwargs)
         # if self.templater_CSS_class != 'bible': # avoid "bible bible"
             # self.classes = ['bible'] # These get appended to the html body class
+    # end of BibleTemplater.__init__ function
 
 
-    def get_page_navigation(self):
+    def get_page_navigation(self) -> None:
         for fname in self.files:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
@@ -650,9 +716,10 @@ class BibleTemplater(Templater):
             self.book_codes[key] = book_code
             chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
             self.chapters[key] = [c['id'] for c in chapters]
+    # end of TnTemplater.get_page_navigation()
 
 
-    def build_page_nav(self, filename=None):
+    def build_page_nav(self, filename:Optional[str]=None) -> str:
         html = """
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
@@ -698,94 +765,52 @@ class BibleTemplater(Templater):
         </nav>
             """
         return html
+    # end of BibleTemplater.build_page_nav function
 # end of class BibleTemplater
 
 
 
-class TaTemplater(Templater):
-    def __init__(self, *args, **kwargs):
-        self.templater_CSS_class = 'ta'
-        super(TaTemplater, self).__init__(*args, **kwargs)
-        self.section_container_id = 1
-
-
-    def build_section_toc(self, section):
-        """
-        Recursive section toc builder
-        :param dict section:
-        :return:
-        """
-        if 'link' in section:
-            link = section['link']
+def init_template(repo_subject:str, source_dir:str, output_dir:str, template_file:str) -> Templater:
+    """
+    Tries to determine the correct templater for the appropriate repo_subject
+    """
+    # AppSettings.logger.debug(f"init_template({repo_subject})")
+    if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
+                        'Greek_Lexicon','Hebrew-Aramaic_Lexicon',
+                        'OBS_Study_Questions', # NOTE: I don't yet understand why this works better for RH nav column
+                        ):
+        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
+        templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('OBS_Study_Notes','XXXOBS_Study_QuestionsXXX',
+                          'OBS_Translation_Notes','OBS_Translation_Questions'):
+        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
+        templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Academy',):
+        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
+        templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Questions',):
+        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
+        templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Words',):
+        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
+        templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
+        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
+        templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
+    else:
+        if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
+            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
         else:
-            link = f'section-container-{self.section_container_id}'
-            self.section_container_id = self.section_container_id + 1
-        try:
-            html = f"""
-                <li>
-                    <a href="#{link}">{section['title']}</a>
-                """
-        except KeyError: # probably missing section title
-            html = f"""
-                <li>
-                    <a href="#{link}">MISSING TITLE???</a>
-                """
-        if 'sections' in section:
-            html += f"""
-                <a href="#" data-target="#{link}-sub" data-toggle="collapse" class="content-nav-expand collapsed"></a>
-                <ul id="{link}-sub" class="collapse">
-            """
-            if section['sections']: # covers case of user leaving it empty = None
-                for subsection in section['sections']:
-                    html += self.build_section_toc(subsection)
-            html += """
-                </ul>
-            """
-        html += """
-            </li>
-        """
-        return html
+            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+        templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
+    return templater
+#end of init_template function
 
 
-    def build_page_nav(self, filename=None):
-        self.section_container_id = 1
-        html = """
-            <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
-                <ul class="nav nav-stacked">
-        """
-        for fname in self.files:
-            with open(fname, 'r') as f:
-                soup = BeautifulSoup(f.read(), 'html.parser')
-            if soup.select('div#content h1'):
-                title = soup.select('div#content h1')[0].text.strip()
-            else:
-                title = os.path.splitext(os.path.basename(fname))[0].title()
-            if title in self.NO_NAV_TITLES:
-                continue
-            if fname != filename:
-                html += f"""
-                <h4><a href="{os.path.basename(fname)}">{title}</a></h4>
-                """
-            else:
-                html += f"""
-                <h4>{title}</h4>
-                """
-                filepath = f'{os.path.splitext(fname)[0]}-toc.yaml'
-                try:
-                    toc = load_yaml_object(os.path.join(filepath))
-                except (ParserError, ScannerError) as e:
-                    err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
-                    AppSettings.logger.critical("Ta"+err_msg)
-                    self.error_messages.add(err_msg)
-                    toc = None
-                if toc:
-                    for section in toc['sections']:
-                        html += self.build_section_toc(section)
-                html += """
-                """
-        html += """
-                </ul>
-            </nav>
-        """
-        return html
-# end of class TaTemplater
+def do_template(repo_subject:str, source_dir:str, output_dir:str, template_file:str) -> bool:
+    """
+    Only used by test_templaters.py
+    """
+    templater = init_template(repo_subject, source_dir, output_dir, template_file)
+    return templater.run()
+# end of do_template function
