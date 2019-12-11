@@ -39,22 +39,22 @@ from app_settings.app_settings import AppSettings
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
             'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon',
-            # and from https://api.door43.org/v3/subjects:
+            # and 14 from https://api.door43.org/v3/subjects (last checked 10 Dec 2019)
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
             'Translation_Notes', 'TSV_Translation_Notes',
-            'Open_Bible_Stories', 'OBS_Translation_Notes', 'OBS_Translation_Questions',
+            'Open_Bible_Stories', 'OBS_Study_Notes', 'OBS_Study_Questions',
+                                'OBS_Translation_Notes', 'OBS_Translation_Questions',
             )
             # A similar table also exists in tx-enqueue-job:check_posted_tx_payload.py
 # TODO: Will we also need 'book' in this map below???
 RESOURCE_SUBJECT_MAP = {
             # Maps from rc.resource.identifier and possibly also from rc.resource.type
             'obs': 'Open_Bible_Stories',
+            'obs-sn': 'OBS_Study_Notes',
+            'obs-sq': 'OBS_Study_Questions',
             'obs-tn': 'OBS_Translation_Notes',
             'obs-tq': 'OBS_Translation_Questions',
-            'obs-sq': 'Generic_Markdown', # See if this works for OBS Study Questions
-            'obs-sn': 'Open_Bible_Stories', # See if this works for OBS Study Notes
-                                            #  (seems to work better than Generic_Markdown)
             'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
 
             'bible': 'Bible', 'reg': 'Bible',
