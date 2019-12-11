@@ -24,7 +24,8 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
     if repo_subject == 'Open_Bible_Stories':
         AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
-    elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions','OBS_Translation_Notes','OBS_Translation_Questions'):
+    elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions',
+                            'OBS_Translation_Notes','OBS_Translation_Questions'):
         AppSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
         preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
@@ -54,7 +55,7 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
 
 
 class Preprocessor:
-    # NOTE: Both of these lists are used for case-sensitive comparisons
+    # NOTE: Both of these lists are used for CASE-SENSITIVE comparisons
     ignoreDirectories = ['.apps', '.git', '.github', '00']
     ignoreFiles = ['.DS_Store', 'reference.txt', 'title.txt', 'LICENSE.md', 'README.md', 'README.rst']
 
@@ -287,22 +288,38 @@ class ObsNotesPreprocessor(Preprocessor):
         AppSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             AppSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
-            for story_number in range(1, 50+1):
+            content_folder_path = os.path.join(self.source_dir, 'content/')
+            if not os.path.isdir(content_folder_path):
+                self.warnings.append(f"Unable to find 'contents/' folder for '{project.identifier}'")
+                continue
+            for story_number in range(0, 50+1): # Includes optional story "0" = introduction
                 story_number_string = str(story_number).zfill(2)
-                story_folder_path = os.path.join(self.source_dir, 'content/', f'{story_number_string}/')
-                if not os.path.isdir(story_folder_path):
-                    self.warnings.append(f"Unable to find folder 'content/{story_number_string}/'")
-                    continue
+                story_folder_path = os.path.join(content_folder_path, f'{story_number_string}/')
                 markdown = toc_contents = ""
-                for filename in sorted(os.listdir(story_folder_path)):
-                    filepath = os.path.join(story_folder_path, filename)
-                    if filename.endswith('.md'):
-                        file_contents = read_file(filepath)
-                        file_basename = filename[:-3] # Remove the .md
-                        markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {story_number_string}-{file_basename}\n\n{file_contents}\n\n'
-                        toc_contents += f'  - title: "{story_number_string}-{file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
-                    else:
-                        self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")
+                if os.path.isdir(story_folder_path):
+                    AppSettings.logger.debug(f"Story {story_number}/ found {story_folder_path}")
+                    for filename in sorted(os.listdir(story_folder_path)):
+                        story_filepath = os.path.join(story_folder_path, filename)
+                        if filename.endswith('.md'):
+                            story_file_contents = read_file(story_filepath)
+                            file_basename = filename[:-3] # Remove the .md
+                            markdown += f'\n# <a id="{story_number_string}-{file_basename}"/> {story_number_string}-{file_basename}\n\n{story_file_contents}\n\n'
+                            toc_contents += f'  - title: "{story_number_string}-{file_basename}"\n    link: {story_number_string}-{file_basename}\n\n'
+                        else:
+                            self.warnings.append(f"Unexpected '{filename}' file in 'content/{story_number_string}/'")
+                else: # no content/{story_number_string}/ folder
+                    story_filepath = os.path.join(content_folder_path, f'{story_number_string}.md')
+                    if os.path.isfile(story_filepath):
+                        AppSettings.logger.debug(f"Story {story_number}/ found {story_filepath}")
+                        markdown = read_file(story_filepath)
+                        title = story_number_string # default
+                        if markdown:
+                            title = markdown.split('\n',1)[0] # Get the first line
+                            if title.startswith("# "): title = title[2:] # Get rid of leading hash
+                        print(f"{title=}")
+                        # toc_contents += f'  - title: "{title}"\n    link: {story_number_string}\n\n'
+                    elif story_number != 0:
+                        self.warnings.append(f"Unable to find story {story_number_string} text")
                 if markdown:
                     # rc_count = markdown.count('rc://')
                     # if rc_count: print(f"Story number {story_number_string} has {rc_count} 'rc://' links")
