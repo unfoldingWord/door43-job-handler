@@ -198,7 +198,8 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
             to tag and branch names.
     """
     MIN_WANTED_COMMITS = 1
-    MAX_ALLOWED_REMOVED_FOLDERS = 2400 # Don't want to get job timeouts -- typically can do 3500+ in 600s
+    # Lowered from 2,400 to 500  20Dec19 -- not sure why ru_gl/ru_tq_2lv kept getting timeout errors
+    MAX_ALLOWED_REMOVED_FOLDERS = 500 # Don't want to get job timeouts -- typically can do 3500+ in 600s
                                        #    at least project.json will slowly get smaller if we limit this.
                                        # Each commit hash to be deleted has three folders to remove.
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
