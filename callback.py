@@ -12,13 +12,13 @@
 
 
 # Python imports
+from typing import Dict, List, Tuple, Any, Optional, Union, Literal
 import os
 from datetime import datetime
 import time
 import json
 import tempfile
 import traceback
-from typing import Dict, List, Tuple, Any, Optional, Union, Literal
 
 # Library (PyPi) imports
 from rq import get_current_job, Queue
@@ -98,57 +98,57 @@ def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[Dict[str,
 # end of verify_expected_job
 
 
-def merge_results_logs(build_log:Dict[str,Any], file_results:Dict[str,Any],
+def merge_results_logs(old_build_log:Dict[str,Any], new_file_results:Dict[str,Any],
                                         converter_flag:bool) -> Dict[str,Any]:
     """
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
     """
-    AppSettings.logger.debug(f"Callback.merge_results_logs(…, {file_results}, {converter_flag})…")
-    # AppSettings.logger.debug(f"Callback.merge_results_logs({build_log}, {file_results}, {converter_flag})…")
-    # saved_build_log = build_log.copy()
-    if not build_log:
-        AppSettings.logger.debug(f"Callback.merge_results_logs() about to return file_results={file_results}")
-        return file_results
-    if file_results:
-        # The following four lines modify build_log as a side-effect!
-        merge_dicts_lists(build_log, file_results, 'message')
-        merge_dicts_lists(build_log, file_results, 'log')
-        merge_dicts_lists(build_log, file_results, 'warnings')
-        merge_dicts_lists(build_log, file_results, 'errors')
+    AppSettings.logger.debug(f"Callback.merge_results_logs(…, {new_file_results}, {converter_flag})…")
+    # AppSettings.logger.debug(f"Callback.merge_results_logs({old_build_log}, {file_results}, {converter_flag})…")
+    # saved_build_log = old_build_log.copy()
+    if not old_build_log:
+        AppSettings.logger.debug(f"Callback.merge_results_logs() about to return file_results={new_file_results}")
+        return new_file_results
+    if new_file_results:
+        # The following four lines modify old_build_log as a side-effect!
+        merge_dicts_lists(old_build_log, new_file_results, 'message')
+        merge_dicts_lists(old_build_log, new_file_results, 'log')
+        merge_dicts_lists(old_build_log, new_file_results, 'warnings')
+        merge_dicts_lists(old_build_log, new_file_results, 'errors')
         if converter_flag \
-        and ('success' in file_results) \
-        and (file_results['success'] is False):
-            build_log['success'] = file_results['success']
+        and 'success' in new_file_results \
+        and new_file_results['success'] is False:
+            old_build_log['success'] = new_file_results['success']
     # if build_log == saved_build_log:
     #     AppSettings.logger.debug(f"Callback.merge_results_logs() about to return build_log WITHOUT CHANGES\n\n")
     # else:
     #     AppSettings.logger.debug(f"Callback.merge_results_logs() about to return build_log={build_log}\n\n")
-    return build_log
+    return old_build_log
 # end of merge_results_logs function
 
 
-def merge_dicts_lists(build_log:Dict[str,Any], file_results:Dict[str,Any], key:str) -> None:
+def merge_dicts_lists(old_build_log:Dict[str,Any], new_file_results:Dict[str,Any], key:str) -> None:
     """
     Used for merging log dicts from various sub-processes.
 
     build_log is a dict
-    file_results is a dict
+    new_file_results is a dict
     value is a key (string) for the lists that will be merged if in both dicts
 
-    Alters first parameter build_log in place.
+    Alters first parameter old_build_log in place.
     """
-    # AppSettings.logger.debug(f"Callback.merge_dicts_lists({build_log}, {file_results}, '{key}')…")
+    # AppSettings.logger.debug(f"Callback.merge_dicts_lists({build_log}, {new_file_results}, '{key}')…")
     # saved_build_log = build_log.copy()
-    if key in file_results:
-        value = file_results[key]
+    if key in new_file_results:
+        value = new_file_results[key]
         if value:
             # assert isinstance(value, (list, str)) # Oh, it can be str for 'message'!
-            if (key in build_log) and (build_log[key]):
-                build_log[key] += value # Concatenate 2nd list to the build_log one
+            if (key in old_build_log) and (old_build_log[key]):
+                old_build_log[key] += value # Concatenate 2nd list to the build_log one
             else:
-                build_log[key] = value
-    # if build_log == saved_build_log:
+                old_build_log[key] = value
+    # if old_build_log == saved_build_log:
     #     AppSettings.logger.debug(f"Callback.merge_dicts_lists(…, {key}) returning with UNCHANGED BUILD_LOG\n")
     # else:
     #     AppSettings.logger.debug(f"Callback.merge_dicts_lists(…, {key}) returning with build_log={build_log}\n")
@@ -198,7 +198,8 @@ def remove_excess_commits(commits_list:list, project_folder_key:str) -> List[Dic
             to tag and branch names.
     """
     MIN_WANTED_COMMITS = 1
-    MAX_ALLOWED_REMOVED_FOLDERS = 2400 # Don't want to get job timeouts -- typically can do 3500+ in 600s
+    # Lowered from 2,400 to 500  20Dec19 -- not sure why ru_gl/ru_tq_2lv kept getting timeout errors
+    MAX_ALLOWED_REMOVED_FOLDERS = 500 # Don't want to get job timeouts -- typically can do 3500+ in 600s
                                        #    at least project.json will slowly get smaller if we limit this.
                                        # Each commit hash to be deleted has three folders to remove.
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key})…")
@@ -445,8 +446,15 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     final_build_log = merge_results_logs(build_log, converter_log, converter_flag=True)
 
     if final_build_log['errors']:
+        if final_build_log['warnings']:
+            # print(f"Had {len(final_build_log['errors'])} errors")
+            # print(f"Had {len(final_build_log['warnings'])} warnings")
+            # Prepend the errors to the warnings so they display on Door43.org
+            final_build_log['warnings'] = final_build_log['errors'] + final_build_log['warnings']
+            # print(f"Now have {len(final_build_log['warnings'])} warnings")
         final_build_log['status'] = 'errors'
     elif final_build_log['warnings']:
+        print(f"Had {len(final_build_log['warnings'])} warnings")
         final_build_log['status'] = 'warnings'
     else:
         final_build_log['status'] = 'success'

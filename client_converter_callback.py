@@ -1,7 +1,7 @@
+from typing import Dict, List, Any, Optional, Tuple
 import os
 import tempfile
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -54,18 +54,12 @@ class ClientConverterCallback:
         self.job = LocalJob(job_dict)
         self.identifier = identifier
         self.success = success
-        self.log = info
-        self.warnings = warnings
-        self.errors = errors
+        self.log = info if info else []
+        self.warnings = warnings if warnings else []
+        self.errors = errors if errors else []
         self.temp_dir = output_dir
         self.all_parts_completed = False
-
-        if not self.log:
-            self.log = []
-        if not self.warnings:
-            self.warnings = []
-        if not self.errors:
-            self.errors = []
+    # end of ClientConverterCallback.__init__ function
 
 
     def do_post_processing(self) -> Tuple[Optional[str], Dict[str,Any]]:
@@ -205,29 +199,16 @@ class ClientConverterCallback:
     def make_our_build_log(self) -> Dict[str,Any]:
         AppSettings.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
         build_log_dict = {}
-        if self.job.started_at:
-            build_log_dict['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ')
-        else:
-            build_log_dict['started_at'] = None
-        if self.job.ended_at:
-            build_log_dict['ended_at'] = self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ')
-        else:
-            build_log_dict['ended_at'] = None
+        build_log_dict['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ') \
+                                        if self.job.started_at else None
+        build_log_dict['ended_at'] = self.job.ended_at.strftime('%Y-%m-%dT%H:%M:%SZ') \
+                                        if self.job.ended_at else None
         build_log_dict['success'] = self.job.success
         build_log_dict['status'] = self.job.status
         build_log_dict['message'] = self.job.message
-        if self.job.log:
-            build_log_dict['log'] = self.job.log
-        else:
-            build_log_dict['log'] = []
-        if self.job.warnings:
-            build_log_dict['warnings'] = self.job.warnings
-        else:
-            build_log_dict['warnings'] = []
-        if self.job.errors:
-            build_log_dict['errors'] = self.job.errors
-        else:
-            build_log_dict['errors'] = []
+        build_log_dict['log'] = self.job.log if self.job.log else []
+        build_log_dict['warnings'] = self.job.warnings if self.job.warnings else []
+        build_log_dict['errors'] = self.job.errors if self.job.errors else []
         return build_log_dict
     # end of ClientConverterCallback.make_our_build_log()
 

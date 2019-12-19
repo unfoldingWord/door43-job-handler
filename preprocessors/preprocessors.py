@@ -481,7 +481,7 @@ class BiblePreprocessor(Preprocessor):
                 self.warnings.append(warning_msg)
 
             # Check USFM3 pairs
-            for opener,closer in (
+            for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
                                     # Character formatting
                                     ('\\png ', '\\png*'),
                                     ('\\rb ', '\\rb*'),
@@ -541,7 +541,7 @@ class BiblePreprocessor(Preprocessor):
                 # Find and save any RC links (from inside \w fields)
                 if (match := re.search(r'x-tw="(.+?)"', line)):
                     # print(f"Found RC link {match.group(1)} at {B} {C}:{V}")
-                    self.RC_links.append( (B,C,V,'tW',match.group(1)) )
+                    self.RC_links.append( (B,C,V, 'tW', match.group(1)) )
 
                 # Remove any \w fields (just leaving the word)
                 adjusted_line = self.remove_closed_w_field(B, C, V, line, 'w', adjusted_line)
@@ -559,7 +559,8 @@ class BiblePreprocessor(Preprocessor):
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
                         #  AppSettings.logger.debug(f"Adjusted {B} {C}:{V} \\w line from {line!r} to {adjusted_line!r}")
-                    adjusted_file_contents += ('' if adjusted_line.startswith('\\f ') else ' ') \
+                    adjusted_file_contents += ('' if adjusted_line.startswith('\\v ') or adjusted_line.startswith('\\f ')
+                                                    else ' ') \
                                                 + adjusted_line
                     needs_new_line = True
                 else: # the line didn't change (no \k \w or \z fields encountered)
@@ -692,17 +693,19 @@ class BiblePreprocessor(Preprocessor):
                 # Copy across unchanged lines
                 adjusted_file_contents += line + '\n'
 
-            if needs_global_check: # Do some file-wide clean-up
-                # AppSettings.logger.debug(f"Doing global fixes for {B} …")
-                adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
-                adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
-                adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
-                while '\n\n' in adjusted_file_contents:
-                    adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
-                adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC quotation punctuation mistake
-                adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC quotation punctuation mistake
-                adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC quotation punctuation mistake
-                adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
+        if needs_global_check: # Do some file-wide clean-up
+            # AppSettings.logger.debug(f"Doing global fixes for {B} …")
+            adjusted_file_contents = re.sub(r'([^\n])\\v ', r'\1\n\\v ', adjusted_file_contents) # Make sure \v goes onto separate line
+            adjusted_file_contents = adjusted_file_contents.replace('\n ',' ') # Move lines starting with space up to the previous line
+            adjusted_file_contents = adjusted_file_contents.replace('\n\\va ',' \\va ') # Move lines starting with \va up to the previous line
+            adjusted_file_contents = re.sub(r'\n([,.;:?])', r'\1', adjusted_file_contents) # Bring leading punctuation up onto the previous line
+            adjusted_file_contents = re.sub(r'([^\n])\\s5', r'\1\n\\s5', adjusted_file_contents) # Make sure \s5 goes onto separate line
+            while '\n\n' in adjusted_file_contents:
+                adjusted_file_contents = adjusted_file_contents.replace('\n\n','\n') # Delete blank lines
+            adjusted_file_contents = adjusted_file_contents.replace(' ," ',', "') # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(",' ",",' ") # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(' " ',' "') # Fix common tC quotation punctuation mistake
+            adjusted_file_contents = adjusted_file_contents.replace(" ' "," '") # Fix common tC quotation punctuation mistake
 
         # Write the modified USFM
         if prefix and debug_mode_flag:

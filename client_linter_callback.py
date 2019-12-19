@@ -1,8 +1,8 @@
+from typing import Dict, List, Any
 import os
 import tempfile
 import time
 from datetime import datetime
-from typing import Dict, List, Any
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
@@ -32,18 +32,12 @@ class ClientLinterCallback:
         self.job_dict = job_dict
         self.identifier = identifier
         self.success = success
-        self.log = info
-        self.warnings = warnings
-        self.errors = errors
+        self.log = info if info else []
+        self.warnings = warnings if warnings else []
+        self.errors = errors if errors else []
         self.all_parts_completed = False
         self.multipart = False
 
-        if not self.log:
-            self.log = []
-        if not self.warnings:
-            self.warnings = []
-        if not self.errors:
-            self.errors = []
         # self.temp_dir = tempfile.mkdtemp(suffix='',
         #                     prefix='Door43_linter_callback_' + datetime.utcnow().strftime('%Y-%m-%d_%H:%M:%S_'))
         # self.s3_results_key = s3_results_key
