@@ -374,7 +374,7 @@ class BiblePreprocessor(Preprocessor):
         self.RC_links:List[tuple] = []
 
 
-    def is_multiple_jobs(self):
+    def is_multiple_jobs(self) -> bool:
         return len(self.book_filenames) > 1
 
 
@@ -473,10 +473,43 @@ class BiblePreprocessor(Preprocessor):
                 AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
+        # Find and warn about (useless) paragraph formatting before a section break
+        #  (probably should be after break)
+        for marker1,marker2,thisRE in (
+                                        ('p', 's', r'\\p *\n*?\\s'),
+                                        ('p', 'ts', r'\\p *\n*?\\ts'),
+                                        ('p', 'q', r'\\p *\n*?\\q'),
+                                        ('p', 'p', r'\\p *\n*?\\p'),
+                                        ('q', 's', r'\\q *\n*?\\s'),
+                                        ('q', 'ts', r'\\q *\n*?\\ts'),
+                                        ('q', 'p', r'\\q *\n*?\\p'),
+                                        ('q', 'q', r'\\q *\n*?\\q'),
+                                        ('q1', 's', r'\\q1 *\n*?\\s'),
+                                        ('q1', 'ts', r'\\q1 *\n*?\\ts'),
+                                        ('q1', 'p', r'\\q1 *\n*?\\p'),
+                                        ('q1', 'q', r'\\q1 *\n*?\\q'),
+                                      ):
+            bad_count = len(re.findall(thisRE, preadjusted_file_contents))
+            if bad_count:
+                s_suffix = '' if bad_count==1 else 's'
+                self.warnings.append(f"{B} - {bad_count:,} useless \\{marker1} marker{s_suffix} before \\{marker2} marker{s_suffix}")
+
+        # ps_count = len(re.findall(r'\\p *\n*?\\s', preadjusted_file_contents))
+        # if ps_count:
+        #     s_suffix = '' if ps_count==1 else 's'
+        #     self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
+        # qs_count = len(re.findall(r'\\q1* *\n*?\\s', preadjusted_file_contents))
+        # if qs_count:
+        #     s_suffix = '' if qs_count==1 else 's'
+        #     self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
+
+        # Remove translation chunk milestones
+        preadjusted_file_contents = preadjusted_file_contents.replace('\\ts\\*\n', '').replace('\\ts\\*', '')
+
         if has_USFM3_line:
             # Issue any global USFM3 warnings
             if '\\s5' in file_contents:
-                warning_msg = f"{B} - \\s5 fields should be coded as \\ts-s\\*…\\ts-e\\* milestones"
+                warning_msg = f"{B} - \\s5 fields should be coded as \\ts\\* milestones"
                 AppSettings.logger.warning(warning_msg)
                 self.warnings.append(warning_msg)
 
@@ -592,17 +625,6 @@ class BiblePreprocessor(Preprocessor):
             if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
             # Restore empty \p markers
             preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
-
-            # Find and warn about (useless) paragraph formatting before a section break
-            #  (probably should be after break)
-            ps_count = len(re.findall(r'\\p *\n?\\s', preadjusted_file_contents))
-            if ps_count:
-                s_suffix = '' if ps_count==1 else 's'
-                self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
-            qs_count = len(re.findall(r'\\q1* *\n?\\s', preadjusted_file_contents))
-            if qs_count:
-                s_suffix = '' if qs_count==1 else 's'
-                self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
 
             # Then do other global clean-ups
             ks_count = preadjusted_file_contents.count('\\k-s\\*')
