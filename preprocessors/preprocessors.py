@@ -494,25 +494,33 @@ class BiblePreprocessor(Preprocessor):
                 s_suffix = '' if bad_count==1 else 's'
                 self.warnings.append(f"{B} - {bad_count:,} useless \\{marker1} marker{s_suffix} before \\{marker2} marker{s_suffix}")
 
-        # ps_count = len(re.findall(r'\\p *\n*?\\s', preadjusted_file_contents))
-        # if ps_count:
-        #     s_suffix = '' if ps_count==1 else 's'
-        #     self.warnings.append(f"{B} - {ps_count:,} useless \\p marker{s_suffix} before \\s# marker{s_suffix}")
-        # qs_count = len(re.findall(r'\\q1* *\n*?\\s', preadjusted_file_contents))
-        # if qs_count:
-        #     s_suffix = '' if qs_count==1 else 's'
-        #     self.warnings.append(f"{B} - {qs_count:,} useless \\q# marker{s_suffix} before \\s# marker{s_suffix}")
+        for pmarker in ('p','m','q','q1','q2'):
+            thisRE = r'\\v \d{1,3}\s*?\\' + pmarker + ' '
+            bad_count = len(re.findall(thisRE, preadjusted_file_contents))
+            if bad_count:
+                s_suffix = '' if bad_count==1 else 's'
+                self.warnings.append(f"{B} - {bad_count:,} unexpected \\{pmarker} marker{s_suffix} immediately following verse number")
 
         # Remove translation chunk milestones
         preadjusted_file_contents = preadjusted_file_contents.replace('\\ts\\*\n', '').replace('\\ts\\*', '')
 
-        if has_USFM3_line:
-            # Issue any global USFM3 warnings
-            if '\\s5' in file_contents:
-                warning_msg = f"{B} - \\s5 fields should be coded as \\ts\\* milestones"
-                AppSettings.logger.warning(warning_msg)
-                self.warnings.append(warning_msg)
+        if '\\s5' in file_contents: # These are deprecated
+            warning_msg = f"{B} - \\s5 fields should be coded as \\ts\\* milestones"
+            AppSettings.logger.warning(warning_msg)
+            self.warnings.append(warning_msg)
 
+        C = V = '0'
+        for line in file_contents.split('\n'):
+            if line.startswith('\\c '): C, V = line[3:], '0'
+            elif line.startswith('\\v '):
+                ixSpace = line[3:].find(' ')
+                V = line[3:3+ixSpace]
+            elif line.startswith('\\s5') and line[3:] and not line[3:].isspace():
+                self.warnings.append(f"{B} {C}:{V} - unexpected text '{line[3:]}' on \\s5 line")
+            elif line.startswith('\\ts\\*') and line[5:] and not line[5:].isspace():
+                self.warnings.append(f"{B} {C}:{V} - unexpected text '{line[5:]}' on \\ts\\* line")
+
+        if has_USFM3_line: # Issue any global USFM3 warnings
             # Check USFM3 pairs
             for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
                                     # Character formatting
