@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from time import time, sleep
 import traceback
 from zipfile import BadZipFile
-# from urllib.error import HTTPError
+from urllib.error import HTTPError
 from typing import Dict, List, Tuple, Any, Optional, Union
 
 # Library (PyPi) imports
@@ -175,11 +175,11 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
         if try_number > 1:
             AppSettings.logger.warning(f"Try {try_number}: Downloading and unzipping repo from {repo_zip_url} …")
         try:
-            try:
-                # If the file already exists, remove it, we want a fresh copy
-                if os.path.isfile(repo_zip_file):
-                    os.remove(repo_zip_file)
+            # If the file already exists, remove it, we want a fresh copy
+            if os.path.isfile(repo_zip_file):
+                os.remove(repo_zip_file)
 
+            try:
                 download_file(repo_zip_url, repo_zip_file)
             finally:
                 AppSettings.logger.debug("  Downloading finished.")
@@ -585,9 +585,13 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     """
     global project_types_invoked_string
 
-    # Download and unzip the repo files
-    repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
-
+    try: # Download and unzip the repo files
+        repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
+    except HTTPError as e:
+        if 'HTTP Error 404: Not Found' in str(e):
+            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url}")
+        else:
+            raise e # Can't download/unzip repo files
 
     # Get the resource container
     # AppSettings.logger.debug(f'Getting Resource Container…')
