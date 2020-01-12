@@ -7,6 +7,7 @@
 #       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
 # Python imports
+from typing import Dict, List, Tuple, Any, Optional, Union
 import os
 import tempfile
 import json
@@ -17,7 +18,6 @@ from time import time, sleep
 import traceback
 from zipfile import BadZipFile
 from urllib.error import HTTPError
-from typing import Dict, List, Tuple, Any, Optional, Union
 
 # Library (PyPi) imports
 import requests
@@ -1086,16 +1086,16 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             boto3_session = Session(aws_access_key_id=aws_access_key_id,
                                 aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                                 region_name='us-west-2')
-            watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+            failure_watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                         use_queues=False,
                                                         log_group=log_group_name,
                                                         stream_name=prefixed_our_name)
-            logger2.addHandler(watchtower_log_handler)
+            logger2.addHandler(failure_watchtower_log_handler)
             logger2.setLevel(logging.DEBUG)
             logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
             logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
             logger2.critical(f"{e}: {traceback.format_exc()}")
-            watchtower_log_handler.close()
+            failure_watchtower_log_handler.close()
             # NOTE: following line removed as stats recording used too much disk space
             # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
             stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'

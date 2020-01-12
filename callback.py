@@ -551,16 +551,16 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         boto3_session = Session(aws_access_key_id=aws_access_key_id,
                             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                             region_name='us-west-2')
-        watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+        failure_watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     use_queues=False,
                                                     log_group=log_group_name,
                                                     stream_name=prefixed_name)
-        logger2.addHandler(watchtower_log_handler)
+        logger2.addHandler(failure_watchtower_log_handler)
         logger2.setLevel(logging.DEBUG)
         logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
         logger2.critical(f"{prefixed_name} threw an exception while processing: {queued_json_payload}")
         logger2.critical(f"{e}: {traceback.format_exc()}")
-        watchtower_log_handler.close()
+        failure_watchtower_log_handler.close()
         # NOTE: following line removed as stats recording used too much disk space
         # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
         stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'
