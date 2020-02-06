@@ -751,7 +751,10 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
                         else DOOR43_CALLBACK_URL,
-            # 'user_token': gogs_user_token, # Checked by tX enqueue job
+            # TODO: gogs_user_token logic can be completely removed from the program
+            #           if we're certain we're not worried about Host header spoofing
+            #           (which is our new/current ID mechanism).
+            # 'user_token': gogs_user_token, # Used to be checked by tX enqueue job
             }
         if 'options' in pj_job_dict and pj_job_dict['options']:
             AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
@@ -950,7 +953,7 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) 
         AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
-        commit_type = 'default'
+        commit_type = 'defaultBranch'
         commit_id = commit_branch
     elif tag_name:
         commit_type = 'tag'
