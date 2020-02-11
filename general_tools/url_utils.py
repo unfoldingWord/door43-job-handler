@@ -119,6 +119,7 @@ def _download_file(url:str, outfile:str, urlopen:Callable[[str],bytes]) -> None:
         AppSettings.logger.warning(f"  _download_file: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
         sleep(adjusted_wait_time) # Then try again
     # end of loop
+# end of _download_file function
 
 
 def get_languages() -> Dict[str,Any]:
