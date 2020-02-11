@@ -752,9 +752,11 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
                         else DOOR43_CALLBACK_URL,
             # TODO: gogs_user_token logic can be completely removed from the program
-            #           if we're certain we're not worried about Host header spoofing
-            #           (which is our new/current ID mechanism).
+            #           if we're certain we're not worried about Host header spoofing.
+            #           (Checking Host header is our new/current ID mechanism.)
             # 'user_token': gogs_user_token, # Used to be checked by tX enqueue job
+            #   but it now authenticates because we usually send this from git.door43.org
+            #       (or when debugging, from 127.0.0.1:80).
             }
         if 'options' in pj_job_dict and pj_job_dict['options']:
             AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
