@@ -960,9 +960,15 @@ class TaPreprocessor(Preprocessor):
         'translate': 'Translation Manual'
     }
 
+
     def __init__(self, *args, **kwargs) -> None:
         super(TaPreprocessor, self).__init__(*args, **kwargs)
         self.section_container_id = 1
+        self.need_to_check_quotes = False
+        self.loaded_file_path = None
+        self.loaded_file_contents = None
+        self.preload_dir = tempfile.mkdtemp(prefix='tX_tA_linter_preload_')
+
 
     def get_title(self, project, link:str, alt_title:Optional[str]=None) -> str:
         proj = None
@@ -983,6 +989,7 @@ class TaPreprocessor(Preprocessor):
         else:
             return link.replace('-', ' ').title()
 
+
     def get_ref(self, project, link:str) -> str:
         project_config = project.config()
         if project_config and link in project_config:
@@ -993,15 +1000,18 @@ class TaPreprocessor(Preprocessor):
                 return f'{p.identifier}.html#{link}'
         return f'#{link}'
 
+
     def get_question(self, project, slug:str) -> str:
         subtitle_file = os.path.join(self.source_dir, project.path, slug, 'sub-title.md')
         if os.path.isfile(subtitle_file):
             return read_file(subtitle_file)
 
+
     def get_content(self, project, slug):
         content_file = os.path.join(self.source_dir, project.path, slug, '01.md')
         if os.path.isfile(content_file):
             return read_file(content_file)
+
 
     def compile_ta_section(self, project, section, level):
         """
@@ -1014,6 +1024,7 @@ class TaPreprocessor(Preprocessor):
         """
         # if prefix and debug_mode_flag:
         #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' {level=} …")
+
         if 'link' in section:
             link = section['link']
         else:
@@ -1057,17 +1068,135 @@ class TaPreprocessor(Preprocessor):
         if 'sections' in section:
             if section['sections']:
                 for subsection in section['sections']:
-                    markdown += self.compile_ta_section(project, subsection, level + 1)
+                    subsection_markdown = self.compile_ta_section(project, subsection, level + 1)
+                    if self.need_to_check_quotes:
+                        try: self.check_embedded_quotes(f"{project.identifier}/{section['title']}", subsection['title'], subsection_markdown)
+                        except Exception as e:
+                            msg = f"{project.identifier} {subsection} Unable to check embedded quotes: {e}"
+                            AppSettings.logger.warning(msg)
+                            self.warnings.append(msg)
+                    markdown += subsection_markdown
             else: # why is it empty? probably user error
                 msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['title']}'"
                 AppSettings.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown
-    # end of compile_ta_section(self, project, section, level)
+    # end of TaPreprocessor.compile_ta_section(self, project, section, level)
+
+
+    def preload_translated_text_archive(self, name:str, zip_url:str) -> bool:
+        """
+        Fetch and unpack the Hebrew/Greek zip file.
+
+        Returns a True/False success flag
+        """
+        AppSettings.logger.info(f"preload_translated_text_archive({name}, {zip_url})…")
+
+        zip_path = os.path.join(self.preload_dir, f'{name}.zip')
+        try:
+            download_file(zip_url, zip_path)
+            unzip(zip_path, self.preload_dir)
+            remove_file(zip_path)
+        except Exception as e:
+            AppSettings.logger.error(f"Unable to download {zip_url}: {e}")
+            self.warnings.append(f"Unable to download '{name}' from {zip_url}")
+            return False
+        # AppSettings.logger.debug(f"Got {name} files: {os.listdir(self.preload_dir)}")
+        return True
+    # end of TaPreprocessor.preload_translated_text_archive function
+
+
+    def get_quoted_versions(self) -> None:
+        """
+        See if TA manifest has relationships back to translations
+
+        Compares with the unfoldingWord version if possible
+          otherwise falls back to the Door43Catalog version
+
+        Sets self.need_to_check_quotes to True if successful.
+        """
+        AppSettings.logger.debug("tA preprocessor get_quoted_versions()…")
+
+        rels = self.rc.resource.relation
+        if isinstance(rels, list):
+            for rel in rels:
+                if 'en/ult' in rel:
+                    if '?v=' in rel:
+                        version = rel[rel.find('?v=')+3:]
+                    else:
+                        AppSettings.logger.debug(f"No ULT version number specified in manifest: '{rel}'")
+                        version = None
+                    url = f"https://git.door43.org/unfoldingWord/en_ult/archive/v{version}.zip" \
+                        if version else 'https://git.door43.org/unfoldingWord/en_ult/archive/master.zip'
+                    successFlag = self.preload_translated_text_archive('ult', url)
+                    if not successFlag: # Try the Door43 Catalog version
+                        url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/en_ult.zip" \
+                            if version else 'https://git.door43.org/unfoldingWord/en_ult/archive/master.zip'
+                        successFlag = self.preload_translated_text_archive('ult', url)
+                    if successFlag:
+                        self.warnings.append(f"Note: Using {url} for checking ULT quotes against.")
+                        self.need_to_check_quotes = True
+                if 'en/ust' in rel:
+                    if '?v=' in rel:
+                        version = rel[rel.find('?v=')+3:]
+                    else:
+                        AppSettings.logger.debug(f"No UST version number specified in manifest: '{rel}'")
+                        version = None
+                    url = f"https://git.door43.org/unfoldingWord/en_ust/archive/v{version}.zip" \
+                        if version else 'https://git.door43.org/unfoldingWord/en_ust/archive/master.zip'
+                    successFlag = self.preload_translated_text_archive('ust', url)
+                    if not successFlag: # Try the Door43 Catalog version
+                        url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/en_ust.zip" \
+                            if version else 'https://git.door43.org/unfoldingWord/en_ust/archive/master.zip'
+                        successFlag = self.preload_translated_text_archive('ust', url)
+                    if successFlag:
+                        self.warnings.append(f"Note: Using {url} for checking UST quotes against.")
+                        self.need_to_check_quotes = True
+                # if 'en/tn' in rel:
+                #     if '?v=' in rel:
+                #         version = rel[rel.find('?v=')+3:]
+                #     else:
+                #         AppSettings.logger.debug(f"No TN version number specified in manifest: '{rel}'")
+                #         version = None
+                #     url = f"https://git.door43.org/unfoldingWord/en_ust/archive/v{version}.zip" \
+                #         if version else 'https://git.door43.org/unfoldingWord/en_tn/archive/master.zip'
+                #     successFlag = self.preload_translated_text_archive('tn', url)
+                #     if not successFlag: # Try the Door43 Catalog version
+                #         url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/en_tn.zip" \
+                #             if version else 'https://git.door43.org/unfoldingWord/en_tn/archive/master.zip'
+                #         successFlag = self.preload_translated_text_archive('tn', url)
+                #     if successFlag:
+                #         self.warnings.append(f"Note: Using {url} for checking TN quotes against.")
+                #         self.need_to_check_quotes = True
+                # if 'en/tw' in rel:
+                #     if '?v=' in rel:
+                #         version = rel[rel.find('?v=')+3:]
+                #     else:
+                #         AppSettings.logger.debug(f"No TW version number specified in manifest: '{rel}'")
+                #         version = None
+                #     url = f"https://git.door43.org/unfoldingWord/en_ust/archive/v{version}.zip" \
+                #         if version else 'https://git.door43.org/unfoldingWord/en_tw/archive/master.zip'
+                #     successFlag = self.preload_translated_text_archive('tw', url)
+                #     if not successFlag: # Try the Door43 Catalog version
+                #         url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/en_tw.zip" \
+                #             if version else 'https://git.door43.org/unfoldingWord/en_tw/archive/master.zip'
+                #         successFlag = self.preload_translated_text_archive('tw', url)
+                #     if successFlag:
+                #         self.warnings.append(f"Note: Using {url} for checking TW quotes against.")
+                #         self.need_to_check_quotes = True
+        elif rels:
+            AppSettings.logger.debug(f"tA preprocessor get_quoted_versions expected a list not {rels!r}")
+
+        if not self.need_to_check_quotes:
+            self.warnings.append("Unable to find/load translated sources for comparing tA snippets against.")
+    # end of TaPreprocessor.get_quoted_versions()
 
 
     def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+
+        self.get_quoted_versions() # Sets self.need_to_check_quotes
+
         for idx, project in enumerate(self.rc.projects):
             AppSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
             self.section_container_id = 1
@@ -1100,9 +1229,213 @@ class TaPreprocessor(Preprocessor):
             self.warnings.append("No tA source files discovered")
         else:
             AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+
+        # Delete temp folder
+        if prefix and debug_mode_flag:
+            AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
+        else:
+            remove_tree(self.preload_dir)
+
         AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.warnings
     # end of TaPreprocessor run()
+
+
+    compiled_re_verse = re.compile(r'“(.+?)” \((.+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)',
+                                                                    flags=re.IGNORECASE)
+    compiled_re_verses = re.compile(r'“(.+?)” \((.+?) (\d{1,3}):(\d{1,3})-(\d{1,3}) (ULT|UST)\)',
+                                                                    flags=re.IGNORECASE)
+    def check_embedded_quotes(self, project_id:str, section_id:str, content:str) -> None:
+        """
+        Find any quoted portions and
+            check that they can indeed be found in the quoted translations.
+        """
+        # display_content = content.replace('\n', ' ')
+        # display_content = f'{display_content[:30]}……{display_content[-30:]}'
+        # AppSettings.logger.debug(f"check_embedded_quotes({project_id}, {section_id}, {display_content})…")
+
+        # Match and check single verses
+        start_index = 0
+        while (match := TaPreprocessor.compiled_re_verse.search(content, start_index)):
+            # print(f"Match1a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match1b: {match.groups()}")
+            quoteField, bookname,C,V, version_abbreviation = match.groups()
+            start_index = match.end() # For next loop
+
+            qid = f"{project_id}/{section_id}"
+            ref = f'{version_abbreviation} {bookname} {C}:{V}'
+            self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
+
+        # Match and check bridged verses (in the same chapter)
+        start_index = 0
+        while (match := TaPreprocessor.compiled_re_verses.search(content, start_index)):
+            # print(f"Match2a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match2b: {match.groups()}")
+            quoteField, bookname,C,V1,V2, version_abbreviation = match.groups()
+            start_index = match.end() # For next loop
+
+            qid = f"{project_id}/{section_id}"
+            V = f'{V1}-{V2}'
+            self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
+    # end of TaPreprocessor.check_embedded_quotes function
+
+
+    def check_embedded_quote(self, qid:str, bookname:str, C:str, V:str, version_abbreviation:str, quoteField:str) -> None:
+        """
+        Check that the quoted portion can indeed be found in the quoted translation.
+        """
+        # AppSettings.logger.debug(f"check_embedded_quote({qid}, {bookname}, {C}:{V}, {version_abbreviation}, {quoteField})…")
+
+        ref = f'{version_abbreviation} {bookname} {C}:{V}'
+        full_qid = f"'{qid}' {ref}"
+        quoteField = quoteField.replace('*', '') # Remove emphasis from quoted text
+
+        verse_text = self.get_passage(bookname,C,V, version_abbreviation)
+        if not verse_text:
+            AppSettings.logger.error(f"Can't get verse text for {bookname} {C}:{V} {version_abbreviation}!")
+            return # nothing else we can do here
+
+        if '...' in quoteField:
+            AppSettings.logger.debug(f"Bad ellipse characters in {qid} '{quoteField}'")
+            self.warnings.append(f"Should use proper ellipse character in {qid} '{quoteField}'")
+
+        if '…' in quoteField:
+            quoteBits = quoteField.split('…')
+            if ' …' in quoteField or '… ' in quoteField:
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in {qid} '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse character in {qid} '{quoteField}'")
+        elif '...' in quoteField: # Yes, we still actually allow this
+            quoteBits = quoteField.split('...')
+            if ' ...' in quoteField or '... ' in quoteField:
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in {qid} '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse characters in {qid} '{quoteField}'")
+        else:
+            quoteBits = None
+
+        if quoteBits:
+            numQuoteBits = len(quoteBits)
+            if numQuoteBits >= 2:
+                for index in range(numQuoteBits):
+                    if quoteBits[index] not in verse_text: # this is what we really want to catch
+                        # If the quote has multiple parts, create a description of the current part
+                        if index == 0: description = 'beginning'
+                        elif index == numQuoteBits-1: description = 'end'
+                        else: description = f"middle{index if numQuoteBits>3 else ''}"
+                        AppSettings.logger.debug(f"Unable to find {qid} '{quoteBits[index]}' ({description}) in '{verse_text}' ({ref})")
+                        self.warnings.append(f"Unable to find {qid}: {description} of <em>{quoteField}</em> <b>in</b> <em>{verse_text}</em> ({ref})")
+            else: # < 2
+                self.warnings.append(f"Ellipsis without surrounding snippet in {qid} '{quoteField}'")
+        elif quoteField not in verse_text:
+            AppSettings.logger.debug(f"Unable to find {qid} '{quoteField}' in '{verse_text}' ({ref})")
+            extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
+            if extra_text: quoteField = quoteField.replace('\u00A0', '~')
+            self.warnings.append(f"Unable to find {qid}: <em>{quoteField}</em> {extra_text} <b>in</b> <em>{verse_text}</em> ({ref})")
+    # end of TaPreprocessor.check_embedded_quote function
+
+
+    def get_passage(self, bookname:str, C:str,V:str, version_abbreviation:str) -> str:
+        """
+        Get the information for the given verse(s) out of the appropriate book file.
+
+        Handle verse bridges (within the same chapter).
+
+        Also removes milestones and extra word (\\w) information
+        """
+        # AppSettings.logger.debug(f"get_passage({bookname}, {C}:{V}, {version_abbreviation})…")
+
+        B = bookname.replace(' ','').replace('Judges','JDG')[:3].upper()
+        B = B.replace('SON','SNG').replace('EZE','EZK')
+        B = B.replace('MAR','MRK').replace('JOH','JHN').replace('PHI','PHP').replace('JAM','JAS')
+        try: book_number = BOOK_NUMBERS[B.lower()]
+        except KeyError: # how can this happen?
+            AppSettings.logger.error(f"Unable to find book number for '{bookname} ({B}) {C}:{V}' in get_passage()")
+            book_number = 0
+
+        V1 = V2 = V
+        if '-' in V: V1, V2 = V.split('-')
+
+        language_code = 'en'
+        version_code = f'{language_code}_{version_abbreviation.lower()}'
+
+        book_path = os.path.join(self.preload_dir, f'{version_code}/{book_number}-{B}.usfm')
+        # print("book_path", book_path)
+        if not os.path.isfile(book_path):
+            AppSettings.logger.info(f"Non-existent {book_path}")
+            return None
+        if self.loaded_file_path != book_path:
+            # It's not cached already
+            # AppSettings.logger.debug(f"Loading text from {book_path}…")
+            with open(book_path, 'rt') as book_file:
+                self.loaded_file_contents = book_file.read()
+            self.loaded_file_path = book_path
+            # Do some initial cleaning and convert to lines
+            self.loaded_file_contents = self.loaded_file_contents \
+                                            .replace('\\ts\\*','').replace('\\s5','') \
+                                            .replace('\\zaln-e\\*','') \
+                                            .replace('\\p ', '').replace('\\p\n', '') \
+                                            .replace('\\q ', '').replace('\\q\n', '') \
+                                            .replace('\\q1 ', '').replace('\\q1\n', '') \
+                                            .replace('\\q2 ', '').replace('\\q2\n', '') \
+                                            .split('\n')
+        # print("loaded_file_contents", self.loaded_file_contents[:2], '……', self.loaded_file_contents[-2:])
+        found_chapter = found_verse = False
+        verseText = ''
+        V2int = int(V2)
+        for book_line in self.loaded_file_contents:
+            if not found_chapter and book_line == f'\\c {C}':
+                found_chapter = True
+                continue
+            if found_chapter and not found_verse and book_line.startswith(f'\\v {V1}'):
+                found_verse = True
+                book_line = book_line[3+len(V1):] # Delete (start) verse number so test below doesn't fail
+
+            if found_verse:
+                if book_line.startswith('\\c '):
+                    break # Don't go into the next chapter
+                if book_line.startswith('\\v '):
+                    ixSp = book_line.find(' ', 3)
+                    verse_num_string = book_line[3:] if ixSp==-1 else book_line[3:ixSp]
+                    Vint = int(verse_num_string)
+                    if Vint > V2int:
+                        break # Don't go past the (last) verse
+
+                while True: # Remove self-closed \zaln-s fields
+                    ixs = book_line.find('\\zaln-s ')
+                    if ixs == -1: break # None / no more
+                    ixe = book_line.find('\\*')
+                    if ixe == -1:
+                        self.warnings.append(f"{B} {C}:{V} Missing closing part of {bookline[ixs:]}")
+                    book_line = f'{book_line[:ixs]}{book_line[ixe+2:]}' # Remove \zaln-s field
+                verseText += ('' if book_line.startswith('\\f ') else ' ') + book_line
+        if V1 != V2: # then the text might contain verse numbers
+            verseText = re.sub(r'\\v \d{1,3}', '', verseText) # Remove them
+        # verseText = verseText.strip().replace('  ', ' ')
+        # print(f"Got verse text1: '{verseText}'")
+
+        # Remove \w fields (just leaving the actual Bible text words)
+        ixW = verseText.find('\\w ')
+        while ixW != -1:
+            ixEnd = verseText.find('\\w*', ixW)
+            if ixEnd != -1:
+                field = verseText[ixW+3:ixEnd]
+                bits = field.split('|')
+                adjusted_field = bits[0]
+                verseText = verseText[:ixW] + adjusted_field + verseText[ixEnd+3:]
+            else:
+                AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} verseText: '{verseText}'")
+                verseText = verseText.replace('\\w ', '', 1) # Attempt to limp on
+            ixW = verseText.find('\\w ', ixW+1) # Might be another one
+        # print(f"Got verse text2: '{verseText}'")
+
+        # Remove footnotes
+        verseText = re.sub(r'\\f (.+?)\\f\*', '', verseText)
+        # Remove alternative versifications
+        verseText = re.sub(r'\\va (.+?)\\va\*', '', verseText)
+        # print(f"Got verse text3: '{verseText}'")
+
+        # Final clean-up (shouldn't be necessary, but just in case)
+        return verseText.strip().replace('  ', ' ')
+    # end of TaPreprocessor.get_passage function
 
 
     def fix_links(self, content:str, repo_owner:str) -> str:
@@ -1438,6 +1771,7 @@ class TwPreprocessor(Preprocessor):
                          r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
+    # end of TwPreprocessor fix_links function
 # end of class TwPreprocessor
 
 
@@ -1482,7 +1816,7 @@ class TnPreprocessor(Preprocessor):
             return False
         # AppSettings.logger.debug(f"Got {name} files:", os.listdir(self.preload_dir))
         return True
-    # end of TnTsvLinter.preload_original_text_archive function
+    # end of TnPreprocessor.preload_original_text_archive function
 
 
     def get_quoted_versions(self) -> None:
@@ -1510,7 +1844,7 @@ class TnPreprocessor(Preprocessor):
                         successFlag = self.preload_original_text_archive('uhb', url)
                     if successFlag:
                         self.warnings.append(f"Note: Using {url} for checking Hebrew quotes against.")
-                        need_to_check_quotes = True
+                        self.need_to_check_quotes = True
                 if 'el-x-koine/ugnt' in rel:
                     if '?v=' not in rel:
                         self.warnings.append(f"No Greek version number specified in manifest: '{rel}'")
@@ -1523,8 +1857,11 @@ class TnPreprocessor(Preprocessor):
                     if successFlag:
                         self.warnings.append(f"Note: Using {url} for checking Greek quotes against.")
                         self.need_to_check_quotes = True
+        elif rels:
+            AppSettings.logger.debug(f"tN preprocessor get_quoted_versions expected a list not {rels!r}")
+
         if not self.need_to_check_quotes:
-            self.warnings.append("Unable to find/load original language (Heb/Grk) sources for comparing snippets against.")
+            self.warnings.append("Unable to find/load original language (Heb/Grk) sources for comparing tN snippets against.")
     # end of get_quoted_versions()
 
 
@@ -1590,7 +1927,7 @@ class TnPreprocessor(Preprocessor):
                                     if B != 'Book' \
                                     and self.need_to_check_quotes \
                                     and OrigQuote:
-                                        try: self.check_original_language_quotes(B,C,V,OrigQuote)
+                                        try: self.check_original_language_quotes(B,C,V, OrigQuote)
                                         except Exception as e:
                                             self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
                                     tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
@@ -1715,6 +2052,7 @@ class TnPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
 
+        # Delete temp folder
         if prefix and debug_mode_flag:
             AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
         else:
@@ -1777,19 +2115,10 @@ class TnPreprocessor(Preprocessor):
                 self.warnings.append(f"Ellipsis without surrounding snippet in {B} {C}:{V} '{quoteField}'")
         elif quoteField not in verse_text:
             AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteField}' in '{verse_text}'")
-            # if B=='TIT':
-            #     import unicodedata
-            #     print(f"quoteField='{quoteField}'")
-            #     for char in quoteField:
-            #         print(unicodedata.name(char), end='  ')
-            #     print(f"\nverse_text='{verse_text}'")
-            #     for char in verse_text:
-            #         print(unicodedata.name(char), end='  ')
-            #     print()
             extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
             if extra_text: quoteField = quoteField.replace('\u00A0', '~')
             self.warnings.append(f"Unable to find {B} {C}:{V} '{quoteField}'{extra_text} in '{verse_text}'")
-    # end of TnTsvLinter.check_original_language_quotes function
+    # end of TnPreprocessor.check_original_language_quotes function
 
 
     def get_passage(self, B:str, C:str,V:str) -> str:
@@ -1830,7 +2159,6 @@ class TnPreprocessor(Preprocessor):
                                             .replace('\\zaln-e\\*','') \
                                             .replace('\\k-e\\*', '') \
                                             .split('\n')
-        # print("loaded_book_contents", self.loaded_file_contents)
         found_chapter = found_verse = False
         verseText = ''
         for book_line in self.loaded_file_contents:
@@ -1839,7 +2167,8 @@ class TnPreprocessor(Preprocessor):
                 continue
             if found_chapter and not found_verse and book_line.startswith(f'\\v {V}'):
                 found_verse = True
-                continue
+                book_line = book_line[3+len(V):] # Delete verse number so below bit doesn't fail
+
             if found_verse:
                 if book_line.startswith('\\v ') or book_line.startswith('\\c '):
                     break # Don't go into the next verse or chapter
@@ -1873,7 +2202,7 @@ class TnPreprocessor(Preprocessor):
 
         # Final clean-up (shouldn't be necessary, but just in case)
         return verseText.replace('  ', ' ')
-    # end of TnTsvLinter.get_passage function
+    # end of TnPreprocessor.get_passage function
 
 
     compiled_re1 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)/01\.md\]\]',
