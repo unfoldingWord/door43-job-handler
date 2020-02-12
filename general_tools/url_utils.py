@@ -28,7 +28,7 @@ def _get_url(url:str, catch_exception:bool, urlopen:Callable[[str],bytes]) -> Un
 
     Handles "HTTP Error 503: Service Unavailable" internally with an automatic wait and retry.
     """
-    AppSettings.logger.debug(f"_get_url( {url}, catch_exception={catch_exception}, …)…")
+    # AppSettings.logger.debug(f"_get_url( {url}, catch_exception={catch_exception}, …)…")
     MAX_TRIES = 5
     INITIAL_WAIT_TIME = 5 # seconds
     num_tries = 0
