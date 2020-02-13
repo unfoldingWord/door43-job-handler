@@ -1134,7 +1134,8 @@ class TaPreprocessor(Preprocessor):
                             if version else 'https://git.door43.org/unfoldingWord/en_ult/archive/master.zip'
                         successFlag = self.preload_translated_text_archive('ult', url)
                     if successFlag:
-                        self.warnings.append(f"Note: Using {url} for checking ULT quotes against.")
+                        extra = '' if version else ' (No version number specified in manifest.)'
+                        self.warnings.append(f"Note: Using {url} for checking ULT quotes against.{extra}")
                         self.need_to_check_quotes = True
                 if 'en/ust' in rel:
                     if '?v=' in rel:
@@ -1150,7 +1151,8 @@ class TaPreprocessor(Preprocessor):
                             if version else 'https://git.door43.org/unfoldingWord/en_ust/archive/master.zip'
                         successFlag = self.preload_translated_text_archive('ust', url)
                     if successFlag:
-                        self.warnings.append(f"Note: Using {url} for checking UST quotes against.")
+                        extra = '' if version else ' (No version number specified in manifest.)'
+                        self.warnings.append(f"Note: Using {url} for checking UST quotes against.{extra}")
                         self.need_to_check_quotes = True
                 # if 'en/tn' in rel:
                 #     if '?v=' in rel:
@@ -1166,7 +1168,8 @@ class TaPreprocessor(Preprocessor):
                 #             if version else 'https://git.door43.org/unfoldingWord/en_tn/archive/master.zip'
                 #         successFlag = self.preload_translated_text_archive('tn', url)
                 #     if successFlag:
-                #         self.warnings.append(f"Note: Using {url} for checking TN quotes against.")
+                #         extra = '' if version else ' (No version number specified in manifest.)'
+                #         self.warnings.append(f"Note: Using {url} for checking TN quotes against.{extra}")
                 #         self.need_to_check_quotes = True
                 # if 'en/tw' in rel:
                 #     if '?v=' in rel:
@@ -1182,7 +1185,8 @@ class TaPreprocessor(Preprocessor):
                 #             if version else 'https://git.door43.org/unfoldingWord/en_tw/archive/master.zip'
                 #         successFlag = self.preload_translated_text_archive('tw', url)
                 #     if successFlag:
-                #         self.warnings.append(f"Note: Using {url} for checking TW quotes against.")
+                #         extra = '' if version else ' (No version number specified in manifest.)'
+                #         self.warnings.append(f"Note: Using {url} for checking TW quotes against.{extra}")
                 #         self.need_to_check_quotes = True
         elif rels:
             AppSettings.logger.debug(f"tA preprocessor get_quoted_versions expected a list not {rels!r}")
@@ -1911,8 +1915,9 @@ class TnPreprocessor(Preprocessor):
                                         if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
                                             self.warnings.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
                                     elif tab_count != EXPECTED_TSV_SOURCE_TAB_COUNT:
-                                        # NOTE: This is not added to warnings because that will be done at convert time (don't want double warnings)
                                         AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        continue # otherwise we crash on the next line
                                     B, C, V, field_id, _SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
                                     if B!=lastB or C!=lastC or V!=lastV:
                                         field_id_list:List[str] = [] # IDs only need to be unique within each verse
