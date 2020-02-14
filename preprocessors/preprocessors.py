@@ -1245,13 +1245,15 @@ class TaPreprocessor(Preprocessor):
     # end of TaPreprocessor run()
 
 
-    compiled_re_verse = re.compile(r'“(.+?)” \((.+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)',
-                                                                    flags=re.IGNORECASE)
-    compiled_re_verses = re.compile(r'“(.+?)” \((.+?) (\d{1,3}):(\d{1,3})-(\d{1,3}) (ULT|UST)\)',
-                                                                    flags=re.IGNORECASE)
+    compiled_re_quoted_verse = re.compile(r'“(.+?)” \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)')
+    compiled_re_unquoted_verse = re.compile(r'^(?:> )?([^“”>]+?) \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)',
+                                                                    flags=re.MULTILINE)
+    compiled_re_quoted_verses = re.compile(r'“(.+?)” \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3})-(\d{1,3}) (ULT|UST)\)')
+    compiled_re_unquoted_verses = re.compile(r'^(?:> )?([^“”>]+?) \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3})-(\d{1,3}) (ULT|UST)\)',
+                                                                    flags=re.MULTILINE)
     def check_embedded_quotes(self, project_id:str, section_id:str, content:str) -> None:
         """
-        Find any quoted portions and
+        Find any quoted portions in a markdown section and
             check that they can indeed be found in the quoted translations.
         """
         # display_content = content.replace('\n', ' ')
@@ -1260,9 +1262,19 @@ class TaPreprocessor(Preprocessor):
 
         # Match and check single verses
         start_index = 0
-        while (match := TaPreprocessor.compiled_re_verse.search(content, start_index)):
+        while (match := TaPreprocessor.compiled_re_quoted_verse.search(content, start_index)):
             # print(f"Match1a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
             # print(f"Match1b: {match.groups()}")
+            quoteField, bookname,C,V, version_abbreviation = match.groups()
+            start_index = match.end() # For next loop
+
+            qid = f"{project_id}/{section_id}"
+            ref = f'{version_abbreviation} {bookname} {C}:{V}'
+            self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
+        start_index = 0
+        while (match := TaPreprocessor.compiled_re_unquoted_verse.search(content, start_index)):
+            # print(f"Match2a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match2b: {match.groups()}")
             quoteField, bookname,C,V, version_abbreviation = match.groups()
             start_index = match.end() # For next loop
 
@@ -1272,9 +1284,19 @@ class TaPreprocessor(Preprocessor):
 
         # Match and check bridged verses (in the same chapter)
         start_index = 0
-        while (match := TaPreprocessor.compiled_re_verses.search(content, start_index)):
-            # print(f"Match2a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
-            # print(f"Match2b: {match.groups()}")
+        while (match := TaPreprocessor.compiled_re_quoted_verses.search(content, start_index)):
+            # print(f"Match3a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match3b: {match.groups()}")
+            quoteField, bookname,C,V1,V2, version_abbreviation = match.groups()
+            start_index = match.end() # For next loop
+
+            qid = f"{project_id}/{section_id}"
+            V = f'{V1}-{V2}'
+            self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
+        start_index = 0
+        while (match := TaPreprocessor.compiled_re_unquoted_verses.search(content, start_index)):
+            # print(f"Match4a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match4b: {match.groups()}")
             quoteField, bookname,C,V1,V2, version_abbreviation = match.groups()
             start_index = match.end() # For next loop
 
@@ -1325,12 +1347,12 @@ class TaPreprocessor(Preprocessor):
                         if index == 0: description = 'beginning'
                         elif index == numQuoteBits-1: description = 'end'
                         else: description = f"middle{index if numQuoteBits>3 else ''}"
-                        AppSettings.logger.debug(f"Unable to find {qid} '{quoteBits[index]}' ({description}) in '{verse_text}' ({ref})")
+                        # AppSettings.logger.debug(f"Unable to find {qid} '{quoteBits[index]}' ({description}) in '{verse_text}' ({ref})")
                         self.warnings.append(f"Unable to find {qid}: {description} of <em>{quoteField}</em> <b>in</b> <em>{verse_text}</em> ({ref})")
             else: # < 2
                 self.warnings.append(f"Ellipsis without surrounding snippet in {qid} '{quoteField}'")
         elif quoteField not in verse_text:
-            AppSettings.logger.debug(f"Unable to find {qid} '{quoteField}' in '{verse_text}' ({ref})")
+            # AppSettings.logger.debug(f"Unable to find {qid} '{quoteField}' in '{verse_text}' ({ref})")
             extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
             if extra_text: quoteField = quoteField.replace('\u00A0', '~')
             self.warnings.append(f"Unable to find {qid}: <em>{quoteField}</em> {extra_text} <b>in</b> <em>{verse_text}</em> ({ref})")
@@ -1348,8 +1370,9 @@ class TaPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"get_passage({bookname}, {C}:{V}, {version_abbreviation})…")
 
         B = bookname.replace(' ','').replace('Judges','JDG')[:3].upper()
-        B = B.replace('SON','SNG').replace('EZE','EZK')
+        B = B.replace('SON','SNG').replace('EZE','EZK').replace('JOE','JOL').replace('NAH','NAM')
         B = B.replace('MAR','MRK').replace('JOH','JHN').replace('PHI','PHP').replace('JAM','JAS')
+        B = B.replace('1JO','1JN').replace('2JO','2JN').replace('3JO','3JN')
         try: book_number = BOOK_NUMBERS[B.lower()]
         except KeyError: # how can this happen?
             AppSettings.logger.error(f"Unable to find book number for '{bookname} ({B}) {C}:{V}' in get_passage()")
@@ -1389,8 +1412,12 @@ class TaPreprocessor(Preprocessor):
             if not found_chapter and book_line == f'\\c {C}':
                 found_chapter = True
                 continue
-            if found_chapter and not found_verse and book_line.startswith(f'\\v {V1}'):
+            # TODO: Complain about our USFM formatting around \\m
+            if found_chapter and not found_verse \
+            and (book_line.startswith(f'\\v {V1}') or book_line.startswith(f'\\m \\v {V1}') or book_line.startswith(f'\\m  \\v {V1}')):
                 found_verse = True
+                if book_line.startswith('\\m '):
+                    book_line = book_line[3:].lstrip() # Remove \\m and following space(s)
                 book_line = book_line[3+len(V1):] # Delete (start) verse number so test below doesn't fail
 
             if found_verse:
@@ -2114,12 +2141,12 @@ class TnPreprocessor(Preprocessor):
                         if index == 0: description = 'beginning'
                         elif index == numQuoteBits-1: description = 'end'
                         else: description = f"middle{index if numQuoteBits>3 else ''}"
-                        AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteBits[index]}' ({description}) in '{verse_text}'")
+                        # AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteBits[index]}' ({description}) in '{verse_text}'")
                         self.warnings.append(f"Unable to find {B} {C}:{V} {description} of '{quoteField}' in '{verse_text}'")
             else: # < 2
                 self.warnings.append(f"Ellipsis without surrounding snippet in {B} {C}:{V} '{quoteField}'")
         elif quoteField not in verse_text:
-            AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteField}' in '{verse_text}'")
+            # AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteField}' in '{verse_text}'")
             extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
             if extra_text: quoteField = quoteField.replace('\u00A0', '~')
             self.warnings.append(f"Unable to find {B} {C}:{V} '{quoteField}'{extra_text} in '{verse_text}'")
