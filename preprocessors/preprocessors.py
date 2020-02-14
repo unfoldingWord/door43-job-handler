@@ -1245,6 +1245,7 @@ class TaPreprocessor(Preprocessor):
     # end of TaPreprocessor run()
 
 
+    # TODO: What about the quotes with <sup> verse numbers </sup> included???
     compiled_re_quoted_verse = re.compile(r'“(.+?)” \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)')
     compiled_re_unquoted_verse = re.compile(r'^(?:> )?([^“”>]+?) \(([123 A-Za-z]+?) (\d{1,3}):(\d{1,3}) (ULT|UST)\)',
                                                                     flags=re.MULTILINE)
