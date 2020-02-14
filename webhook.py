@@ -84,7 +84,8 @@ webhook_stats_prefix = f'{job_handler_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
-DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+long_prefix = 'develop' if prefix else 'git'
+DOOR43_CALLBACK_URL = f'https://{long_prefix}.door43.org/client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
                                  else DOOR43_CALLBACK_URL
