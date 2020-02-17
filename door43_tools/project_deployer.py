@@ -150,7 +150,7 @@ class ProjectDeployer:
             if build_log['errors']:
                 content += """
                         <div style="text-align:center;margin-bottom:20px">
-                            <i class="fa fa-times-circle-o" style="font-size: 250px;font-weight: 300;color: red"></i>
+                            <em class="fa fa-times-circle-o" style="font-size: 250px;font-weight: 300;color: red"></em>
                             <br/>
                             <h2>Critical!</h2>
                             <h3>Here is what went wrong with this build:</h3>
@@ -159,7 +159,7 @@ class ProjectDeployer:
                 content += '<div><ul><li>' + '</li><li>'.join(build_log['errors']) + '</li></ul></div>'
             else:
                 content += f'<h1 class="conversion-requested">{build_log["message"]}</h1>'
-                content += f'<p><i>No content is available to show for {repo_name} yet.</i></p>'
+                content += f'<p><em>No content is available to show for {repo_name} yet.</em></p>'
             html = f"""
                     <html lang="en">
                         <head>

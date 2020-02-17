@@ -7,6 +7,7 @@
 #       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
 # Python imports
+from typing import Dict, List, Tuple, Any, Optional, Union
 import os
 import tempfile
 import json
@@ -16,8 +17,7 @@ from datetime import datetime, timedelta
 from time import time, sleep
 import traceback
 from zipfile import BadZipFile
-# from urllib.error import HTTPError
-from typing import Dict, List, Tuple, Any, Optional, Union
+from urllib.error import HTTPError
 
 # Library (PyPi) imports
 import requests
@@ -84,7 +84,8 @@ webhook_stats_prefix = f'{job_handler_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
-DOOR43_CALLBACK_URL = f'https://git.door43.org/{prefix}client/webhook/tx-callback/'
+long_prefix = 'develop' if prefix else 'git'
+DOOR43_CALLBACK_URL = f'https://{long_prefix}.door43.org/client/webhook/tx-callback/'
 ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
                                     if prefix and debug_mode_flag and ':8090' in tx_post_url \
                                  else DOOR43_CALLBACK_URL
@@ -175,11 +176,11 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
         if try_number > 1:
             AppSettings.logger.warning(f"Try {try_number}: Downloading and unzipping repo from {repo_zip_url} …")
         try:
-            try:
-                # If the file already exists, remove it, we want a fresh copy
-                if os.path.isfile(repo_zip_file):
-                    os.remove(repo_zip_file)
+            # If the file already exists, remove it, we want a fresh copy
+            if os.path.isfile(repo_zip_file):
+                os.remove(repo_zip_file)
 
+            try:
                 download_file(repo_zip_url, repo_zip_file)
             finally:
                 AppSettings.logger.debug("  Downloading finished.")
@@ -585,9 +586,13 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     """
     global project_types_invoked_string
 
-    # Download and unzip the repo files
-    repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
-
+    try: # Download and unzip the repo files
+        repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
+    except HTTPError as e:
+        if 'HTTP Error 404: Not Found' in str(e):
+            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url}")
+        else:
+            raise e # Can't download/unzip repo files
 
     # Get the resource container
     # AppSettings.logger.debug(f'Getting Resource Container…')
@@ -747,7 +752,12 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
                         else DOOR43_CALLBACK_URL,
-            'user_token': gogs_user_token, # Checked by tX enqueue job
+            # TODO: gogs_user_token logic can be completely removed from the program
+            #           if we're certain we're not worried about Host header spoofing.
+            #           (Checking Host header is our new/current ID mechanism.)
+            # 'user_token': gogs_user_token, # Used to be checked by tX enqueue job
+            #   but it now authenticates because we usually send this from git.door43.org
+            #       (or when debugging, from 127.0.0.1:80).
             }
         if 'options' in pj_job_dict and pj_job_dict['options']:
             AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
@@ -946,7 +956,7 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) 
         AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
-        commit_type = 'default'
+        commit_type = 'defaultBranch'
         commit_id = commit_branch
     elif tag_name:
         commit_type = 'tag'
@@ -1082,16 +1092,16 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             boto3_session = Session(aws_access_key_id=aws_access_key_id,
                                 aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                                 region_name='us-west-2')
-            watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+            failure_watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                         use_queues=False,
                                                         log_group=log_group_name,
                                                         stream_name=prefixed_our_name)
-            logger2.addHandler(watchtower_log_handler)
+            logger2.addHandler(failure_watchtower_log_handler)
             logger2.setLevel(logging.DEBUG)
             logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
             logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
             logger2.critical(f"{e}: {traceback.format_exc()}")
-            watchtower_log_handler.close()
+            failure_watchtower_log_handler.close()
             # NOTE: following line removed as stats recording used too much disk space
             # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
             stats_client.gauge(project_types_invoked_string, 1) # Mark as 'failed'

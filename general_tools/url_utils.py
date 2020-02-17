@@ -28,7 +28,7 @@ def _get_url(url:str, catch_exception:bool, urlopen:Callable[[str],bytes]) -> Un
 
     Handles "HTTP Error 503: Service Unavailable" internally with an automatic wait and retry.
     """
-    AppSettings.logger.debug(f"_get_url( {url}, catch_exception={catch_exception}, …)…")
+    # AppSettings.logger.debug(f"_get_url( {url}, catch_exception={catch_exception}, …)…")
     MAX_TRIES = 5
     INITIAL_WAIT_TIME = 5 # seconds
     num_tries = 0
@@ -119,6 +119,7 @@ def _download_file(url:str, outfile:str, urlopen:Callable[[str],bytes]) -> None:
         AppSettings.logger.warning(f"  _download_file: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
         sleep(adjusted_wait_time) # Then try again
     # end of loop
+# end of _download_file function
 
 
 def get_languages() -> Dict[str,Any]:
