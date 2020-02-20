@@ -516,7 +516,7 @@ class BiblePreprocessor(Preprocessor):
                                 ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
                                 ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
                                 ('\\qt2-s\\*', '\\qt2-e\\*'), # NOTE: Will this still work if it has attributes?
-                                ('\\k-s\\*', '\\k-e\\*'),
+                                ('\\k-s ', '\\k-e\\*'),
                                 ('\\ts-s\\*', '\\ts-e\\*'),
                                 ('\\zaln-s ', '\\zaln-e\\*'),
                                 ):
@@ -583,8 +583,9 @@ class BiblePreprocessor(Preprocessor):
                         AppSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
                         if '\w ' in line:
-                            ixW = adjusted_line.find('\\w ')
+                            ixW = adjusted_line.find('\\w ', ix+4) # See if \\w field follows \\k-s???
                             if ixW != -1: # Yip, there's word(s) on the end
+                                AppSettings.logger.debug(f"With {ix} {ixW} at {B} {C}:{V} adjusted line: '{adjusted_line}'")
                                 assert ix < ixW # This code expects the \\k-s to be before the \\w
                                 adjusted_line = adjusted_line[:ix] + adjusted_line[ixW:]
                             else:
