@@ -584,8 +584,11 @@ class BiblePreprocessor(Preprocessor):
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
                         if '\w ' in line:
                             ixW = adjusted_line.find('\\w ')
-                            assert ix < ixW # This code expects the \\k-s to be before the \\w
-                            adjusted_line = adjusted_line[:ix] + adjusted_line[ixW:]
+                            if ixW != -1: # Yip, there's word(s) on the end
+                                assert ix < ixW # This code expects the \\k-s to be before the \\w
+                                adjusted_line = adjusted_line[:ix] + adjusted_line[ixW:]
+                            else:
+                                adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                         else:
                             adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                 if '\\k-s' in adjusted_line:
