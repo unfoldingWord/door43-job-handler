@@ -1598,7 +1598,7 @@ class TqPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
-        # Write out index.json
+        # Write out TQ index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
@@ -1701,6 +1701,8 @@ class TwPreprocessor(Preprocessor):
                 copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
             elif project.path!='./':
                 self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
+
+            # Write out TW index.json
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
 
@@ -1753,6 +1755,8 @@ class TwPreprocessor(Preprocessor):
                         copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
                     elif project.path!='./':
                         self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
+
+                # Write out TW index.json
                 output_file = os.path.join(self.output_dir, 'index.json')
                 write_file(output_file, index_json)
 
@@ -2081,7 +2085,7 @@ class TnPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
-        # Write out index.json
+        # Write out TN index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
 
