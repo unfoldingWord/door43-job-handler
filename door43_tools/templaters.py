@@ -13,6 +13,64 @@ from general_tools.file_utils import load_yaml_object
 
 
 
+def init_template(repo_subject:str, source_dir:str, output_dir:str, template_file:str):
+    """
+    Tries to determine the correct templater for the appropriate repo_subject
+    """
+    # AppSettings.logger.debug(f"init_template({repo_subject})")
+    if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
+                        'Greek_Lexicon','Hebrew-Aramaic_Lexicon',
+                        'OBS_Study_Questions', # NOTE: I don't yet understand why this works better for righthand nav column
+                        ):
+        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
+        templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('OBS_Study_Notes','XXXOBS_Study_QuestionsXXX',
+                          'OBS_Translation_Notes','OBS_Translation_Questions'):
+        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
+        templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Academy',):
+        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
+        templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Questions',):
+        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
+        templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Words',):
+        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
+        templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
+    elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
+        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
+        templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
+    else:
+        if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
+            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
+        else:
+            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+        templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
+    return templater
+#end of init_template function
+
+
+def get_sorted_Bible_html_filepath_list(folder_path:str) -> List[str]:
+    """
+    Make sure that front and back "books" are ordered correctly
+        as this list will affect the display on the web pages.
+    See http://ubsicap.github.io/usfm/identification/books.html
+    """
+    # AppSettings.logger.debug(f"get_sorted_Bible_html_filepath_list({folder_path})…")
+
+    HTMLfilepaths = sorted(glob(os.path.join(folder_path, '*.html')))
+    for book_code, number_string in (('INT','A7'),
+                                     ('FRT','A0')): # must be in reverse of desired order!
+        for ix, filepath in enumerate( HTMLfilepaths.copy() ):
+            if book_code in filepath and number_string in filepath: # Allows for various ordering of filename bits
+                AppSettings.logger.info(f"Moving {book_code} HTML to front of filepath list…")
+                HTMLfilepaths.insert(0, HTMLfilepaths.pop(ix)) # Move to front of list
+                break
+    return HTMLfilepaths
+# end of get_sorted_Bible_html_filepath_list
+
+
+
 class Templater:
     NO_NAV_TITLES = ['',
                     'Conversion requested…', 'Conversion started…', 'Conversion successful',
@@ -35,7 +93,7 @@ class Templater:
         self.output_dir = output_dir  # Local directory
         self.template_file = template_file  # Local file of template
 
-        self.files = sorted(glob(os.path.join(self.source_dir, '*.html')))
+        self.HTMLfilepaths = sorted(glob(os.path.join(self.source_dir, '*.html')))
         self.rc = None
         self.template_html = ''
         self.already_converted = []
@@ -47,6 +105,9 @@ class Templater:
 
 
     def run(self) -> bool:
+        """
+        Called from ProjectDeployer.run_templater function
+        """
         # AppSettings.logger.debug("Templater.run()")
         # Get the resource container
         self.rc = RC(self.source_dir)
@@ -80,6 +141,9 @@ class Templater:
 
 
     def build_right_sidebar(self, filename:Optional[str]=None) -> str:
+        """
+        Called from apply_template()
+        """
         html = self.build_page_nav(filename)
         return html
     # end of Templater.build_right_sidebar function
@@ -87,11 +151,16 @@ class Templater:
 
     def build_page_nav(self, filename:Optional[str]=None) -> str:
         raise Exception("Programmer Error: You must subclass this build_page_nav function!")
-    # end of Templater.build_right_sidebar function
+    # end of Templater.build_page_nav function
 
 
     def get_page_navigation(self) -> None:
-        for fname in self.files:
+        """
+        Called early in apply_template()
+
+        Creates self.titles
+        """
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
                 continue
@@ -108,6 +177,9 @@ class Templater:
 
 
     def apply_template(self) -> None:
+        """
+        Called from run()
+        """
         # AppSettings.logger.debug("Templater.apply_template()")
         language_code = self.rc.resource.language.identifier
         language_name = self.rc.resource.language.title
@@ -137,7 +209,7 @@ class Templater:
                 canonical = links[0]['href']
 
         # Loop through the html files
-        for filepath in self.files:
+        for filepath in self.HTMLfilepaths:
             if filepath not in self.already_converted:
                 AppSettings.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
 
@@ -254,7 +326,7 @@ class ObsTemplater(Templater):
               <ul id="sidebar-nav" class="nav nav-stacked">
                 <li><h1>Navigation</h1></li>
             """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             # AppSettings.logger.debug(f"ObsTemplater.build_page_nav: {fname}")
             base_name = os.path.basename(fname)
             title = ""
@@ -325,7 +397,7 @@ class ObsNotesTemplater(Templater):
             <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
                 <ul class="nav nav-stacked">
         """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             # with open(fname, 'r') as f:
             #     soup = BeautifulSoup(f.read(), 'html.parser')
             # if soup.select('div#content h1'):
@@ -378,7 +450,12 @@ class TqTemplater(Templater):
             self.book_codes = index['book_codes']
 
     def get_page_navigation(self) -> None:
-        for fname in self.files:
+        """
+        Called early in apply_template()
+
+        Creates self.titles
+        """
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
                 continue
@@ -410,7 +487,7 @@ class TqTemplater(Templater):
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
             """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             book_code = ""
             if key in self.book_codes:
@@ -466,13 +543,13 @@ class TwTemplater(Templater):
 
 
     def build_page_nav(self, filename:Optional[str]=None) -> str:
-        if not self.files or not self.titles or not self.chapters:
+        if not self.HTMLfilepaths or not self.titles or not self.chapters:
             return ""
         html = """
             <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
                 <ul class="nav nav-stacked">
         """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             section = os.path.splitext(key)[0]
             html += f"""
@@ -513,7 +590,12 @@ class TnTemplater(Templater):
 
 
     def get_page_navigation(self) -> None:
-        for fname in self.files:
+        """
+        Called early in apply_template()
+
+        Creates self.titles
+        """
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
                 continue
@@ -545,7 +627,7 @@ class TnTemplater(Templater):
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
             """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             book_code = ""
             if key in self.book_codes:
@@ -642,7 +724,7 @@ class TaTemplater(Templater):
             <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
                 <ul class="nav nav-stacked">
         """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             with open(fname, 'r') as f:
                 soup = BeautifulSoup(f.read(), 'html.parser')
             if soup.select('div#content h1'):
@@ -683,16 +765,33 @@ class TaTemplater(Templater):
 
 
 class BibleTemplater(Templater):
+    """
+    Creates the index as we go
+
+    Bibles come from USFM files
+    """
     def __init__(self, *args, **kwargs) -> None:
         self.templater_CSS_class = 'bible'
         super(BibleTemplater, self).__init__(*args, **kwargs)
-        # if self.templater_CSS_class != 'bible': # avoid "bible bible"
-            # self.classes = ['bible'] # These get appended to the html body class
+
+        # Make sure that front and back "books" are ordered correctly
+        self.HTMLfilepaths = get_sorted_Bible_html_filepath_list(self.source_dir)
+        # print( "now BibleTemplater filepaths", self.HTMLfilepaths)
     # end of BibleTemplater.__init__ function
 
 
     def get_page_navigation(self) -> None:
-        for fname in self.files:
+        """
+        Called early in apply_template()
+
+        Creates self.titles and self.book_codes and self.chapters
+        """
+        AppSettings.logger.debug("BibleTemplater get_page_navigation()…")
+        assert not self.titles
+        assert not self.book_codes
+        assert not self.chapters
+
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             if key in self.titles:  # skip if we already have data
                 continue
@@ -706,6 +805,8 @@ class BibleTemplater(Templater):
                 # Assuming filename of <name.usfm, such as GEN.usfm
                 book_code = fileparts[0].lower()
             book_code.replace(' ', '-').replace('.', '-')  # replacing spaces and periods since used as tag class
+            self.book_codes[key] = book_code
+
             with open(fname, 'r') as f:
                 soup = BeautifulSoup(f.read(), 'html.parser')
             if soup.select('div#content h1'):
@@ -713,18 +814,26 @@ class BibleTemplater(Templater):
             else:
                 title = f'{book_code}.'
             self.titles[key] = title
-            self.book_codes[key] = book_code
-            chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
-            self.chapters[key] = [c['id'] for c in chapters]
-    # end of TnTemplater.get_page_navigation()
+
+            if book_code == 'frt':
+                self.chapters[key] = ['content']
+            else: # a normal Bible book
+                chapters = soup.find_all('h2', {'c-num'}) # Returns a list of bs4.element.Tag's
+                self.chapters[key] = [c['id'] for c in chapters]
+    # end of BibleTemplater.get_page_navigation()
 
 
     def build_page_nav(self, filename:Optional[str]=None) -> str:
+        """
+        Called from build_right_sidebar function
+        """
+        AppSettings.logger.debug("BibleTemplater build_page_nav()…")
+
         html = """
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">
             <ul id="sidebar-nav" class="nav nav-stacked books panel-group">
             """
-        for fname in self.files:
+        for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
             book_code = ""
             if key in self.book_codes:
@@ -768,43 +877,6 @@ class BibleTemplater(Templater):
     # end of BibleTemplater.build_page_nav function
 # end of class BibleTemplater
 
-
-
-def init_template(repo_subject:str, source_dir:str, output_dir:str, template_file:str) -> Templater:
-    """
-    Tries to determine the correct templater for the appropriate repo_subject
-    """
-    # AppSettings.logger.debug(f"init_template({repo_subject})")
-    if repo_subject in ('Generic_Markdown','Open_Bible_Stories',
-                        'Greek_Lexicon','Hebrew-Aramaic_Lexicon',
-                        'OBS_Study_Questions', # NOTE: I don't yet understand why this works better for RH nav column
-                        ):
-        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
-        templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('OBS_Study_Notes','XXXOBS_Study_QuestionsXXX',
-                          'OBS_Translation_Notes','OBS_Translation_Questions'):
-        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
-        templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Academy',):
-        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
-        templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Questions',):
-        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
-        templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Words',):
-        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
-        templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
-    elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
-        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
-        templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
-    else:
-        if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
-        else:
-            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
-        templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
-    return templater
-#end of init_template function
 
 
 def do_template(repo_subject:str, source_dir:str, output_dir:str, template_file:str) -> bool:

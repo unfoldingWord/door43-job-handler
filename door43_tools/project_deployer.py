@@ -12,7 +12,7 @@ from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from general_tools import file_utils
 from general_tools.file_utils import write_file, remove_tree
-from door43_tools.templaters import init_template
+from door43_tools.templaters import init_template, get_sorted_Bible_html_filepath_list
 
 
 
@@ -85,7 +85,9 @@ class ProjectDeployer:
         #######################
 
         # Copy first HTML file to index.html if index.html doesn't exist
-        html_files = sorted(glob(os.path.join(output_dir, '*.html')))
+        # html_files = get_sorted_Bible_html_filepath_list(output_dir) if 'Bible' in resource_type \
+        #                 else sorted(glob(os.path.join(output_dir, '*.html')))
+        html_files = get_sorted_Bible_html_filepath_list(output_dir)
         index_file = os.path.join(output_dir, 'index.html')
         if html_files and not os.path.isfile(index_file):
             copyfile(os.path.join(output_dir, html_files[0]), index_file)
@@ -136,7 +138,7 @@ class ProjectDeployer:
     def template_converted_files(self, build_log:Dict[str,Any], output_dir:str,
                                     repo_name:str, resource_type:str, s3_commit_key:str,
                                     source_dir:str, start_time, template_filepath:str):
-        AppSettings.logger.debug(f"template_converted_files(…, od={output_dir}, '{repo_name}'," \
+        AppSettings.logger.debug(f"template_converted_files((build_log), od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
         assert 'errors' in build_log
@@ -188,10 +190,15 @@ class ProjectDeployer:
             index_json_fname = 'index.json'
             index_json = self.get_templater_index(s3_commit_key, index_json_fname)
             # AppSettings.logger.debug(f"Initial 'index.json': {json.dumps(index_json)[:256]}")
+            # AppSettings.logger.debug(f"Initial 'index.json': {index_json}")
+            # AppSettings.logger.debug(f"Templater titles: {getattr(templater, 'titles')}")
             self.update_index_key(index_json, templater, 'titles')
+            # AppSettings.logger.debug(f"Templater chapters: {getattr(templater, 'chapters')}")
             self.update_index_key(index_json, templater, 'chapters')
+            # AppSettings.logger.debug(f"Templater book_codes: {getattr(templater, 'book_codes')}")
             self.update_index_key(index_json, templater, 'book_codes')
             # AppSettings.logger.debug(f"Final 'index.json': {json.dumps(index_json)[:256]} …")
+            # AppSettings.logger.debug(f"Final 'index.json': {index_json}")
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key,
                                                         index_json_fname, index_json)
         return source_dir, success

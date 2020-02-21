@@ -504,6 +504,28 @@ class BiblePreprocessor(Preprocessor):
                 s_suffix = '' if bad_count==1 else 's'
                 self.warnings.append(f"{B} - {bad_count:,} useless \\{marker1} marker{s_suffix} before \\{marker2} marker{s_suffix}")
 
+        # Check USFM3 pairs
+        for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
+                                # Character formatting
+                                ('\\png ', '\\png*'),
+                                ('\\rb ', '\\rb*'),
+                                ('\\sup ', '\\sup*'),
+                                ('\\wa ', '\\wa*'),
+                                ('\\va ', '\\va*'),
+                                # Milestones
+                                ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
+                                ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
+                                ('\\qt2-s\\*', '\\qt2-e\\*'), # NOTE: Will this still work if it has attributes?
+                                ('\\k-s ', '\\k-e\\*'),
+                                ('\\ts-s\\*', '\\ts-e\\*'),
+                                ('\\zaln-s ', '\\zaln-e\\*'),
+                                ):
+            cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
+            if cnt1 != cnt2:
+                error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
+                AppSettings.logger.error(error_msg)
+                self.warnings.append(error_msg)
+
         for pmarker in ('p','m','q','q1','q2'):
             thisRE = r'\\v \d{1,3}\s*?\\' + pmarker + ' '
             bad_count = len(re.findall(thisRE, preadjusted_file_contents))
@@ -531,31 +553,11 @@ class BiblePreprocessor(Preprocessor):
                 self.warnings.append(f"{B} {C}:{V} - unexpected text '{line[5:]}' on \\ts\\* line")
 
         if has_USFM3_line: # Issue any global USFM3 warnings
-            # Check USFM3 pairs
-            for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
-                                    # Character formatting
-                                    ('\\png ', '\\png*'),
-                                    ('\\rb ', '\\rb*'),
-                                    ('\\sup ', '\\sup*'),
-                                    ('\\wa ', '\\wa*'),
-                                    ('\\va ', '\\va*'),
-                                    # Milestones
-                                    ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
-                                    ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
-                                    ('\\qt2-s\\*', '\\qt2-e\\*'), # NOTE: Will this still work if it has attributes?
-                                    ('\\ts-s\\*', '\\ts-e\\*'),
-                                    ('\\zaln-s ', '\\zaln-e\\*'),
-                                 ):
-                cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
-                if cnt1 != cnt2:
-                    error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
-                    AppSettings.logger.error(error_msg)
-                    self.warnings.append(error_msg)
-
-            # Do some global adjustments to make things easier
+            # Do some global deletions to make things easier
+            preadjusted_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', preadjusted_file_contents) # Remove \k start milestones
             preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', preadjusted_file_contents) # Remove \zaln start milestones
-            preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
+            preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
 
             # Then do line-by-line changes
             needs_new_line = False
@@ -572,16 +574,24 @@ class BiblePreprocessor(Preprocessor):
                     V = line[3:].split(' ')[0]
 
                 adjusted_line = line
-                if '\\k' in adjusted_line: # Delete these fields
+                if '\\k' in adjusted_line: # Delete these unclosed (bad USFM) fields still in some files
                     # AppSettings.logger.debug(f"Processing user-defined line: {line}")
                     ix = adjusted_line.find('\\k-s ')
-                    if ix != -1:
-                        adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
-                    ix = adjusted_line.find('\\k-s')
+                    if ix == -1:
+                        ix = adjusted_line.find('\\k-s') # Without expected trailing space
                     if ix != -1:
                         AppSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
-                        adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+                        if '\w ' in line:
+                            ixW = adjusted_line.find('\\w ', ix+4) # See if \\w field follows \\k-s???
+                            if ixW != -1: # Yip, there's word(s) on the end
+                                AppSettings.logger.debug(f"With {ix} {ixW} at {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                                assert ix < ixW # This code expects the \\k-s to be before the \\w
+                                adjusted_line = adjusted_line[:ix] + adjusted_line[ixW:]
+                            else:
+                                adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
+                        else:
+                            adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                 if '\\k-s' in adjusted_line:
                     AppSettings.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-s field")
@@ -1598,7 +1608,7 @@ class TqPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
-        # Write out index.json
+        # Write out TQ index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
@@ -1701,6 +1711,8 @@ class TwPreprocessor(Preprocessor):
                 copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
             elif project.path!='./':
                 self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
+
+            # Write out TW index.json
             output_file = os.path.join(self.output_dir, 'index.json')
             write_file(output_file, index_json)
 
@@ -1753,6 +1765,8 @@ class TwPreprocessor(Preprocessor):
                         copy(config_file, os.path.join(self.output_dir, 'config.yaml'))
                     elif project.path!='./':
                         self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
+
+                # Write out TW index.json
                 output_file = os.path.join(self.output_dir, 'index.json')
                 write_file(output_file, index_json)
 
@@ -2081,7 +2095,7 @@ class TnPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
 
-        # Write out index.json
+        # Write out TN index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
 
