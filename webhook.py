@@ -456,9 +456,9 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
             try:
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{deleted_branch_name}"
-                AppSettings.logger.info(f"      Removing {prefix}CDN '{c['type']}' '{deleted_branch_name}' commit! …")
+                AppSettings.logger.info(f"      Removing {prefix}CDN '{c['type']}' '{deleted_branch_name}' folder! …")
                 clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
-                AppSettings.logger.info(f"      Removing {prefix}D43 '{c['type']}' '{deleted_branch_name}' commit! …")
+                AppSettings.logger.info(f"      Removing {prefix}D43 '{c['type']}' '{deleted_branch_name}' folder! …")
                 clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
                 # Delete the pre-convert .zip file (available on Download button) from its bucket
                 if c['job_id']:
