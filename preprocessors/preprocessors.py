@@ -1974,7 +1974,7 @@ class TnPreprocessor(Preprocessor):
                                     if B != 'Book' \
                                     and self.need_to_check_quotes \
                                     and OrigQuote:
-                                        try: self.check_original_language_quotes(B,C,V, OrigQuote)
+                                        try: self.check_original_language_quotes(B,C,V, field_id, OrigQuote)
                                         except Exception as e:
                                             self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
                                     tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
@@ -2118,32 +2118,32 @@ class TnPreprocessor(Preprocessor):
                 files.insert(0, last_file)
 
 
-    def check_original_language_quotes(self, B:str,C:str,V:str, quoteField:str) -> None:
+    def check_original_language_quotes(self, B:str,C:str,V:str, field_id:str, quoteField:str) -> None:
         """
         Check that the quoted portions can indeed be found in the original language versions.
 
         Moved here Feb2020 from tX TN linter
         """
-        # AppSettings.logger.debug(f"check_original_language_quotes({B},{C},{V}, {quoteField})…")
-
+        # AppSettings.logger.debug(f"check_original_language_quotes({B},{C},{V}, {field_id}, {quoteField})…")
+        TNid = f'{B} {C}:{V} ({field_id})'
         verse_text = self.get_passage(B,C,V)
         if not verse_text:
             return # nothing else we can do here
 
         if '...' in quoteField:
-            AppSettings.logger.debug(f"Bad ellipse characters in {B} {C}:{V} '{quoteField}'")
-            self.warnings.append(f"Should use proper ellipse character in {B} {C}:{V} '{quoteField}'")
+            AppSettings.logger.debug(f"Bad ellipse characters in {TNid} '{quoteField}'")
+            self.warnings.append(f"Should use proper ellipse character in {TNid} '{quoteField}'")
 
         if '…' in quoteField:
             quoteBits = quoteField.split('…')
             if ' …' in quoteField or '… ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in {B} {C}:{V} '{quoteField}'")
-                self.warnings.append(f"Unexpected space(s) beside ellipse character in {B} {C}:{V} '{quoteField}'")
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in {TNid} '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse character in {TNid} '{quoteField}'")
         elif '...' in quoteField: # Yes, we still actually allow this
             quoteBits = quoteField.split('...')
             if ' ...' in quoteField or '... ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in {B} {C}:{V} '{quoteField}'")
-                self.warnings.append(f"Unexpected space(s) beside ellipse characters in {B} {C}:{V} '{quoteField}'")
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in {TNid} '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse characters in {TNid} '{quoteField}'")
         else:
             quoteBits = None
 
@@ -2156,15 +2156,15 @@ class TnPreprocessor(Preprocessor):
                         if index == 0: description = 'beginning'
                         elif index == numQuoteBits-1: description = 'end'
                         else: description = f"middle{index if numQuoteBits>3 else ''}"
-                        # AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteBits[index]}' ({description}) in '{verse_text}'")
-                        self.warnings.append(f"Unable to find {B} {C}:{V} {description} of '{quoteField}' in '{verse_text}'")
+                        # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteBits[index]}' ({description}) in '{verse_text}'")
+                        self.warnings.append(f"Unable to find {TNid} {description} of '{quoteField}' in '{verse_text}'")
             else: # < 2
-                self.warnings.append(f"Ellipsis without surrounding snippet in {B} {C}:{V} '{quoteField}'")
+                self.warnings.append(f"Ellipsis without surrounding snippet in {TNid} '{quoteField}'")
         elif quoteField not in verse_text:
-            # AppSettings.logger.debug(f"Unable to find {B} {C}:{V} '{quoteField}' in '{verse_text}'")
+            # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
             extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
             if extra_text: quoteField = quoteField.replace('\u00A0', '~')
-            self.warnings.append(f"Unable to find {B} {C}:{V} '{quoteField}'{extra_text} in '{verse_text}'")
+            self.warnings.append(f"Unable to find {TNid} '{quoteField}'{extra_text} in '{verse_text}'")
     # end of TnPreprocessor.check_original_language_quotes function
 
 
