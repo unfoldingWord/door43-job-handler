@@ -54,9 +54,10 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
     # So now lets actually run our chosen preprocessor and do the work
     num_files_written, warnings_list = preprocessor.run()
 
-    if len(warnings_list) > 200:  # sanity check so we don't overflow callback size limits
-        new_warnings_list = warnings_list[:190]
-        new_warnings_list.append("………………")
+    MAX_WARNINGS = 1000
+    if len(warnings_list) > MAX_WARNINGS:  # sanity check so we don't overflow callback size limits
+        new_warnings_list = warnings_list[:MAX_WARNINGS-10]
+        new_warnings_list.append("…………………………")
         new_warnings_list.extend(warnings_list[-9:])
         msg = f"Preprocessor warnings reduced from {len(warnings_list):,} to {len(new_warnings_list)}"
         AppSettings.logger.debug(f"Linter {msg}")
@@ -483,7 +484,7 @@ class BiblePreprocessor(Preprocessor):
                 AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
-        # Find and warn about (useless) paragraph formatting before a section break
+        # Find and warn about (useless) paragraph formatting before a section break, etc.
         #  (probably should be after break)
         for marker1,marker2,thisRE in (
                                         ('p', 's', r'\\p *\n*?\\s'),
