@@ -1896,6 +1896,9 @@ class TnPreprocessor(Preprocessor):
                     if '?v=' not in rel:
                         self.warnings.append(f"No Hebrew version number specified in manifest: '{rel}'")
                     version = rel[rel.find('?v=')+3:]
+        #################################################### TEMP
+                    version = '2.1.8'
+        #################################################### TEMP
                     url = f"https://git.door43.org/unfoldingWord/UHB/archive/v{version}.zip"
                     successFlag = self.preload_original_text_archive('uhb', url)
                     if not successFlag: # Try the Door43 Catalog version
