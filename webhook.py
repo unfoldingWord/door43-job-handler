@@ -39,7 +39,7 @@ from app_settings.app_settings import AppSettings
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
             'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon',
-            # and 14 from https://api.door43.org/v3/subjects (last checked 10 Dec 2019)
+            # and 14 from https://api.door43.org/v3/subjects (last checked Mar 2020)
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
             'Translation_Notes', 'TSV_Translation_Notes',
@@ -222,7 +222,7 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
     Given a resource container, try to determine the repo subject
         even if the manifest has no subject field.
 
-    https://api.door43.org/v3/subjects specifies 12 subjects (as of Feb 2019)
+    https://api.door43.org/v3/subjects specifies 14 subjects (as of Mar 2020)
 
     Can return None if we can't determine one.
     """
