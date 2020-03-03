@@ -1898,6 +1898,8 @@ class TnPreprocessor(Preprocessor):
                     version = rel[rel.find('?v=')+3:]
         #################################################### TEMP
                     version = '2.1.8'
+                    self.warnings.append(f"NOTE: TEMPORARILY using v{version} for checking Hebrew quotes against.")
+                    version = '?v=' + version
         #################################################### TEMP
                     url = f"https://git.door43.org/unfoldingWord/UHB/archive/v{version}.zip"
                     successFlag = self.preload_original_text_archive('uhb', url)
