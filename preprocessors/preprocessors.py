@@ -1898,8 +1898,7 @@ class TnPreprocessor(Preprocessor):
                     version = rel[rel.find('?v=')+3:]
         #################################################### TEMP
                     version = '2.1.8'
-                    self.warnings.append(f"NOTE: TEMPORARILY using v{version} for checking Hebrew quotes against.")
-                    version = '?v=' + version
+                    self.warnings.append(f"NOTE: TEMPORARILY USING v{version} FOR CHECKING Hebrew QUOTES AGAINST.")
         #################################################### TEMP
                     url = f"https://git.door43.org/unfoldingWord/UHB/archive/v{version}.zip"
                     successFlag = self.preload_original_text_archive('uhb', url)
@@ -1978,13 +1977,16 @@ class TnPreprocessor(Preprocessor):
                                         AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
-                                    B, C, V, field_id, _SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
+                                    B, C, V, field_id, SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
                                     if B!=lastB or C!=lastC or V!=lastV:
                                         field_id_list:List[str] = [] # IDs only need to be unique within each verse
                                         lastB, lastC, lastV = B, C, V
                                     if field_id in field_id_list:
                                         self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
                                     field_id_list.append(field_id)
+                                    if SupportReference and SupportReference!='SupportReference' \
+                                    and SupportReference not in OccurrenceNote:
+                                        self.warnings.append(f"Mismatch at {B} {C}:{V} between SupportReference='{SupportReference}' and expected link in '{OccurrenceNote}'")
                                     if '://' in OccurrenceNote or '[[' in OccurrenceNote:
                                         OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                                     if 'rc://' in OccurrenceNote:
