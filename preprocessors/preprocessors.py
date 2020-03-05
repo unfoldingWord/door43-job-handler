@@ -491,6 +491,11 @@ class BiblePreprocessor(Preprocessor):
                 error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
                 AppSettings.logger.error(error_msg)
                 self.errors.append(error_msg)
+            cnt = file_contents.count(f'{opener}{closer}') + file_contents.count(f'{opener} {closer}')
+            if cnt:
+                error_msg = f"{B} - {cnt} empty '{opener}{closer}' field{'' if cnt==1 else 's'}"
+                AppSettings.logger.error(error_msg)
+                self.warnings.append(error_msg)
 
         # Find and warn about (useless) paragraph formatting before a section break, etc.
         #  (probably should be after break)
