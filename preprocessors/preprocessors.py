@@ -420,9 +420,9 @@ class BiblePreprocessor(Preprocessor):
     # end of BiblePreprocessor.remove_closed_w_field function
 
 
-    def write_clean_file(self, file_name: str, file_contents: str) -> None:
+    def check_clean_write_USFM_file(self, file_name:str, file_contents:str) -> None:
         """
-        Cleans the USFM text as it writes it.
+        Checks (creating warnings) and cleans the USFM text as it writes it.
 
         Also saves a list of RC links for later checking
             (from inside \w fields of original Heb/Grk texts,
@@ -431,7 +431,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Check/Remove some of this code once tC export is fixed
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
-        # AppSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
+        # AppSettings.logger.debug(f"check_clean_write_USFM_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -446,7 +446,14 @@ class BiblePreprocessor(Preprocessor):
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
 
-        # Check USFM2/3 pairs
+        # Check illegal characters
+        for illegal_chars in ('\\\\', '**',):
+            if illegal_chars in file_contents:
+                error_msg = f"{B} - Unexpected '{illegal_chars}' in USFM file"
+                AppSettings.logger.error(error_msg)
+                self.warnings.append(error_msg)
+
+        # Check USFM pairs
         for opener,closer in (
                                 # Character formatting
                                 ('\\add ', '\\add*'),
@@ -777,12 +784,15 @@ class BiblePreprocessor(Preprocessor):
             assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
-    # end of BiblePreprocessor.write_clean_file function
+    # end of BiblePreprocessor.check_clean_write_USFM_file function
 
 
     def clean_copy(self, source_pathname: str, destination_pathname: str) -> None:
         """
         Cleans the USFM file as it copies it.
+
+        Note that check_clean_write_USFM_file() also does many checks (creates warnings)
+            on the USFM data as it cleans and writes it.
         """
         # AppSettings.logger.debug(f"clean_copy( {source_pathname}, {destination_pathname} )")
 
@@ -792,7 +802,7 @@ class BiblePreprocessor(Preprocessor):
 
         with open(source_pathname, 'rt') as in_file:
             source_contents = in_file.read()
-        self.write_clean_file(destination_pathname, source_contents)
+        self.check_clean_write_USFM_file(destination_pathname, source_contents)
     # end of BiblePreprocessor.clean_copy function
 
 
@@ -955,7 +965,7 @@ class BiblePreprocessor(Preprocessor):
                                                           project.identifier.upper())
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
-                        self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
+                        self.check_clean_write_USFM_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
         if self.num_files_written == 0:
@@ -1896,10 +1906,6 @@ class TnPreprocessor(Preprocessor):
                     if '?v=' not in rel:
                         self.warnings.append(f"No Hebrew version number specified in manifest: '{rel}'")
                     version = rel[rel.find('?v=')+3:]
-        #################################################### TEMP
-                    version = '2.1.8'
-                    self.warnings.append(f"NOTE: TEMPORARILY USING v{version} FOR CHECKING Hebrew QUOTES AGAINST.")
-        #################################################### TEMP
                     url = f"https://git.door43.org/unfoldingWord/UHB/archive/v{version}.zip"
                     successFlag = self.preload_original_text_archive('uhb', url)
                     if not successFlag: # Try the Door43 Catalog version
@@ -1985,7 +1991,7 @@ class TnPreprocessor(Preprocessor):
                                         self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
                                     field_id_list.append(field_id)
                                     if SupportReference and SupportReference!='SupportReference' \
-                                    and SupportReference not in OccurrenceNote:
+                                    and f'/{SupportReference}' not in OccurrenceNote:
                                         self.warnings.append(f"Mismatch at {B} {C}:{V} between SupportReference='{SupportReference}' and expected link in '{OccurrenceNote}'")
                                     if '://' in OccurrenceNote or '[[' in OccurrenceNote:
                                         OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
