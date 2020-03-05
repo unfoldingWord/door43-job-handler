@@ -659,6 +659,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         AppSettings.logger.debug(f"Prepending {len(rc.error_messages)} RC warnings to {len(preprocessor_warning_list)} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
     if preprocessor_warning_list:
+        preprocessor_warning_list.append(f"{len(preprocessor_warning_list)} total resource container and preprocessor warnings")
         AppSettings.logger.debug(f"Preprocessor warning list is ({len(preprocessor_warning_list)}) {preprocessor_warning_list}")
 
     # Copy the ReadMe file if it seems that this repo is just minimal
