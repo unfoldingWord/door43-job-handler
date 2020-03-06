@@ -54,9 +54,10 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
     # So now lets actually run our chosen preprocessor and do the work
     num_files_written, warnings_list = preprocessor.run()
 
-    if len(warnings_list) > 200:  # sanity check so we don't overflow callback size limits
-        new_warnings_list = warnings_list[:190]
-        new_warnings_list.append("………………")
+    MAX_WARNINGS = 1000
+    if len(warnings_list) > MAX_WARNINGS:  # sanity check so we don't overflow callback size limits
+        new_warnings_list = warnings_list[:MAX_WARNINGS-10]
+        new_warnings_list.append("…………………………")
         new_warnings_list.extend(warnings_list[-9:])
         msg = f"Preprocessor warnings reduced from {len(warnings_list):,} to {len(new_warnings_list)}"
         AppSettings.logger.debug(f"Linter {msg}")
@@ -87,7 +88,8 @@ class Preprocessor:
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
         self.num_files_written = 0
-        self.warnings:List[str] = []
+        self.errors:List[str] = []   # { Errors float to the top of the list
+        self.warnings:List[str] = [] # {    above warnings
 
         # Check that we had a manifest (or equivalent) file
         # found_manifest = False
@@ -154,11 +156,11 @@ class Preprocessor:
                         self.num_files_written += 1
         if self.num_files_written == 0:
             AppSettings.logger.error(f"Default preprocessor didn't write any files")
-            self.warnings.append("No source files discovered")
+            self.errors.append("No source files discovered")
         else:
-            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of DefaultPreprocessor run()
 
 
@@ -278,11 +280,11 @@ class ObsPreprocessor(Preprocessor):
                         self.num_files_written += 1
         if self.num_files_written == 0:
             AppSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
-            self.warnings.append("No OBS source files discovered")
+            self.errors.append("No OBS source files discovered")
         else:
-            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
 
@@ -351,11 +353,11 @@ class ObsNotesPreprocessor(Preprocessor):
 
         if self.num_files_written == 0:
             AppSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
-            self.warnings.append("No OBSNotes source files discovered")
+            self.errors.append("No OBSNotes source files discovered")
         else:
-            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of ObsNotesPreprocessor run()
 
 
@@ -412,16 +414,16 @@ class BiblePreprocessor(Preprocessor):
                 # AppSettings.logger.debug(f"Adjusted line to: '{text}'")
             else:
                 AppSettings.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
-                self.warnings.append(f"{B} {C}:{V} - Missing \\{marker}* closure")
+                self.errors.append(f"{B} {C}:{V} - Missing \\{marker}* closure")
                 text = text.replace(f'\\{marker} ', '', 1) # Attempt to limp on
             ixW = text.find(f'\\{marker} ', ixW) # Might be another one
         return text
     # end of BiblePreprocessor.remove_closed_w_field function
 
 
-    def write_clean_file(self, file_name: str, file_contents: str) -> None:
+    def check_clean_write_USFM_file(self, file_name:str, file_contents:str) -> None:
         """
-        Cleans the USFM text as it writes it.
+        Checks (creating warnings) and cleans the USFM text as it writes it.
 
         Also saves a list of RC links for later checking
             (from inside \w fields of original Heb/Grk texts,
@@ -430,7 +432,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Check/Remove some of this code once tC export is fixed
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
-        # AppSettings.logger.debug(f"write_clean_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
+        # AppSettings.logger.debug(f"check_clean_write_USFM_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -445,7 +447,14 @@ class BiblePreprocessor(Preprocessor):
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
 
-        # Check USFM2/3 pairs
+        # Check illegal characters
+        for illegal_chars in ('\\\\', '**',):
+            if illegal_chars in file_contents:
+                error_msg = f"{B} - {file_contents.count(illegal_chars)} unexpected '{illegal_chars}' in USFM file"
+                AppSettings.logger.error(error_msg)
+                self.errors.append(error_msg)
+
+        # Check USFM pairs
         for opener,closer in (
                                 # Character formatting
                                 ('\\add ', '\\add*'),
@@ -481,9 +490,14 @@ class BiblePreprocessor(Preprocessor):
             if cnt1 != cnt2:
                 error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
                 AppSettings.logger.error(error_msg)
+                self.errors.append(error_msg)
+            cnt = file_contents.count(f'{opener}{closer}') + file_contents.count(f'{opener} {closer}')
+            if cnt:
+                error_msg = f"{B} - {cnt} empty '{opener}{closer}' field{'' if cnt==1 else 's'}"
+                AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
-        # Find and warn about (useless) paragraph formatting before a section break
+        # Find and warn about (useless) paragraph formatting before a section break, etc.
         #  (probably should be after break)
         for marker1,marker2,thisRE in (
                                         ('p', 's', r'\\p *\n*?\\s'),
@@ -560,9 +574,9 @@ class BiblePreprocessor(Preprocessor):
                 ixSpace = line[3:].find(' ')
                 V = line[3:3+ixSpace]
             elif line.startswith('\\s5') and line[3:] and not line[3:].isspace():
-                self.warnings.append(f"{B} {C}:{V} - unexpected text '{line[3:]}' on \\s5 line")
+                self.errors.append(f"{B} {C}:{V} - unexpected text '{line[3:]}' on \\s5 line")
             elif line.startswith('\\ts\\*') and line[5:] and not line[5:].isspace():
-                self.warnings.append(f"{B} {C}:{V} - unexpected text '{line[5:]}' on \\ts\\* line")
+                self.errors.append(f"{B} {C}:{V} - unexpected text '{line[5:]}' on \\ts\\* line")
 
         if has_USFM3_line: # Issue any global USFM3 warnings
             # Do some global deletions to make things easier
@@ -627,7 +641,7 @@ class BiblePreprocessor(Preprocessor):
                                          '\\+w ', '\\+w\t', '\\+w\n', ):
                     if illegal_sequence in adjusted_line:
                         AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
-                        self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
+                        self.errors.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                 if adjusted_line != line: # it's non-blank and it changed
                     # if 'EPH' in file_name:
@@ -654,7 +668,7 @@ class BiblePreprocessor(Preprocessor):
             preadjusted_file_contents, n1 = re.subn(r'\\q([^ 1234acdmrs])', r'\\q \1', preadjusted_file_contents) # Fix bad USFM \q without following space
             # \q markers with following text but missing the space in-betweeb
             preadjusted_file_contents, n2 = re.subn(r'\\(q[1234])([^ ])', r'\\\1 \2', preadjusted_file_contents) # Fix bad USFM \q without following space
-            if n1 or n2: self.warnings.append(f"{B} - {n1+n2:,} badly formed \\q markers")
+            if n1 or n2: self.errors.append(f"{B} - {n1+n2:,} badly formed \\q markers")
             # Restore good \q# markers
             preadjusted_file_contents = re.sub(r'\\QQQ([1234acdmrs]?)\n', r'\\q\1\n', preadjusted_file_contents) # Repair valid \q# markers
 
@@ -662,7 +676,7 @@ class BiblePreprocessor(Preprocessor):
             preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
             # Invalid \p… markers
             preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
-            if n: self.warnings.append(f"{B} - {n:,} badly formed \\p markers")
+            if n: self.errors.append(f"{B} - {n:,} badly formed \\p markers")
             # Restore empty \p markers
             preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
 
@@ -776,12 +790,15 @@ class BiblePreprocessor(Preprocessor):
             assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
-    # end of BiblePreprocessor.write_clean_file function
+    # end of BiblePreprocessor.check_clean_write_USFM_file function
 
 
     def clean_copy(self, source_pathname: str, destination_pathname: str) -> None:
         """
         Cleans the USFM file as it copies it.
+
+        Note that check_clean_write_USFM_file() also does many checks (creates warnings)
+            on the USFM data as it cleans and writes it.
         """
         # AppSettings.logger.debug(f"clean_copy( {source_pathname}, {destination_pathname} )")
 
@@ -791,7 +808,7 @@ class BiblePreprocessor(Preprocessor):
 
         with open(source_pathname, 'rt') as in_file:
             source_contents = in_file.read()
-        self.write_clean_file(destination_pathname, source_contents)
+        self.check_clean_write_USFM_file(destination_pathname, source_contents)
     # end of BiblePreprocessor.clean_copy function
 
 
@@ -819,7 +836,7 @@ class BiblePreprocessor(Preprocessor):
             if not link_text.startswith('rc://*/tw/dict/bible/'):
                 err_msg = f"{B} {C}:{V} - Bad {link_type} link format: '{link_text}'"
                 AppSettings.logger.error(err_msg)
-                self.warnings.append(err_msg)
+                self.errors.append(err_msg)
                 continue
             link_word = link_text[21:]
             if link_word in cached_links: # we've already checked it
@@ -928,7 +945,7 @@ class BiblePreprocessor(Preprocessor):
                                 continue
                             try: first_chunk = read_file(os.path.join(project_path, chapter, chunks[0]))
                             except Exception as e:
-                                self.warnings.append(f"Error reading {chapter}/{chunks[0]}: {e}")
+                                self.errors.append(f"Error reading {chapter}/{chunks[0]}: {e}")
                                 continue
                             usfm += '\n\n'
                             if f'\\c {chapter_num}' not in first_chunk:
@@ -944,7 +961,7 @@ class BiblePreprocessor(Preprocessor):
                                 chunk_num = os.path.splitext(chunk)[0].lstrip('0')
                                 try: chunk_content = read_file(os.path.join(project_path, chapter, chunk))
                                 except Exception as e:
-                                    self.warnings.append(f"Error reading {chapter}/{chunk}: {e}")
+                                    self.errors.append(f"Error reading {chapter}/{chunk}: {e}")
                                     continue
                                 if f'\\v {chunk_num} ' not in chunk_content:
                                     chunk_content = f'\\v {chunk_num} ' + chunk_content
@@ -954,21 +971,21 @@ class BiblePreprocessor(Preprocessor):
                                                           project.identifier.upper())
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
-                        self.write_clean_file(os.path.join(self.output_dir, filename), usfm)
+                        self.check_clean_write_USFM_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
         if self.num_files_written == 0:
             AppSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
-            self.warnings.append("No Bible source files discovered")
+            self.errors.append("No Bible source files discovered")
         else:
-            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         if self.RC_links:
             self.process_RC_links()
 
         AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of BiblePreprocessor.run()
 # end of class BiblePreprocessor
 
@@ -1252,9 +1269,9 @@ class TaPreprocessor(Preprocessor):
                 self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
         if self.num_files_written == 0:
             AppSettings.logger.error("tA preprocessor didn't write any markdown files")
-            self.warnings.append("No tA source files discovered")
+            self.errors.append("No tA source files discovered")
         else:
-            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Delete temp folder
         if prefix and debug_mode_flag:
@@ -1263,7 +1280,7 @@ class TaPreprocessor(Preprocessor):
             remove_tree(self.preload_dir)
 
         AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of TaPreprocessor run()
 
 
@@ -1458,7 +1475,7 @@ class TaPreprocessor(Preprocessor):
                     if ixs == -1: break # None / no more
                     ixe = book_line.find('\\*')
                     if ixe == -1:
-                        self.warnings.append(f"{B} {C}:{V} Missing closing part of {bookline[ixs:]}")
+                        self.errors.append(f"{B} {C}:{V} Missing closing part of {bookline[ixs:]}")
                     book_line = f'{book_line[:ixs]}{book_line[ixe+2:]}' # Remove \zaln-s field
                 verseText += ('' if book_line.startswith('\\f ') else ' ') + book_line
         if V1 != V2: # then the text might contain verse numbers
@@ -1596,7 +1613,7 @@ class TqPreprocessor(Preprocessor):
                                         '-'+end_verse if start_verse != end_verse else '')
                                 try: text = read_file(chunk_filepath) + '\n\n'
                                 except Exception as e:
-                                    self.warnings.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
+                                    self.errors.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
                                     continue
                                 text = headers_re.sub(r'\1### \2', text)  # This will bump any header down 3 levels
                                 markdown += text
@@ -1607,7 +1624,7 @@ class TqPreprocessor(Preprocessor):
                 else: # no chapter dirs
                     msg = f"No chapter folders found in {book} folder"
                     AppSettings.logger.warning(msg)
-                    self.warnings.append(msg)
+                    self.errors.append(msg)
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
                 self.num_files_written += 1
@@ -1616,15 +1633,15 @@ class TqPreprocessor(Preprocessor):
 
         if self.num_files_written == 0:
             AppSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
-            self.warnings.append("No tQ source files discovered")
+            self.errors.append("No tQ source files discovered")
         else:
-            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Write out TQ index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
 
@@ -1670,7 +1687,7 @@ class TwPreprocessor(Preprocessor):
                 term = os.path.splitext(os.path.basename(term_filepath))[0]
                 try: text = read_file(term_filepath)
                 except Exception as e:
-                    self.warnings.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
+                    self.errors.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
                     continue
                 try:
                     json_data = json.loads(text)
@@ -1679,7 +1696,7 @@ class TwPreprocessor(Preprocessor):
                     adjusted_filepath = '/'.join(term_filepath.split('/')[6:]) #.replace('/./','/')
                     error_message = f"Badly formed tW json file '{adjusted_filepath}': {e}"
                     AppSettings.logger.error(error_message)
-                    self.warnings.append(error_message)
+                    self.errors.append(error_message)
                     json_data = {}
                 if json_data:
                     unit_count = 0
@@ -1704,7 +1721,7 @@ class TwPreprocessor(Preprocessor):
                 else:
                     error_message = f"No tW json data found in file '{adjusted_filepath}'"
                     AppSettings.logger.error(error_message)
-                    self.warnings.append(error_message)
+                    self.errors.append(error_message)
             # Now process the dictionaries to sort terms by title and add to markdown
             markdown = ''
             titles = index_json['chapters'][key]
@@ -1749,7 +1766,7 @@ class TwPreprocessor(Preprocessor):
                         term = os.path.splitext(os.path.basename(term_filepath))[0]
                         try: text = read_file(term_filepath)
                         except Exception as e:
-                            self.warnings.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
+                            self.errors.append(f"Error reading {os.path.basename(term_filepath)}: {e}")
                             continue
                         if title_re.search(text):
                             title = title_re.search(text).group(1)
@@ -1784,11 +1801,11 @@ class TwPreprocessor(Preprocessor):
 
         if self.num_files_written == 0:
             AppSettings.logger.error(f"tW preprocessor didn't write any markdown files")
-            self.warnings.append("No tW source files discovered")
+            self.errors.append("No tW source files discovered")
         else:
-            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of TwPreprocessor run()
 
 
@@ -1967,18 +1984,21 @@ class TnPreprocessor(Preprocessor):
                                     if line_number == 1:
                                         # AppSettings.logger.debug(f"TSV header line is '{tsv_line}")
                                         if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
-                                            self.warnings.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
+                                            self.errors.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
                                     elif tab_count != EXPECTED_TSV_SOURCE_TAB_COUNT:
                                         AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
-                                    B, C, V, field_id, _SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
+                                    B, C, V, field_id, SupportReference, OrigQuote, _Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
                                     if B!=lastB or C!=lastC or V!=lastV:
                                         field_id_list:List[str] = [] # IDs only need to be unique within each verse
                                         lastB, lastC, lastV = B, C, V
                                     if field_id in field_id_list:
                                         self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
                                     field_id_list.append(field_id)
+                                    if SupportReference and SupportReference!='SupportReference' \
+                                    and f'/{SupportReference}' not in OccurrenceNote:
+                                        self.warnings.append(f"Mismatch at {B} {C}:{V} between SupportReference='{SupportReference}' and expected link in '{OccurrenceNote}'")
                                     if '://' in OccurrenceNote or '[[' in OccurrenceNote:
                                         OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                                     if 'rc://' in OccurrenceNote:
@@ -2039,7 +2059,7 @@ class TnPreprocessor(Preprocessor):
                                         '-'+end_verse if start_verse != end_verse else '')
                                 try: text = read_file(chunk_filepath) + '\n\n'
                                 except Exception as e:
-                                    self.warnings.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
+                                    self.errors.append(f"Error reading {os.path.basename(chunk_filepath)}: {e}")
                                     continue
                                 text = headers_re.sub(r'\1## \2', text)  # This will bump any header down 2 levels
                                 markdown += text
@@ -2079,7 +2099,7 @@ class TnPreprocessor(Preprocessor):
                                     adjusted_filepath = '/'.join(chunk_filepath.split('/')[6:]) #.replace('/./','/')
                                     error_message = f"Badly formed tN json file '{adjusted_filepath}': {e}"
                                     AppSettings.logger.error(error_message)
-                                    self.warnings.append(error_message)
+                                    self.errors.append(error_message)
                                     json_data = {}
                                 for tn_unit in json_data:
                                     if 'title' in tn_unit and 'body' in tn_unit:
@@ -2088,7 +2108,7 @@ class TnPreprocessor(Preprocessor):
                                     else:
                                         self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
                     if not found_something:
-                        self.warnings.append(f"tN Preprocessor didn't find any valid source files for {book}")
+                        self.errors.append(f"tN Preprocessor didn't find any valid source files for {book}")
                     markdown = self.fix_links(book, markdown, self.repo_owner, language_id)
                     if 'rc://' in markdown:
                         self.warnings.append(f"Unable to all process 'rc://' links in {book}")
@@ -2103,9 +2123,9 @@ class TnPreprocessor(Preprocessor):
 
         if self.num_files_written == 0:
             AppSettings.logger.error(f"tN preprocessor didn't write any markdown files")
-            self.warnings.append("No tN source files discovered")
+            self.errors.append("No tN source files discovered")
         else:
-            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Write out TN index.json
         output_file = os.path.join(self.output_dir, 'index.json')
@@ -2118,7 +2138,7 @@ class TnPreprocessor(Preprocessor):
             remove_tree(self.preload_dir)
 
         # AppSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of TnPreprocessor run()
 
 
@@ -2456,7 +2476,7 @@ class LexiconPreprocessor(Preprocessor):
             except Exception as e:
                 msg = f"Error reading {os.path.basename(content_folderpath)}/01.md: {e}"
                 AppSettings.logger.error(msg)
-                self.warnings.append(msg)
+                self.errors.append(msg)
                 content = None
         else:
             msg = f"compile_lexicon_entry couldn't find any files for {folder}"
@@ -2532,15 +2552,15 @@ class LexiconPreprocessor(Preprocessor):
 
         if self.num_files_written == 0:
             AppSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
-            self.warnings.append("No lexicon source files discovered")
+            self.errors.append("No lexicon source files discovered")
         else:
-            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files with {len(self.warnings)} warnings")
+            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         str_list = str(os.listdir(self.output_dir))
         str_list_adjusted = str_list if len(str_list)<1500 \
                                 else f'{str_list[:1000]} …… {str_list[-500:]}'
         AppSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
-        return self.num_files_written, self.warnings
+        return self.num_files_written, self.errors + self.warnings
     # end of LexiconPreprocessor run()
 
 
