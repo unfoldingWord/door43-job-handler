@@ -19,14 +19,14 @@ import traceback
 from zipfile import BadZipFile
 from urllib.error import HTTPError
 
-# Library (PyPi) imports
+# Library (PyPI) imports
 import requests
 from rq import get_current_job, Queue
 from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, gogs_user_token, tx_post_url, REDIS_JOB_LIST, webhook_queue_name
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
