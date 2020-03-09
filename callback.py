@@ -188,45 +188,67 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) ->
 # end of clear_commit_directory_from_bucket function
 
 
-def get_current_branch_list(repo_owner_username:str, repo_name:str) -> List[str]:
+def get_list_from_Gitea(Gitea_url:str) -> List[str]:
     """
     """
-    AppSettings.logger.debug(f"get_current_branch_list({repo_owner_username}, {repo_name})…")
+    AppSettings.logger.debug(f"get_list_from_Gitea({Gitea_url})…")
 
-    current_branch_list = []
-    AppSettings.logger.info(f"Fetching branch list for {repo_owner_username}/{repo_name} from Gitea…")
+    this_list = []
     response:Optional[requests.Response]
     try:
-        # AppSettings.logger.debug(f"GETting branch list for {repo_owner_username}/{repo_name} from 'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches'…")
-        response = requests.get(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
+        # AppSettings.logger.debug(f"GETting list from '{Gitea_url}'…")
+        response = requests.get(Gitea_url)
     except requests.exceptions.ConnectionError as e:
-        AppSettings.logger.critical(f"Branch list connection error: {e}")
+        AppSettings.logger.critical(f"get_list_from_Gitea connection error: {e}")
         response = None
     if response:
         # AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
         # AppSettings.logger.debug(f"response.headers = {response.headers}")
         try:
-            response_json = response.json()
-            # AppSettings.logger.info(f"response_json = {response_json}")
-            assert isinstance( response_json, list) # Should be a list of dicts
-            current_branch_list = [branch_dict['name'] for branch_dict in response_json]
+            this_list = response.json()
+            # AppSettings.logger.info(f"response_json = {this_list}")
+            assert isinstance( this_list, list) # Should be a list of dicts
         except json.decoder.JSONDecodeError:
-            AppSettings.logger.info("No valid branch list response JSON found")
+            AppSettings.logger.info("No valid list response JSON found")
             AppSettings.logger.debug(f"response.text = {response.text}")
         if response.status_code != 200:
-            AppSettings.logger.critical(f"Failed to submit branch list request to Gitea:"
+            AppSettings.logger.critical(f"Failed to submit list request to Gitea:"
                                         f" {response.status_code}={response.reason}")
     else: # no response
-        error_msg = "Submission of branch list request to Gitea got no response"
+        error_msg = "Submission of list request to Gitea got no response"
         AppSettings.logger.critical(error_msg)
         # raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
-    AppSettings.logger.debug(f"  Returning current_branch_list={current_branch_list}")
-    return current_branch_list
-# end of get_current_branch_list function
+    # AppSettings.logger.debug(f"  Returning this_list={this_list}")
+    return this_list
+# end of get_list_from_Gitea function
 
 
-def remove_excess_commits(commits_list:list, project_folder_key:str, current_branch_list:List[str]) -> List[Dict[str,Any]]:
+def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
+    """
+    """
+    AppSettings.logger.debug(f"get_current_branch_names_list({repo_owner_username}, {repo_name})…")
+
+    current_branch_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
+    current_branch_names_list = [this_dict['name'] for this_dict in current_branch_list]
+    AppSettings.logger.info(f"  Returning current_branch_names_list={current_branch_names_list}")
+    return current_branch_names_list
+# end of get_current_branch_names_list function
+
+
+def get_current_tag_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
+    """
+    """
+    AppSettings.logger.debug(f"get_current_tag_names_list({repo_owner_username}, {repo_name})…")
+
+    current_tag_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
+    current_tag_names_list = [this_dict['tag_name'] for this_dict in current_tag_list]
+    AppSettings.logger.info(f"  Returning current_tag_names_list={current_tag_names_list}")
+    return current_tag_names_list
+# end of get_current_tag_names_list function
+
+
+def remove_excess_commits(commits_list:list, repo_owner_username:str, repo_name:str) -> List[Dict[str,Any]]:
     """
     Given a list of commits (oldest first),
         remove the unnecessary ones from the list
@@ -245,8 +267,12 @@ def remove_excess_commits(commits_list:list, project_folder_key:str, current_bra
     MAX_ALLOWED_REMOVED_FOLDERS = 500 # Don't want to get job timeouts -- typically can do 3500+ in 600s
                                        #    at least project.json will slowly get smaller if we limit this.
                                        # Each commit hash to be deleted has three folders to remove.
-    AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {project_folder_key}, {len(current_branch_list)}={current_branch_list})…")
+    AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {repo_owner_username}, {repo_name})…")
 
+    current_branch_names_list = get_current_branch_names_list(repo_owner_username, repo_name)
+    current_tag_names_list = get_current_tag_names_list(repo_owner_username, repo_name)
+
+    project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     new_commits:List[Dict[str,Any]] = []
     removed_folder_count = 0
     # Process it backwards in case we want to count how many we have as we go
@@ -283,11 +309,11 @@ def remove_excess_commits(commits_list:list, project_folder_key:str, current_bra
                 AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
                 AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
                 deleted_flag = True
-            elif commit['type'] == 'branch' and current_branch_list:
+            elif commit['type'] == 'branch' and current_branch_names_list:
                 # Some branches may have been deleted without us being informed
                 branch_name = commit['id']
-                AppSettings.logger.debug(f"Checking branch '{branch_name}' against {current_branch_list}…")
-                if branch_name not in current_branch_list:
+                AppSettings.logger.debug(f"Checking branch '{branch_name}' against {current_branch_names_list}…")
+                if branch_name not in current_branch_names_list:
                     commit_key = f"{project_folder_key}{commit['id']}"
                     AppSettings.logger.info(f"  {n:,} Removing {prefix} CDN & D43 '{branch_name}' branch! …")
                     # AppSettings.logger.info(f"  {n:,} Removing {prefix}CDN '{branch_name}' branch! …")
@@ -306,6 +332,34 @@ def remove_excess_commits(commits_list:list, project_folder_key:str, current_bra
                         AppSettings.logger.warning(f" {n:,} No job_id so pre-convert zip file not deleted.")
                     # Setup redirects (so users don't get 404 errors from old saved links)
                     old_repo_key = f"{project_folder_key}{branch_name}"
+                    latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
+                    AppSettings.logger.info(f"  {n:,} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
+                    AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
+                    AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
+                    deleted_flag = True
+            elif commit['type'] == 'tag' and current_tag_names_list:
+                # Some branches may have been deleted without us being informed
+                tag_name = commit['id']
+                AppSettings.logger.debug(f"Checking tag '{tag_name}' against {current_tag_names_list}…")
+                if tag_name not in current_tag_names_list:
+                    commit_key = f"{project_folder_key}{commit['id']}"
+                    AppSettings.logger.info(f"  {n:,} Removing {prefix} CDN & D43 '{tag_name}' release! …")
+                    # AppSettings.logger.info(f"  {n:,} Removing {prefix}CDN '{tag_name}' release! …")
+                    clear_commit_directory_from_bucket(AppSettings.cdn_s3_handler(), commit_key)
+                    removed_folder_count += 1
+                    # AppSettings.logger.info(f"  {n:,} Removing {prefix}D43 '{tag_name}' release! …")
+                    clear_commit_directory_from_bucket(AppSettings.door43_s3_handler(), commit_key)
+                    removed_folder_count += 1
+                    # Delete the pre-convert .zip file (available on Download button) from its bucket
+                    if commit['job_id']:
+                        zipFile_key = f"preconvert/{commit['job_id']}.zip"
+                        AppSettings.logger.info(f"  {n:,} Removing {prefix}PreConvert '{commit['type']}' '{zipFile_key}' file! …")
+                        clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zipFile_key)
+                        removed_folder_count += 1
+                    else: # don't know the job_id (or the zip file was already deleted)
+                        AppSettings.logger.warning(f" {n:,} No job_id so pre-convert zip file not deleted.")
+                    # Setup redirects (so users don't get 404 errors from old saved links)
+                    old_repo_key = f"{project_folder_key}{tag_name}"
                     latest_repo_key = f"/{project_folder_key}{new_commits[-1]['id']}" # Must start with /
                     AppSettings.logger.info(f"  {n:,} Redirecting {old_repo_key} and {old_repo_key}/index.html to {latest_repo_key} …")
                     AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
@@ -397,8 +451,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
         AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
     commits.append(current_commit)
 
-    current_branch_list = get_current_branch_list(repo_owner_username, repo_name)
-    cleaned_commits = remove_excess_commits(commits, project_folder_key, current_branch_list)
+    cleaned_commits = remove_excess_commits(commits, repo_owner_username, repo_name)
     if len(cleaned_commits) < len(commits): # Then we removed some
         # Save a dated (coz this could happen more than once) backup of the project.json file
         save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
