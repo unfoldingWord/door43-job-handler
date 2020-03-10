@@ -190,6 +190,8 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) ->
 
 def get_list_from_Gitea(Gitea_url:str) -> List[str]:
     """
+    Send a GET request to the URL
+        and return the list from the returned JSON.
     """
     AppSettings.logger.debug(f"get_list_from_Gitea({Gitea_url})…")
 
@@ -226,24 +228,26 @@ def get_list_from_Gitea(Gitea_url:str) -> List[str]:
 
 def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
+    Ask Gitea for a list of all current branches.
     """
     AppSettings.logger.debug(f"get_current_branch_names_list({repo_owner_username}, {repo_name})…")
 
     current_branch_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
     current_branch_names_list = [this_dict['name'] for this_dict in current_branch_list]
-    AppSettings.logger.info(f"  Returning current_branch_names_list={current_branch_names_list}")
+    AppSettings.logger.info(f"Returning current_branch_names_list={current_branch_names_list}")
     return current_branch_names_list
 # end of get_current_branch_names_list function
 
 
 def get_current_tag_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
+    Ask Gitea for a list of all current release tags.
     """
     AppSettings.logger.debug(f"get_current_tag_names_list({repo_owner_username}, {repo_name})…")
 
     current_tag_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
     current_tag_names_list = [this_dict['tag_name'] for this_dict in current_tag_list]
-    AppSettings.logger.info(f"  Returning current_tag_names_list={current_tag_names_list}")
+    AppSettings.logger.info(f"Returning current_tag_names_list={current_tag_names_list}")
     return current_tag_names_list
 # end of get_current_tag_names_list function
 
