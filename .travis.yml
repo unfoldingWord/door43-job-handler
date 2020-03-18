@@ -2,6 +2,7 @@
 #
 # Requires the following environment variables to be set in the Travis settings:
 #   QUEUE_PREFIX
+#   DB_ENDPOINT
 #   TX_DATABASE_PW
 #   AWS_ACCESS_KEY_ID
 #   ASW_SECRET_ACCESS_KEY
