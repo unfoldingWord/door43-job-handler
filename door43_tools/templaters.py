@@ -180,7 +180,7 @@ class Templater:
         """
         Called from run()
         """
-        # AppSettings.logger.debug("Templater.apply_template()")
+        AppSettings.logger.info(f"Templater.apply_template() to all {len(self.HTMLfilepaths)} HTML files…")
         language_code = self.rc.resource.language.identifier
         language_name = self.rc.resource.language.title
         language_dir = self.rc.resource.language.direction

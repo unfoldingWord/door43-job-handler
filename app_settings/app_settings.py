@@ -84,7 +84,7 @@ class AppSettings:
     db_protocol = 'mysql+pymysql'
     db_user = 'tx'
     db_pass = os.environ['TX_DATABASE_PW']
-    db_end_point = 'd43-gogs.ccidwldijq9p.us-west-2.rds.amazonaws.com'
+    db_end_point = os.environ['DB_ENDPOINT']
     db_port = '3306'
     db_name = 'tx'
     db_connection_string = None

@@ -1996,9 +1996,8 @@ class TnPreprocessor(Preprocessor):
                                     if field_id in field_id_list:
                                         self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
                                     field_id_list.append(field_id)
-                                    if SupportReference and SupportReference!='SupportReference' \
-                                    and f'/{SupportReference}' not in OccurrenceNote:
-                                        self.warnings.append(f"Mismatch at {B} {C}:{V} between SupportReference='{SupportReference}' and expected link in '{OccurrenceNote}'")
+                                    if SupportReference and SupportReference!='SupportReference':
+                                        self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
                                     if '://' in OccurrenceNote or '[[' in OccurrenceNote:
                                         OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                                     if 'rc://' in OccurrenceNote:
@@ -2284,6 +2283,56 @@ class TnPreprocessor(Preprocessor):
     # end of TnPreprocessor.get_passage function
 
 
+    def check_support_reference(self, BCV:str, field_id:str, shortReference:str, fullNote:str, repo_owner:str, language_code:str) -> None:
+        """
+        We expect a full Resource Container link to TA like 'rc://en/ta/man/translate/figs-explicit'
+            or else just a TA 'translate' topic like 'figs-explicit'.
+
+        TODO: If we're really not going to use the fullNote parameter, it could be removed.
+        """
+        # AppSettings.logger.debug(f"check_support_reference({BCV}, {field_id}, {shortReference}, {fullNote}, {repo_owner}, {language_code})…" )
+
+        if shortReference.startswith('rc://'):
+            revisedContents = self.fix_links(BCV, field_id, shortReference, repo_owner, language_code)
+            AppSettings.logger.info( f"Got back revisedContents='{revisedContents}'")
+            AppSettings.logger.info( f"What if (anything) should we be doing next????") # Not really checked or finished (coz no data to test on yet)
+        else: # it's just the short form
+            file_url = f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/{shortReference}/01.md'
+            # print(f"check_support_reference: Got file URL='{file_url}'")
+            try:
+                link_title = self.title_cache[file_url]
+                # print(f"check_support_reference: Got from cache link_text='{link_text}' for {file_url}")
+            except:
+                link_title = None
+                title_file_url = file_url.replace('src','raw').replace('01','title')
+                # print(f"check_support_reference title file URL='{title_file_url}'")
+                try:
+                    file_contents = get_url(title_file_url)
+                except Exception as e:
+                    AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
+                    self.warnings.append(f"{BCV} error with tA '{shortReference}' link {title_file_url}: {e}")
+                    file_contents = None
+                if file_contents:
+                    link_title = file_contents
+                    if '\n' in link_title or '\r' in link_title or '\t' in link_title:
+                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
+                        self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
+                        link_title = link_title.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
+                    if not link_title:
+                        AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                        self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
+                        link_title = f"BLANK from '{shortReference}'"
+                    self.title_cache[file_url] = link_title
+                    # print(f"check_support_reference: Added to cache link_text='{link_text}' for {file_url}")
+            if not link_title:
+                AppSettings.logger.error(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
+                self.errors.append(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
+            # elif f'/{shortReference}' not in fullNote:
+            #     AppSettings.logger.warning(f"Possible tN mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+            #     self.warnings.append(f"Possible mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+    # end of TnPreprocessor.check_support_reference function
+
+
     compiled_re1 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)/01\.md\]\]',
                                             flags=re.IGNORECASE)
     compiled_re2 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
@@ -2292,6 +2341,7 @@ class TnPreprocessor(Preprocessor):
         """
         For tN (MD and TSV)
         """
+        # AppSettings.logger.debug(f"fix_links({BCV}, {content}, {repo_owner}, {language_code})…" )
         # assert content.count('(') == content.count(')')
         # assert content.count('[') == content.count(']')
 
@@ -2348,9 +2398,9 @@ class TnPreprocessor(Preprocessor):
         # content = re.sub(r'\[\[https://(.+?)/src/branch/master/(.+?)/01\.md\]\]',
         #                  r'[\2](https://\1/src/branch/master/\2/01\.md)',
         #                  content, flags=re.IGNORECASE)
-        start_index = 0
+        content_start_index = 0
         bad_file_count = 0
-        while (match := TnPreprocessor.compiled_re1.search(content, start_index)):
+        while (match := TnPreprocessor.compiled_re1.search(content, content_start_index)):
             # print(f"Match8a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
             # print(f"Match8b: {match.groups()}")
             file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}/01.md'
@@ -2386,7 +2436,7 @@ class TnPreprocessor(Preprocessor):
             # new_link_markdown = f'[{link_text}]({file_url})'
             # print(f"Match8e: New tA link = {new_link_markdown}")
             content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
-            start_index = match.start() + 1
+            content_start_index = match.start() + 1
         # if content != content8: print(f"8: was {content8}\nnow {content}")
         # assert content.count('(') == content.count(')')
         # assert content.count('[') == content.count(']')
@@ -2395,9 +2445,9 @@ class TnPreprocessor(Preprocessor):
         # content = re.sub(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
         #                  r'[\2](https://\1/src/branch/master/\2\.md)',
         #                  content, flags=re.IGNORECASE)
-        start_index = 0
+        content_start_index = 0
         bad_file_count = 0
-        while (match := TnPreprocessor.compiled_re2.search(content, start_index)):
+        while (match := TnPreprocessor.compiled_re2.search(content, content_start_index)):
             # print(f"Match9a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
             # print(f"Match9b: {match.groups()}")
             file_url = f'https://{match.group(1)}/src/branch/master/{match.group(2)}.md'
@@ -2438,7 +2488,7 @@ class TnPreprocessor(Preprocessor):
             # new_link_markdown = f'[{link_text}]({file_url})'
             # print(f"Match9e: New tW link = {new_link_markdown}")
             content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
-            start_index = match.start() + 1
+            content_start_index = match.start() + 1
         # if content != content9: print(f"9: was {content9}\nnow {content}")
 
         # assert content.count('(') == content.count(')')

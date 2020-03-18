@@ -20,11 +20,16 @@ dependenciesTest:
 	pip3 install --requirement test_requirements.txt
 
 # NOTE: The following environment variables are expected to be set for testing:
+#	DB_ENDPOINT
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
 #	GOGS_USER_TOKEN
 checkEnvVariables:
+	@ if [ -z "${DB_ENDPOINT}" ]; then \
+		echo "Need to set DB_ENDPOINT"; \
+		exit 1; \
+	fi
 	@ if [ -z "${TX_DATABASE_PW}" ]; then \
 		echo "Need to set TX_DATABASE_PW"; \
 		exit 1; \
@@ -92,11 +97,11 @@ pushMasterImage:
 	docker push unfoldingword/door43_job_handler:master
 
 # NOTE: To test the container (assuming that the confidential environment variables are already set in the current environment) use:
-# 	docker run --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+# 	docker run --env DB_ENDPOINT --env TX_DATABASE_PW --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env QUEUE_PREFIX=dev- --env DEBUG_MODE=True --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
 
 
 # NOTE: To run the container in production use with the desired values:
-#     	docker run --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
+#     	docker run --env DB_ENDPOINT --env TX_DATABASE_PW=<tx_db_pw> --env AWS_ACCESS_KEY_ID=<access_key> --env AWS_SECRET_ACCESS_KEY=<sa_key> --env GRAPHITE_HOSTNAME=<graphite_hostname> --env REDIS_URL=<redis_url> --net="host" --name door43_job_handler --rm door43_job_handler
 
 connect:
 	# Gives a shell on the running container -- Note: no bash shell available
