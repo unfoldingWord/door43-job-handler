@@ -176,7 +176,7 @@ class Preprocessor:
         return None
 
 
-    def check_punctuation_pairs(self, some_text:str, ref:str, ignore_close_parenthesis=False) -> None:
+    def check_punctuation_pairs(self, some_text:str, ref:str, allow_close_parenthesis_points=False) -> None:
         """
         Check matching number of pairs.
 
@@ -185,8 +185,7 @@ class Preprocessor:
 
         Copied here from linter.py 23Mar2020.
         """
-        punctuation_pairs_to_check = (('[',']'), ('{','}'), ('**_','_**')) if ignore_close_parenthesis \
-                    else (('(',')'), ('[',']'), ('{','}'), ('**_','_**'))
+        punctuation_pairs_to_check = (('(',')'), ('[',']'), ('{','}'), ('**_','_**'))
 
         found_any_paired_chars = False
         # found_mismatch = False
@@ -199,8 +198,14 @@ class Preprocessor:
                 self.warnings.append(f"{ref}: Possible missing closing '{pairEnd}' -- found {pairStartCount} '{pairStart}' but {pairEndCount} '{pairEnd}'")
                 # found_mismatch = True
             elif pairEndCount > pairStartCount:
-                self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' -- found {pairStartCount} '{pairStart}' but {pairEndCount} '{pairEnd}'")
-                # found_mismatch = True
+                if allow_close_parenthesis_points:
+                    # possible_points_list = re.findall(r'\s\d\) ', some_text)
+                    # if possible_points_list: print("possible_points_list", possible_points_list)
+                    possible_point_count = len(re.findall(r'\s\d\) ', some_text))
+                    pairEndCount -= possible_point_count
+                if pairEndCount > pairStartCount: # still
+                    self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' -- found {pairStartCount} '{pairStart}' but {pairEndCount} '{pairEnd}'")
+                    # found_mismatch = True
         if found_any_paired_chars: # and not found_mismatch:
             # Double-check the nesting
             lines = some_text.split('\n')
@@ -1799,7 +1804,7 @@ class TwPreprocessor(Preprocessor):
                     assert unit_count == 1 # Only expect one title/body set I think
                     index_json['chapters'][key][term] = title
                     term_text[term] = body_text
-                    self.check_punctuation_pairs(body_text, f'{section}/{term}')
+                    self.check_punctuation_pairs(body_text, f'{section}/{term}', allow_close_parenthesis_points=True)
                 else:
                     error_message = f"No tW json data found in file '{adjusted_filepath}'"
                     AppSettings.logger.error(error_message)
@@ -1858,7 +1863,7 @@ class TwPreprocessor(Preprocessor):
                         text = headers_re.sub(r'#\1 \2', text)
                         index_json['chapters'][key][term] = title
                         term_text[term] = text
-                        self.check_punctuation_pairs(text, f'{section}/{term}')
+                        self.check_punctuation_pairs(text, f'{section}/{term}', allow_close_parenthesis_points=True)
                     # Sort terms by title and add to markdown
                     markdown = ''
                     titles = index_json['chapters'][key]
