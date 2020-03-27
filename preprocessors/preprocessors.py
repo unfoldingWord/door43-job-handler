@@ -423,7 +423,7 @@ class ObsNotesPreprocessor(Preprocessor):
                     # if rc_count: print(f"Story number {story_number_string} has {rc_count} 'rc://' links")
                     # double_bracket_count = markdown.count('[[')
                     # if double_bracket_count: print(f"Story number {story_number_string} has {double_bracket_count} '[[…]]' links")
-                    markdown = self.fix_links(markdown, self.repo_owner)
+                    markdown = self.fix_OBSNotes_links(markdown, self.repo_owner)
                     rc_count = markdown.count('rc://')
                     if rc_count:
                         AppSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
@@ -447,7 +447,7 @@ class ObsNotesPreprocessor(Preprocessor):
     # end of ObsNotesPreprocessor run()
 
 
-    def fix_links(self, content:str, repo_owner:str) -> str:
+    def fix_OBSNotes_links(self, content:str, repo_owner:str) -> str:
         """
         OBS Translation Notes contain links to translationAcademy
 
@@ -460,7 +460,7 @@ class ObsNotesPreprocessor(Preprocessor):
                          content,
                          flags=re.IGNORECASE)
         return content
-    # end of ObsNotesPreprocessor fix_links(content)
+    # end of ObsNotesPreprocessor fix_OBSNotes_links(content)
 # end of class ObsNotesPreprocessor
 
 
@@ -1338,7 +1338,7 @@ class TaPreprocessor(Preprocessor):
             if toc:
                 for section in toc['sections']:
                     markdown += self.compile_ta_section(project, section, 2)
-            markdown = self.fix_links(markdown, self.repo_owner)
+            markdown = self.fix_tA_links(markdown, self.repo_owner)
             output_file = os.path.join(self.output_dir, f'{str(idx+1).zfill(2)}-{project.identifier}.md')
             write_file(output_file, markdown)
             self.num_files_written += 1
@@ -1595,7 +1595,7 @@ class TaPreprocessor(Preprocessor):
     # end of TaPreprocessor.get_passage function
 
 
-    def fix_links(self, content:str, repo_owner:str) -> str:
+    def fix_tA_links(self, content:str, repo_owner:str) -> str:
         """
         For tA
         """
@@ -1622,7 +1622,7 @@ class TaPreprocessor(Preprocessor):
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])', r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         return content
-    # end of TaPreprocessor fix_links(content)
+    # end of TaPreprocessor fix_tA_links(content)
 # end of class TaPreprocessor
 
 
@@ -1740,6 +1740,13 @@ class TwPreprocessor(Preprocessor):
         'other': 'Other'
     }
 
+
+    def __init__(self, *args, **kwargs) -> None:
+        super(TwPreprocessor, self).__init__(*args, **kwargs)
+        self.content_cache = {}
+    # end of TwPreprocessor.__init__ function
+
+
     def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
@@ -1814,11 +1821,13 @@ class TwPreprocessor(Preprocessor):
             titles = index_json['chapters'][key]
             terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
             for term in terms_sorted_by_title:
+                # Less efficient to call fix_tW_links for each term here, but it helps us to know which file any errors are in
+                fixed_markdown = self.fix_tW_links(term_text[term], section, term, self.repo_owner)
                 if markdown:
                     markdown += '<hr>\n\n'
-                markdown += f"{term_text[term]}\n\n"
+                markdown += f'{fixed_markdown}\n\n'
             markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n{markdown}'
-            markdown = self.fix_links(markdown, section, self.repo_owner)
+            # markdown = self.fix_tW_links(markdown, section, self.repo_owner)
             output_file = os.path.join(self.output_dir, f'{section}.md')
             write_file(output_file, markdown)
             self.num_files_written += 1
@@ -1869,11 +1878,13 @@ class TwPreprocessor(Preprocessor):
                     titles = index_json['chapters'][key]
                     terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
                     for term in terms_sorted_by_title:
+                        # Less efficient to call fix_tW_links for each term here, but it helps us to know which file any errors are in
+                        fixed_markdown = self.fix_tW_links(term_text[term], section, term, self.repo_owner)
                         if markdown:
                             markdown += '<hr>\n\n'
-                        markdown += term_text[term] + '\n\n'
+                        markdown += f'{fixed_markdown}\n\n'
                     markdown = f'# <a id="tw-section-{section}"/>{self.section_titles[section]}\n\n' + markdown
-                    markdown = self.fix_links(markdown, section, self.repo_owner)
+                    # markdown = self.fix_tW_links(markdown, section, self.repo_owner)
                     output_file = os.path.join(self.output_dir, f'{section}.md')
                     write_file(output_file, markdown)
                     self.num_files_written += 1
@@ -1897,44 +1908,159 @@ class TwPreprocessor(Preprocessor):
     # end of TwPreprocessor run()
 
 
-    def fix_links(self, content:str, section:str, repo_owner:str) -> str:
+    compiled_tA_re = re.compile(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)', flags=re.IGNORECASE)
+    compiled_tW_re1 = re.compile(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)')
+    # compiled_tN_help_re = re.compile(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)', flags=re.IGNORECASE)
+    def fix_tW_links(self, content:str, sectionName:str, term_name:str, repo_owner:str) -> str:
         """
-        For tW
+        Also does some checking now (as from 27 March 2020)
         """
-        # convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
+        # AppSettings.logger.debug(f"fix_tW_links('{content[:10]}…', '{sectionName}', '{term_name}', '{repo_owner}')…" )
+        assert sectionName in ('kt','names','other')
+        sectionName = f'{sectionName}/{term_name}'
+
+        # Convert tA RC links, e.g. rc://en/ta/man/translate/figs-euphemism
         #                           => https://git.door43.org/{repo_owner}/en_ta/translate/figs-euphemism/01.md
-        content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
-                         rf'https://git.door43.org/{repo_owner}/\1_ta/src/branch/master/\3/01.md', content,
-                         flags=re.IGNORECASE)
-        # convert other RC links, e.g. rc://en/tn/help/1sa/16/02
+        # WAS content = re.sub(r'rc://([^/]+)/ta/([^/]+)/([^\s)\]\n$]+)',
+        #                  rf'https://git.door43.org/{repo_owner}/\1_ta/src/branch/master/\3/01.md', content,
+        #                  flags=re.IGNORECASE)
+        content_start_index = 0
+        bad_file_count = 0
+        while (match := TwPreprocessor.compiled_tA_re.search(content, content_start_index)):
+            # print(f"Match1a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match1b: {match.groups()}")
+            assert match.group(2) == 'man'
+            link_text = file_url = f'https://git.door43.org/{repo_owner}/{match.group(1)}_ta/src/branch/master/{match.group(3)}/01.md'
+            # print(f"Match1c: file URL='{file_url}'")
+            try:
+                file_contents = self.content_cache[file_url]
+            except KeyError:
+                try:
+                    # AppSettings.logger.debug(f"tW {sectionName} fix_linkA fetching {file_url}…")
+                    file_contents = get_url(file_url)
+                    if '<h3 id="' in file_contents and len(file_contents)>200:
+                        file_contents = 'good' # No need to store entire file contents
+                    elif bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tW fix_linkA in '{sectionName}' fetching {file_url} only got '{file_contents}'")
+                        self.warnings.append(f"Link in '{sectionName}' to {file_url} only found '{file_contents}'")
+                    self.content_cache[file_url] = file_contents # Remember that we were successful
+                except Exception as e:
+                    bad_file_count += 1
+                    if bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tW '{sectionName}' fix_linkA fetching {file_url} got: {e}")
+                        self.warnings.append(f"Error in '{sectionName}' with tA '{match.group(3)}' link {file_url}: {e}")
+                    link_text = self.content_cache[file_url] = f'INVALID {match.group(3)}'
+            content = f'{content[:match.start()]}{link_text}{content[match.end():]}'
+            content_start_index = match.start() + 1
+
+        # Convert other RC links, e.g. rc://en/tn/help/1sa/16/02
         #                           => https://git.door43.org/{repo_owner}/en_tn/1sa/16/02.md
         content = re.sub(r'rc://([^/]+)/([^/]+)/([^/]+)/([^\s)\]\n$]+)',
                          rf'https://git.door43.org/{repo_owner}/\1_\2/src/branch/master/\4.md', content,
                          flags=re.IGNORECASE)
-        # fix links to other sections within the same manual (only one ../ and a section name that matches section_link)
+
+
+        # Fix links to other tW sections within the same manual (only one ../ and a section name that matches section_link)
         # e.g. [covenant](../kt/covenant.md) => [covenant](#covenant)
-        pattern = r'\]\(\.\.\/{0}\/([^/]+).md\)'.format(section)
-        content = re.sub(pattern, r'](#\1)', content)
-        # fix links to other sections within the same manual (only one ../ and a section name)
+        compiled_pattern = re.compile( rf'\]\(\.\.\/{sectionName}\/([^/]+).md\)' )
+        # WAS content = re.sub(pattern, r'](#\1)', content)
+        content_start_index = 0
+        bad_file_count = 0
+        while (match := compiled_pattern.search(content, content_start_index)):
+            # print(f"Match3a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+            # print(f"Match3b: {match.groups()}")
+            link_text = f'](#{match.group(1)})'
+            # print(f"Match3c: link_text='{link_text}'")
+            filepath = f'{self.source_dir}/bible/{sectionName}/{match.group(1)}.md'
+            # print(f'Match3d: filepath={filepath}')
+            try:
+                file_contents = self.content_cache[filepath]
+            except KeyError:
+                try:
+                    # AppSettings.logger.debug(f"tW {sectionName} fix_linkC fetching {filepath}…")
+                    file_contents = read_file(filepath)
+                    if '## ' in file_contents and len(file_contents)>200:
+                        file_contents = 'good' # No need to store entire file contents
+                    elif bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tW fix_linkC in '{sectionName}' reading {filepath} only got '{file_contents}'")
+                        self.warnings.append(f"Link in '{sectionName}' to {filepath} only found '{file_contents}'")
+                    self.content_cache[filepath] = file_contents # Remember that we were successful
+                except Exception as e:
+                    bad_file_count += 1
+                    if bad_file_count < 15 and len(self.warnings) < 200:
+                        AppSettings.logger.debug(f"tW '{sectionName}' fix_linkC reading {filepath} got: {e}")
+                        self.warnings.append(f"Error with '{sectionName}' internal '{match.group(1)}' link {filepath}: {e}" \
+                                                .replace(f'{self.source_dir}/', ''))
+                    self.content_cache[filepath] = f'INVALID {match.group(1)}'
+                    link_text = f']({self.content_cache[filepath]})'
+            content = f'{content[:match.start()]}{link_text}{content[match.end():]}'
+            content_start_index = match.start() + 1
+
+        # Fix links to other sections within the same manual (only one ../ and a section name)
         # e.g. [commit](../other/commit.md) => [commit](other.html#commit)
         for s in TwPreprocessor.section_titles:
-            pattern = re.compile(r'\]\(\.\./{0}/([^/]+).md\)'.format(s))
-            replace = r']({0}.html#\1)'.format(s)
-            content = re.sub(pattern, replace, content)
+            # Was pattern = re.compile(r'\]\(\.\./{0}/([^/]+).md\)'.format(s))
+            # replace = r']({0}.html#\1)'.format(s)
+            # content = re.sub(pattern, replace, content)
+            compiled_pattern = re.compile(rf'\]\(\.\./{s}/([^/]+).md\)')
+            content_start_index = 0
+            bad_file_count = 0
+            while (match := compiled_pattern.search(content, content_start_index)):
+                # print(f"Match4a: {match.start()}:{match.end()} '{content[match.start():match.end()]}'")
+                # print(f"Match4b: {match.groups()}")
+                link_text = rf']({s}.html#{match.group(1)})'
+                # print(f"Match4c: link_text='{link_text}'")
+                filepath = f'{self.source_dir}/bible/{s}/{match.group(1)}.md'
+                # print(f'Match4d: filepath={filepath}')
+                try:
+                    file_contents = self.content_cache[filepath]
+                except KeyError:
+                    try:
+                        # AppSettings.logger.debug(f"tW {sectionName} fix_linkD fetching {filepath}…")
+                        file_contents = read_file(filepath)
+                        if '## ' in file_contents and len(file_contents)>200:
+                            file_contents = 'good' # No need to store entire file contents
+                        elif bad_file_count < 15 and len(self.warnings) < 200:
+                            AppSettings.logger.debug(f"tW fix_linkD in '{sectionName}' reading {filepath} only got '{file_contents}'")
+                            self.warnings.append(f"Link in '{sectionName}' to {filepath} only found '{file_contents}'")
+                        self.content_cache[filepath] = file_contents # Remember that we were successful
+                    except Exception as e:
+                        bad_file_count += 1
+                        if bad_file_count < 15 and len(self.warnings) < 200:
+                            AppSettings.logger.debug(f"tW '{sectionName}' fix_linkD reading {filepath} got: {e}")
+                            self.warnings.append(f"Error with '{sectionName}' internal '{s}/{match.group(1)}' link {filepath}: {e}" \
+                                                .replace(f'{self.source_dir}/', ''))
+                        self.content_cache[filepath] = f'INVALID {s}/{match.group(1)}'
+                        link_text = f']({self.content_cache[filepath]})'
+                content = f'{content[:match.start()]}{link_text}{content[match.end():]}'
+                content_start_index = match.start() + 1
+
         # fix links to other sections that just have the section name but no 01.md page (preserve http:// links)
         # e.g. See [Verbs](figs-verb) => See [Verbs](#figs-verb)
+        contentSave1 = content
         content = re.sub(r'\]\(([^# :/)]+)\)',
                          r'](#\1)', content)
-        # convert URLs to links if not already
+        if content != contentSave1:
+            AppSettings.logger.debug("fix_tW_links still changed links here!")
+
+        # Convert URLs to links if not already
+        contentSave2 = content
         content = re.sub(r'([^"(\[])((http|https|ftp)://[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
                          r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
+        if content != contentSave2:
+            AppSettings.logger.debug("fix_tW_links still changed URLs here!")
+
         # URLs wth just www at the start, no http
+        contentSave3 = content
         content = re.sub(r'([^A-Z0-9"(/])(www\.[A-Z0-9/?&_.:=#-]+[A-Z0-9/?&_:=#-])',
                          r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
+        if content != contentSave3:
+            AppSettings.logger.debug("fix_tW_links still changed www's here!")
+
         return content
-    # end of TwPreprocessor fix_links function
+    # end of TwPreprocessor fix_tW_links function
 # end of class TwPreprocessor
 
 
@@ -1955,6 +2081,7 @@ class TnPreprocessor(Preprocessor):
         self.loaded_file_path = None
         self.loaded_file_contents = None
         self.preload_dir = tempfile.mkdtemp(prefix='tX_tN_linter_preload_')
+    # end of TnPreprocessor.__init__ function
 
 
     def get_book_list(self):
@@ -2025,7 +2152,7 @@ class TnPreprocessor(Preprocessor):
 
         if not self.need_to_check_quotes:
             self.warnings.append("Unable to find/load original language (Heb/Grk) sources for comparing tN snippets against.")
-    # end of get_quoted_versions()
+    # end of TnPreprocessor.get_quoted_versions()
 
 
     def run(self) -> Tuple[int, List[str]]:
@@ -2087,7 +2214,7 @@ class TnPreprocessor(Preprocessor):
                                     if SupportReference and SupportReference!='SupportReference':
                                         self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
                                     if '://' in OccurrenceNote or '[[' in OccurrenceNote:
-                                        OccurrenceNote = self.fix_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
+                                        OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                                     if 'rc://' in OccurrenceNote:
                                         self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
                                     if B != 'Book' \
@@ -2196,7 +2323,7 @@ class TnPreprocessor(Preprocessor):
                                         self.warnings.append(f"Unexpected tN unit in {chunk_filepath}: {tn_unit}")
                     if not found_something:
                         self.errors.append(f"tN Preprocessor didn't find any valid source files for {book}")
-                    markdown = self.fix_links(book, markdown, self.repo_owner, language_id)
+                    markdown = self.fix_tN_links(book, markdown, self.repo_owner, language_id)
                     if 'rc://' in markdown:
                         self.warnings.append(f"Unable to all process 'rc://' links in {book}")
                     book_file_name = f'{BOOK_NUMBERS[book]}-{book.upper()}.md'
@@ -2381,7 +2508,7 @@ class TnPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"check_support_reference({BCV}, {field_id}, {shortReference}, {fullNote}, {repo_owner}, {language_code})…" )
 
         if shortReference.startswith('rc://'):
-            revisedContents = self.fix_links(BCV, field_id, shortReference, repo_owner, language_code)
+            revisedContents = self.fix_tN_links(BCV, field_id, shortReference, repo_owner, language_code)
             AppSettings.logger.info( f"Got back revisedContents='{revisedContents}'")
             AppSettings.logger.info( f"What if (anything) should we be doing next????") # Not really checked or finished (coz no data to test on yet)
         else: # it's just the short form
@@ -2390,7 +2517,7 @@ class TnPreprocessor(Preprocessor):
             try:
                 link_title = self.title_cache[file_url]
                 # print(f"check_support_reference: Got from cache link_text='{link_text}' for {file_url}")
-            except:
+            except KeyError:
                 link_title = None
                 title_file_url = file_url.replace('src','raw').replace('01','title')
                 # print(f"check_support_reference title file URL='{title_file_url}'")
@@ -2425,11 +2552,11 @@ class TnPreprocessor(Preprocessor):
                                             flags=re.IGNORECASE)
     compiled_re2 = re.compile(r'\[\[https://([^ ]+?)/src/branch/master/([^ .]+?)\.md\]\]',
                                             flags=re.IGNORECASE)
-    def fix_links(self, BCV:str, content:str, repo_owner:str, language_code:str) -> str:
+    def fix_tN_links(self, BCV:str, content:str, repo_owner:str, language_code:str) -> str:
         """
-        For tN (MD and TSV)
+        For both MD and TSV varieties
         """
-        # AppSettings.logger.debug(f"fix_links({BCV}, {content}, {repo_owner}, {language_code})…" )
+        # AppSettings.logger.debug(f"fix_tN_links({BCV}, {content}, {repo_owner}, {language_code})…" )
         # assert content.count('(') == content.count(')')
         # assert content.count('[') == content.count(']')
 
@@ -2495,7 +2622,7 @@ class TnPreprocessor(Preprocessor):
             # print(f"Match8c: file URL='{file_url}'")
             try:
                 link_text = self.title_cache[file_url]
-            except:
+            except KeyError:
                 repo_type = match.group(1).split('_')[-1].upper() # e.g., TA or TW
                 link_text = f'{repo_type}:{match.group(2)}' # default
                 title_file_url = file_url.replace('src','raw').replace('01','title')
@@ -2542,7 +2669,7 @@ class TnPreprocessor(Preprocessor):
             # print(f"Match9c: file URL='{file_url}'")
             try:
                 link_text = self.title_cache[file_url]
-            except:
+            except KeyError:
                 repo_type = match.group(1).split('_')[-1].upper() # e.g., TA or TW
                 link_text = f'{repo_type}:{match.group(2)}' # default
                 title_file_url = file_url.replace('src','raw')
@@ -2582,7 +2709,7 @@ class TnPreprocessor(Preprocessor):
         # assert content.count('(') == content.count(')')
         # assert content.count('[') == content.count(']')
         return content
-    # end of fix_links function
+    # end of fix_tN_links function
 # end of class TnPreprocessor
 
 
