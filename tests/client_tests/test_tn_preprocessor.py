@@ -98,7 +98,7 @@ class TestTnPreprocessor(unittest.TestCase):
             ('rc://en/tn/help/1sa/16/02',
                 f'https://git.door43.org/{repo_owner}/en_tn/src/branch/master/1sa/16/02.md'),
             ):
-                actual_output = tn_preprocessor.fix_links('Gen 2:3', given_input, repo_owner, language_code)
+                actual_output = tn_preprocessor.fix_tN_links('Gen 2:3', given_input, repo_owner, language_code)
                 self.assertEqual(actual_output, expected_output)
 
     @classmethod
