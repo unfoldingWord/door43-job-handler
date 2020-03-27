@@ -699,7 +699,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         # We no longer use txJob class but just create our own Python dict
         #   This gets saved in Redis so it can be recalled by the callback function
         #       (only a very small subset gets posted to the tX-enqueue-job)
-        AppSettings.logger.debug("Webhook.process_job setting up job dict…")
+        AppSettings.logger.debug("Webhook.handle_page_build setting up job dict…")
         pj_job_dict:Dict[str,Any] = {}
         pj_job_dict['job_id'] = our_job_id
         pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
@@ -802,7 +802,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 # end of handle_page_build function
 
 
-def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) -> str:
+def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) -> str:
     """
     Parameters:
         queued_json_payload is a dict
@@ -815,7 +815,7 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) 
     The given payload will be automatically appended to the 'failed' queue
         by rq if an exception is thrown in this module.
     """
-    AppSettings.logger.info(f"WEBHOOK {prefix+' ' if prefix else ''}processing: {queued_json_payload}")
+    AppSettings.logger.debug(f"WEBHOOK {prefix+' ' if prefix else ''}processing: {queued_json_payload}")
 
 
     #  Update repo/owner/pusher stats
@@ -1009,10 +1009,10 @@ def process_job(queued_json_payload:Dict[str,Any], redis_connection, our_queue) 
         AppSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
     else:
         remove_tree(base_temp_dir_name)  # cleanup
-    # AppSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} is finishing with {build_log_dict}")
-    AppSettings.logger.info(f"{prefixed_our_name} process_job() for {job_descriptive_name} has finished.")
+    # AppSettings.logger.info(f"{prefixed_our_name} process_webhook_job() for {job_descriptive_name} is finishing with {build_log_dict}")
+    AppSettings.logger.info(f"{prefixed_our_name} process_webhook_job() for {job_descriptive_name} has finished.")
     return job_descriptive_name
-#end of process_job function
+#end of process_webhook_job function
 
 
 def job(queued_json_payload:Dict[str,Any]) -> None:
@@ -1027,9 +1027,10 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     AppSettings.logger.debug(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
     stats_client.incr(f'{webhook_stats_prefix}.jobs.attempted')
+    if 'echoed_from_production' in queued_json_payload and queued_json_payload['echoed_from_production']:
+        AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
 
-
-    AppSettings.logger.info(f"Clearing /tmp folder…")
+    AppSettings.logger.debug(f"Clearing /tmp folder…")
     empty_folder('/tmp/', only_prefix='Door43_') # Stops failed jobs from accumulating in /tmp
 
     current_job = get_current_job()
@@ -1072,7 +1073,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
         #queue_prefix = 'dev-' if current_job.origin.startswith('dev-') else ''
         #assert queue_prefix == prefix
         try:
-            job_descriptive_name = process_job(queued_json_payload, current_job.connection, our_queue)
+            job_descriptive_name = process_webhook_job(queued_json_payload, current_job.connection, our_queue)
         except Exception as e:
             # Catch most exceptions here so we can log them to CloudWatch
             AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
