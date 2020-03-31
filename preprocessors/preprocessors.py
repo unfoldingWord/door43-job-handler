@@ -2450,8 +2450,11 @@ class TnPreprocessor(Preprocessor):
             # Do some initial cleaning and convert to lines
             self.loaded_file_contents = self.loaded_file_contents \
                                             .replace('\\zaln-e\\*','') \
-                                            .replace('\\k-e\\*', '') \
-                                            .split('\n')
+                                            .replace('\\k-e\\*', '')
+            self.loaded_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \zaln start milestones
+            self.loaded_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \k start milestones
+            self.loaded_file_contents = self.loaded_file_contents.split('\n')
+
         found_chapter = found_verse = False
         verseText = ''
         for book_line in self.loaded_file_contents:
@@ -2465,9 +2468,6 @@ class TnPreprocessor(Preprocessor):
             if found_verse:
                 if book_line.startswith('\\v ') or book_line.startswith('\\c '):
                     break # Don't go into the next verse or chapter
-                ix = book_line.find('\\k-s ')
-                if ix != -1:
-                    book_line = book_line[:ix] # Remove k-s field right up to end of line
                 verseText += ('' if book_line.startswith('\\f ') else ' ') + book_line
         verseText = verseText.replace('\\p ', '').strip().replace('  ', ' ')
         # print(f"Got verse text1: '{verseText}'")
