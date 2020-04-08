@@ -994,27 +994,31 @@ class BiblePreprocessor(Preprocessor):
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
                     AppSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    # print("chapters3:", chapters)
+                    print("chapters3:", chapters)
                     if chapters:
                         #          Piece the USFM file together
-                        title_file = os.path.join(project_path, chapters[0], 'title.txt')
+                        title_file = os.path.join(project_path, 'front', 'title.txt')
+                        print("title_file1", title_file)
                         if os.path.isfile(title_file):
-                            title = read_file(title_file)
-                            title = re.sub(r' \d+$', '', title).strip()
-                            # print("title1", title)
+                            title = read_file(title_file).strip()
+                            print("title1a", title)
                         else:
                             title = project.title
-                            # print("title2", title)
-                        if not title and os.path.isfile(os.path.join(project_path, 'title.txt')):
-                            title = read_file(os.path.join(project_path, 'title.txt'))
-                            # print("title3", title)
-                        # if not title and os.path.isfile(os.path.join(project_path, 'headers.json')):
-                        #     headers_text = read_file(os.path.join(project_path, 'headers.json'))
-                        #     headers_list = json.loads(headers_text)
-                        #     print("headers_list", headers_list)
-                        #     for headers_dict in headers_list:
-                        #         if headers_dict and 'tag' in headers_dict and headers_dict['tag']=='toc1' and content in headers_dict:
-                        #             title = headers_dict['content']
+                            print("title1b", title)
+                        # if not title: # yet -- old tx-manager code
+                        #     title_file = os.path.join(project_path, chapters[0], 'title.txt')
+                        #     print("title_file2", title_file)
+                        #     if os.path.isfile(title_file):
+                        #         title = read_file(title_file)
+                        #         title = re.sub(r' \d+$', '', title).strip()
+                        #         print("title2", title)
+                        #     else:
+                        #         title = project.title
+                        #         print("title3", title)
+                        # if not title: # still -- can this code ever execute???
+                        #     title_file = os.path.join(project_path, 'title.txt')
+                        #     if os.path.isfile(title_file):
+                        #         title = read_file(os.path.join(project_path, 'title.txt'))
                         #         print("title4", title)
                         usfm = f"""
 \\id {project.identifier.upper()} {self.rc.resource.title}
@@ -1022,6 +1026,7 @@ class BiblePreprocessor(Preprocessor):
 \\h {title}
 \\toc1 {title}
 \\toc2 {title}
+\\toc3 {title}
 \\mt {title}
 """
                         # print("chapters:", chapters)
