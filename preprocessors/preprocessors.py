@@ -473,15 +473,13 @@ class BiblePreprocessor(Preprocessor):
         super(BiblePreprocessor, self).__init__(*args, **kwargs)
         self.book_filenames:List[str] = []
         self.RC_links:List[tuple] = []
+    # end of BiblePreprocessor.__init__ function
 
 
-    # def is_multiple_jobs(self) -> bool:
-    #     return len(self.book_filenames) > 1
-
-
-    def get_book_list(self):
+    def get_book_list(self) -> List[str]:
         self.book_filenames.sort()
         return self.book_filenames
+    # end of BiblePreprocessor.get_book_list()
 
 
     def remove_closed_w_field(self, B:str, C:str, V:str, line:str, marker:str, text:str) -> str:
@@ -515,7 +513,7 @@ class BiblePreprocessor(Preprocessor):
         Checks (creating warnings) and cleans the USFM text as it writes it.
 
         Also saves a list of RC links for later checking
-            (from inside \w fields of original Heb/Grk texts,
+            (from inside \\w fields of original Heb/Grk texts,
                 e.g., x-tw="rc://*/tw/dict/bible/names/paul)
 
         TODO: Check/Remove some of this code once tC export is fixed
@@ -697,7 +695,7 @@ class BiblePreprocessor(Preprocessor):
                     if ix != -1:
                         AppSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
-                        if '\w ' in line:
+                        if '\\w ' in line:
                             ixW = adjusted_line.find('\\w ', ix+4) # See if \\w field follows \\k-s???
                             if ixW != -1: # Yip, there's word(s) on the end
                                 AppSettings.logger.debug(f"With {ix} {ixW} at {B} {C}:{V} adjusted line: '{adjusted_line}'")
@@ -997,35 +995,40 @@ class BiblePreprocessor(Preprocessor):
                     # print("chapters3:", chapters)
                     if chapters:
                         #          Piece the USFM file together
-                        title_file = os.path.join(project_path, chapters[0], 'title.txt')
-                        if os.path.isfile(title_file):
-                            title = read_file(title_file)
-                            title = re.sub(r' \d+$', '', title).strip()
-                            # print("title1", title)
+                        front_title_file = os.path.join(project_path, 'front', 'title.txt')
+                        # print("title_file1", front_title_file)
+                        if os.path.isfile(front_title_file):
+                            book_title = read_file(front_title_file).strip()
+                            print(f"book_title1a = '{book_title}'")
                         else:
-                            title = project.title
-                            # print("title2", title)
-                        if not title and os.path.isfile(os.path.join(project_path, 'title.txt')):
-                            title = read_file(os.path.join(project_path, 'title.txt'))
-                            # print("title3", title)
-                        # if not title and os.path.isfile(os.path.join(project_path, 'headers.json')):
-                        #     headers_text = read_file(os.path.join(project_path, 'headers.json'))
-                        #     headers_list = json.loads(headers_text)
-                        #     print("headers_list", headers_list)
-                        #     for headers_dict in headers_list:
-                        #         if headers_dict and 'tag' in headers_dict and headers_dict['tag']=='toc1' and content in headers_dict:
-                        #             title = headers_dict['content']
+                            book_title = project.title
+                            print(f"book_title1b = '{book_title}'")
+                        # if not title: # yet -- old tx-manager code
+                        #     title_file = os.path.join(project_path, chapters[0], 'title.txt')
+                        #     print("title_file2", title_file)
+                        #     if os.path.isfile(title_file):
+                        #         title = read_file(title_file)
+                        #         title = re.sub(r' \d+$', '', title).strip()
+                        #         print("title2", title)
+                        #     else:
+                        #         title = project.title
+                        #         print("title3", title)
+                        # if not title: # still -- can this code ever execute???
+                        #     title_file = os.path.join(project_path, 'title.txt')
+                        #     if os.path.isfile(title_file):
+                        #         title = read_file(os.path.join(project_path, 'title.txt'))
                         #         print("title4", title)
                         usfm = f"""
 \\id {project.identifier.upper()} {self.rc.resource.title}
 \\ide UTF-8
-\\h {title}
-\\toc1 {title}
-\\toc2 {title}
-\\mt {title}
+\\h {book_title}
+\\toc1 {book_title}
+\\toc2 {book_title}
+\\toc3 {book_title}
+\\mt {book_title}
 """
-                        # print("chapters:", chapters)
-                        for chapter in chapters:
+                        # print(f"Chapters: {chapters}")
+                        for chapter in chapters: # can include 'front'
                             if chapter in self.ignoreDirectories:
                                 continue
                             chapter_num = chapter.lstrip('0')
@@ -1036,14 +1039,26 @@ class BiblePreprocessor(Preprocessor):
                             except Exception as e:
                                 self.errors.append(f"Error reading {chapter}/{chunks[0]}: {e}")
                                 continue
-                            usfm += '\n\n'
-                            if f'\\c {chapter_num}' not in first_chunk:
+                            usfm = f'{usfm}\n'
+                            if chapter_num.isdigit():
+                                if int(chapter_num) == 1:
+                                    if os.path.isfile(os.path.join(project_path, chapter, 'title.txt')):
+                                        complete_translated__chapter_title = read_file(os.path.join(project_path, chapter, 'title.txt'))
+                                        translated__chapter_title = re.sub(r' \d+$', '', complete_translated__chapter_title).strip()
+                                        usfm += f'\\cl {translated__chapter_title}\n'
+                                if f'\\c {chapter_num}' not in first_chunk:
+                                    AppSettings.logger.error(f"Needed to add '\\c {chapter_num}' marker")
+                                    self.errors.append(f"Needed to add '\\c {chapter_num}' marker")
                                 usfm += f'\\c {chapter_num}\n'
-                            if os.path.isfile(os.path.join(project_path, chapter, 'title.txt')):
-                                translated_title = read_file(os.path.join(project_path, chapter, 'title.txt'))
-                                book_name = re.sub(r' \d+$', '', translated_title).strip()
-                                if book_name.lower() != title.lower():
-                                    usfm += f'\\cl {translated_title}\n'
+                                # Following code doesn't work coz structure of HTML renderer
+                                #   doesn't allow \\cl fields AFTER the chapter number
+                                # if os.path.isfile(os.path.join(project_path, chapter, 'title.txt')):
+                                #     complete_translated__chapter_title = read_file(os.path.join(project_path, chapter, 'title.txt'))
+                                #     # translated__chapter_title = re.sub(r' \d+$', '', complete_translated__chapter_title).strip()
+                                #     if not complete_translated__chapter_title[-1].isdigit():
+                                #         AppSettings.logger.error(f"Translated chapter {chapter_num} line seems wrong: '{complete_translated__chapter_title}'")
+                                #         self.errors.append(f"Translated chapter {chapter_num} line seems wrong: '{complete_translated__chapter_title}'")
+                                #     usfm += f'\\cl {complete_translated__chapter_title}\n'
                             for chunk in chunks:
                                 if chunk in self.ignoreFiles:
                                     continue
@@ -1052,14 +1067,17 @@ class BiblePreprocessor(Preprocessor):
                                 except Exception as e:
                                     self.errors.append(f"Error reading {chapter}/{chunk}: {e}")
                                     continue
+                                chunk_content = chunk_content.replace(f'\\c {chapter_num}', '') # Remove their chapter number coz we added put it in
+                                # print(f"Chunk {chunk_num}: {chunk_content}")
                                 if f'\\v {chunk_num} ' not in chunk_content:
-                                    chunk_content = f'\\v {chunk_num} ' + chunk_content
-                                usfm += chunk_content+"\n"
+                                    chunk_content = f'\\v {chunk_num} {chunk_content}'
+                                usfm += f'{chunk_content.lstrip()}\n'
                         if project.identifier.lower() in BOOK_NUMBERS:
                             filename = file_format.format(BOOK_NUMBERS[project.identifier.lower()],
                                                           project.identifier.upper())
                         else:
                             filename = file_format.format(str(idx + 1).zfill(2), project.identifier.upper())
+                        # print(f"Pre-cleaned USFM was: {usfm}")
                         self.check_clean_write_USFM_file(os.path.join(self.output_dir, filename), usfm)
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
@@ -1398,7 +1416,7 @@ class TaPreprocessor(Preprocessor):
             start_index = match.end() # For next loop
 
             qid = f"{project_id}/{section_id}"
-            ref = f'{version_abbreviation} {bookname} {C}:{V}'
+            # ref = f'{version_abbreviation} {bookname} {C}:{V}'
             self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
         start_index = 0
         while (match := TaPreprocessor.compiled_re_unquoted_verse.search(content, start_index)):
@@ -1408,7 +1426,7 @@ class TaPreprocessor(Preprocessor):
             start_index = match.end() # For next loop
 
             qid = f"{project_id}/{section_id}"
-            ref = f'{version_abbreviation} {bookname} {C}:{V}'
+            # ref = f'{version_abbreviation} {bookname} {C}:{V}'
             self.check_embedded_quote(qid, bookname,C,V, version_abbreviation, quoteField)
 
         # Match and check bridged verses (in the same chapter)
@@ -1442,7 +1460,7 @@ class TaPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"check_embedded_quote({qid}, {bookname}, {C}:{V}, {version_abbreviation}, {quoteField})…")
 
         ref = f'{version_abbreviation} {bookname} {C}:{V}'
-        full_qid = f"'{qid}' {ref}"
+        # full_qid = f"'{qid}' {ref}"
         quoteField = quoteField.replace('*', '') # Remove emphasis from quoted text
 
         verse_text = self.get_passage(bookname,C,V, version_abbreviation)
@@ -1564,7 +1582,7 @@ class TaPreprocessor(Preprocessor):
                     if ixs == -1: break # None / no more
                     ixe = book_line.find('\\*')
                     if ixe == -1:
-                        self.errors.append(f"{B} {C}:{V} Missing closing part of {bookline[ixs:]}")
+                        self.errors.append(f"{B} {C}:{V} Missing closing part of {book_line[ixs:]}")
                     book_line = f'{book_line[:ixs]}{book_line[ixe+2:]}' # Remove \zaln-s field
                 verseText += ('' if book_line.startswith('\\f ') else ' ') + book_line
         if V1 != V2: # then the text might contain verse numbers
@@ -2555,7 +2573,7 @@ class TnPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"check_support_reference({BCV}, {field_id}, {shortReference}, {fullNote}, {repo_owner}, {language_code})…" )
 
         if shortReference.startswith('rc://'):
-            revisedContents = self.fix_tN_links(BCV, field_id, shortReference, repo_owner, language_code)
+            revisedContents = self.fix_tN_links(f'{BCV}-{field_id}', shortReference, repo_owner, language_code)
             AppSettings.logger.info( f"Got back revisedContents='{revisedContents}'")
             AppSettings.logger.info( f"What if (anything) should we be doing next????") # Not really checked or finished (coz no data to test on yet)
         else: # it's just the short form
@@ -2577,8 +2595,8 @@ class TnPreprocessor(Preprocessor):
                 if file_contents:
                     link_title = file_contents
                     if '\n' in link_title or '\r' in link_title or '\t' in link_title:
-                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
-                        self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
+                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_title!r}")
+                        self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_title!r}")
                         link_title = link_title.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
                     if not link_title:
                         AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
