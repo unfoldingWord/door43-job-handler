@@ -525,7 +525,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
     and len_our_queue: # Have other entries
         AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entr{'y' if len_our_queue==1 else 'ies'}…")
         my_url_bits = submitted_json_payload['commits'][0]['url'].split('/')
-        for j, queued_job in enumerate(our_queue.jobs, start=1):
+        for queued_job in our_queue.jobs:
             # print(f"{j}/ {queued_job!r}")
             # print(f"    status = '{queued_job.get_status()}'")
             # # print(f"Args {type(queued_job.args)} ({len(queued_job.args)}) = {queued_job.args}") # tuple containing one dict
@@ -656,11 +656,15 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
     # Save the warnings for the user -- put any RC messages in front
     if rc.error_messages or preprocessor_warning_list:
-        AppSettings.logger.debug(f"Prepending {len(rc.error_messages)} RC warnings to {len(preprocessor_warning_list)} preprocessor warnings")
+        AppSettings.logger.debug(f"Prepending {len(rc.error_messages):,} RC warnings to {len(preprocessor_warning_list):,} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
     if preprocessor_warning_list:
-        preprocessor_warning_list.append(f"{len(preprocessor_warning_list)} total resource container and preprocessor warnings")
-        AppSettings.logger.debug(f"Preprocessor warning list is ({len(preprocessor_warning_list)}) {preprocessor_warning_list}")
+        if ' warnings reduced from ' not in preprocessor_warning_list[-1]: # Don't overwhelm with extra messages
+            preprocessor_warning_list.append(f"{len(preprocessor_warning_list):,} total resource container and preprocessor warnings")
+        pwlist_len = len(preprocessor_warning_list)
+        adjusted_preprocessor_warning_list = preprocessor_warning_list if pwlist_len < 20 \
+                            else f'{preprocessor_warning_list[:10]} …… {preprocessor_warning_list[-10:]}'
+        AppSettings.logger.debug(f"Preprocessor warning list is ({pwlist_len:,}) {adjusted_preprocessor_warning_list}")
 
     # Copy the ReadMe file if it seems that this repo is just minimal
     if num_preprocessor_files_written < 3:
@@ -681,7 +685,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     #   so that at least any errors/warnings get displayed
 
 
-    abort_duplicate_flag, unwanted_job_descriptive_name = check_for_forthcoming_pushes_in_queue(submitted_json_payload, our_queue)
+    abort_duplicate_flag, _unwanted_job_descriptive_name = check_for_forthcoming_pushes_in_queue(submitted_json_payload, our_queue)
     if not abort_duplicate_flag:
         # Zip up the massaged files
         AppSettings.logger.info(f"Zipping {num_preprocessor_files_written:,} preprocessed files…")

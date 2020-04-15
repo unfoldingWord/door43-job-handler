@@ -105,7 +105,10 @@ def merge_results_logs(old_build_log:Dict[str,Any], new_file_results:Dict[str,An
     Given a second partial build log file_results,
         combine the log/warnings/errors lists into the first build_log.
     """
-    AppSettings.logger.debug(f"Callback.merge_results_logs(…, {new_file_results}, {converter_flag})…")
+    new_file_results_copy = new_file_results.copy() # Sometimes this gets too big
+    if 'warnings' in new_file_results_copy and len(new_file_results_copy['warnings']) > 10:
+        new_file_results_copy['warnings'] = f"{new_file_results_copy['warnings'][:5]} …… {new_file_results_copy['warnings'][-5:]}"
+    AppSettings.logger.debug(f"Callback.merge_results_logs(…, {new_file_results_copy}, converter_flag={converter_flag})…")
     # AppSettings.logger.debug(f"Callback.merge_results_logs({old_build_log}, {file_results}, {converter_flag})…")
     # saved_build_log = old_build_log.copy()
     if not old_build_log:
@@ -387,7 +390,10 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     Changed March 2020 to read project.json from door43 bucket (not cdn bucket).
         (The updated file gets written to both buckets.)
     """
-    AppSettings.logger.debug(f"Callback.update_project_file({build_log}, output_dir={output_dirpath})…")
+    build_log_copy = build_log.copy() # Sometimes this gets too big
+    if 'warnings' in build_log_copy and len(build_log_copy['warnings']) > 10:
+        build_log_copy['warnings'] = f"{build_log_copy['warnings'][:5]} …… {build_log_copy['warnings'][-5:]}"
+    AppSettings.logger.debug(f"Callback.update_project_file({build_log_copy}, output_dir={output_dirpath})…")
 
     commit_id = build_log['commit_id']
     repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
@@ -508,7 +514,10 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         error = f"No waiting job found for {queued_json_payload}"
         AppSettings.logger.critical(error)
         raise Exception(error)
-    AppSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict}")
+    matched_job_dict_copy = matched_job_dict.copy() # Sometimes this gets too big
+    if 'preprocessor_warnings' in matched_job_dict_copy and len(matched_job_dict_copy['preprocessor_warnings']) > 10:
+        matched_job_dict_copy['preprocessor_warnings'] = f"{matched_job_dict_copy['preprocessor_warnings'][:5]} …… {matched_job_dict_copy['preprocessor_warnings'][-5:]}"
+    AppSettings.logger.debug(f"Got matched_job_dict: {matched_job_dict_copy}")
     job_descriptive_name = f"{matched_job_dict['resource_type']}({matched_job_dict['input_format']})"
 
     this_job_dict = queued_json_payload.copy()

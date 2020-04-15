@@ -8,6 +8,7 @@ from glob import glob
 from shutil import copy, copytree
 from urllib.request import urlopen
 from urllib.error import HTTPError
+import unicodedata
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag
@@ -59,10 +60,10 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
 
     MAX_WARNINGS = 1000
     if len(warnings_list) > MAX_WARNINGS:  # sanity check so we don't overflow callback size limits
-        new_warnings_list = warnings_list[:MAX_WARNINGS-10]
+        new_warnings_list = warnings_list[:MAX_WARNINGS-11]
         new_warnings_list.append("…………………………")
         new_warnings_list.extend(warnings_list[-9:])
-        msg = f"Preprocessor warnings reduced from {len(warnings_list):,} to {len(new_warnings_list)}"
+        msg = f"Preprocessor warnings reduced from {len(warnings_list):,} to {len(new_warnings_list):,}"
         AppSettings.logger.debug(f"Linter {msg}")
         new_warnings_list.append(msg)
         warnings_list = new_warnings_list
@@ -164,7 +165,7 @@ class Preprocessor:
             AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings
-    # end of DefaultPreprocessor run()
+    # end of Preprocessor.run()
 
 
     def mark_chapter(self, ident:int, chapter:str, text:str) -> str:
@@ -177,6 +178,31 @@ class Preprocessor:
 
     def get_book_list(self):
         return None
+
+
+    def check_and_clean_title(self, title_text:str, ref:str) -> str:
+        """
+        """
+        if title_text.lstrip() != title_text:
+            self.warnings.append(f"{ref}: Unexpected whitespace at beginning of {title_text!r}")
+        if title_text.rstrip() != title_text:
+            # We will ignore a single final newline
+            if title_text[-1]=='\n' and title_text[:-1].rstrip() != title_text[:-1]:
+                self.warnings.append(f"{ref}: Unexpected whitespace at end of {title_text!r}")
+        title_text = title_text.strip()
+        if '  ' in title_text:
+            self.warnings.append(f"{ref}: Doubled spaces in '{title_text}'")
+
+        if not title_text:
+            self.warnings.append(f"{ref}: Missing title text")
+
+        for char in '.[]:"':
+            if char in title_text:
+                self.warnings.append(f"{ref}: Unexpected '{char}' in '{title_text}'")
+
+        self.check_punctuation_pairs(title_text, ref)
+        return title_text
+    # end of Preprocessor.check_and_clean_title function
 
 
     def check_punctuation_pairs(self, some_text:str, ref:str, allow_close_parenthesis_points=False) -> None:
@@ -198,7 +224,7 @@ class Preprocessor:
             if pairStartCount or pairEndCount:
                 found_any_paired_chars = True
             if pairStartCount > pairEndCount:
-                self.warnings.append(f"{ref}: Possible missing closing '{pairEnd}' -- found {pairStartCount} '{pairStart}' but {pairEndCount} '{pairEnd}'")
+                self.warnings.append(f"{ref}: Possible missing closing '{pairEnd}' -- found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
                 # found_mismatch = True
             elif pairEndCount > pairStartCount:
                 if allow_close_parenthesis_points:
@@ -207,7 +233,7 @@ class Preprocessor:
                     possible_point_count = len(re.findall(r'\s\d\) ', some_text))
                     pairEndCount -= possible_point_count
                 if pairEndCount > pairStartCount: # still
-                    self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' -- found {pairStartCount} '{pairStart}' but {pairEndCount} '{pairEnd}'")
+                    self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' -- found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
                     # found_mismatch = True
         if found_any_paired_chars: # and not found_mismatch:
             # Double-check the nesting
@@ -291,10 +317,10 @@ class ObsPreprocessor(Preprocessor):
         Get a chapter title.
         if the title file does not exist, it will hand back the number with a period only.
         """
-        title_file = os.path.join(project_path, chapter, 'title.txt')
-        if os.path.exists(title_file):
-            contents = read_file(title_file)
-            title = contents.strip()
+        title_filepath = os.path.join(project_path, chapter, 'title.txt')
+        if os.path.exists(title_filepath):
+            # title = self.check_and_clean_title(read_file(title_filepath), f'{chapter}/title/txt')
+            title = read_file(title_filepath).strip()
         else:
             title = chapter.lstrip('0') + '. '
         return title
@@ -998,10 +1024,10 @@ class BiblePreprocessor(Preprocessor):
                         front_title_file = os.path.join(project_path, 'front', 'title.txt')
                         # print("title_file1", front_title_file)
                         if os.path.isfile(front_title_file):
-                            book_title = read_file(front_title_file).strip()
+                            book_title = self.check_and_clean_title(read_file(front_title_file), 'front/title.txt')
                             print(f"book_title1a = '{book_title}'")
                         else:
-                            book_title = project.title
+                            book_title = self.check_and_clean_title(project.title, 'project.title')
                             print(f"book_title1b = '{book_title}'")
                         # if not title: # yet -- old tx-manager code
                         #     title_file = os.path.join(project_path, chapters[0], 'title.txt')
@@ -1043,7 +1069,7 @@ class BiblePreprocessor(Preprocessor):
                             if chapter_num.isdigit():
                                 if int(chapter_num) == 1:
                                     if os.path.isfile(os.path.join(project_path, chapter, 'title.txt')):
-                                        complete_translated__chapter_title = read_file(os.path.join(project_path, chapter, 'title.txt'))
+                                        complete_translated__chapter_title = self.check_and_clean_title(read_file(os.path.join(project_path, chapter, 'title.txt')), 'chapter/title.txt')
                                         translated__chapter_title = re.sub(r' \d+$', '', complete_translated__chapter_title).strip()
                                         usfm += f'\\cl {translated__chapter_title}\n'
                                 if f'\\c {chapter_num}' not in first_chunk:
@@ -1127,9 +1153,9 @@ class TaPreprocessor(Preprocessor):
                 if p_config and link in p_config:
                     proj = p
         if proj:
-            title_file = os.path.join(self.source_dir, proj.path, link, 'title.md')
-            if os.path.isfile(title_file):
-                return read_file(title_file)
+            title_filepath = os.path.join(self.source_dir, proj.path, link, 'title.md')
+            if os.path.isfile(title_filepath):
+                return self.check_and_clean_title(read_file(title_filepath), f'{proj.path}/{link}/title.md')
         if alt_title:
             return alt_title
         else:
@@ -1150,13 +1176,15 @@ class TaPreprocessor(Preprocessor):
     def get_question(self, project, slug:str) -> str:
         subtitle_file = os.path.join(self.source_dir, project.path, slug, 'sub-title.md')
         if os.path.isfile(subtitle_file):
-            return read_file(subtitle_file)
+            return self.check_and_clean_title(read_file(subtitle_file), f'{project.path}/{slug}/sub-title.md')
 
 
     def get_content(self, project, slug):
-        content_file = os.path.join(self.source_dir, project.path, slug, '01.md')
-        if os.path.isfile(content_file):
-            return read_file(content_file)
+        content_filepath = os.path.join(self.source_dir, project.path, slug, '01.md')
+        if os.path.isfile(content_filepath):
+            content = read_file(content_filepath)
+            self.check_punctuation_pairs(content, f'{project.path}/{slug}/01.md')
+            return content
 
 
     def compile_ta_section(self, project, section, level):
@@ -1461,7 +1489,7 @@ class TaPreprocessor(Preprocessor):
 
         ref = f'{version_abbreviation} {bookname} {C}:{V}'
         # full_qid = f"'{qid}' {ref}"
-        quoteField = quoteField.replace('*', '') # Remove emphasis from quoted text
+        quoteField = quoteField.replace('*', '').replace('_', '') # Remove emphasis from quoted text
 
         verse_text = self.get_passage(bookname,C,V, version_abbreviation)
         if not verse_text:
@@ -1469,19 +1497,19 @@ class TaPreprocessor(Preprocessor):
             return # nothing else we can do here
 
         if '...' in quoteField:
-            AppSettings.logger.debug(f"Bad ellipse characters in {qid} '{quoteField}'")
-            self.warnings.append(f"Should use proper ellipse character in {qid} '{quoteField}'")
+            # AppSettings.logger.debug(f"Bad ellipse characters in {qid} '{quoteField}'")
+            self.warnings.append(f"Should use proper ellipse character in \"{qid}\": '{quoteField}'")
 
         if '…' in quoteField:
             quoteBits = quoteField.split('…')
             if ' …' in quoteField or '… ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in {qid} '{quoteField}'")
-                self.warnings.append(f"Unexpected space(s) beside ellipse character in {qid} '{quoteField}'")
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse character in \"{qid}\": '{quoteField}'")
         elif '...' in quoteField: # Yes, we still actually allow this
             quoteBits = quoteField.split('...')
             if ' ...' in quoteField or '... ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in {qid} '{quoteField}'")
-                self.warnings.append(f"Unexpected space(s) beside ellipse characters in {qid} '{quoteField}'")
+                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quoteField}'")
+                self.warnings.append(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quoteField}'")
         else:
             quoteBits = None
 
@@ -1495,14 +1523,14 @@ class TaPreprocessor(Preprocessor):
                         elif index == numQuoteBits-1: description = 'end'
                         else: description = f"middle{index if numQuoteBits>3 else ''}"
                         # AppSettings.logger.debug(f"Unable to find {qid} '{quoteBits[index]}' ({description}) in '{verse_text}' ({ref})")
-                        self.warnings.append(f"Unable to find {qid}: {description} of <em>{quoteField}</em> <b>in</b> <em>{verse_text}</em> ({ref})")
+                        self.warnings.append(f"Unable to find \"{qid}\": {description} of <em>{quoteField}</em> <b>in</b> <em>{verse_text}</em> ({ref})")
             else: # < 2
-                self.warnings.append(f"Ellipsis without surrounding snippet in {qid} '{quoteField}'")
+                self.warnings.append(f"Ellipsis without surrounding snippet in \"{qid}\": '{quoteField}'")
         elif quoteField not in verse_text:
             # AppSettings.logger.debug(f"Unable to find {qid} '{quoteField}' in '{verse_text}' ({ref})")
             extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
             if extra_text: quoteField = quoteField.replace('\u00A0', '~')
-            self.warnings.append(f"Unable to find {qid}: <em>{quoteField}</em> {extra_text} <b>in</b> <em>{verse_text}</em> ({ref})")
+            self.warnings.append(f"Unable to find \"{qid}\": <em>{quoteField}</em> {extra_text} <b>in</b> <em>{verse_text}</em> ({ref})")
     # end of TaPreprocessor.check_embedded_quote function
 
 
@@ -1817,7 +1845,7 @@ class TwPreprocessor(Preprocessor):
                     title = body_text = None
                     for tw_unit in json_data:
                         if 'title' in tw_unit and 'body' in tw_unit:
-                            title = tw_unit['title']
+                            title = self.check_and_clean_title(tw_unit['title'], f'{term}.txt: {tw_unit}')
                             if not title:
                                 self.warnings.append(f"Missing tW title in {term}.txt: {tw_unit}")
                             elif '\n' in title:
@@ -2284,7 +2312,7 @@ class TnPreprocessor(Preprocessor):
                                         if B != 'Book' \
                                         and self.need_to_check_quotes \
                                         and OrigQuote:
-                                            try: self.check_original_language_quotes(B,C,V, field_id, OrigQuote)
+                                            try: self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
                                             except Exception as e:
                                                 self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
 
@@ -2429,20 +2457,23 @@ class TnPreprocessor(Preprocessor):
                 files.insert(0, last_file)
 
 
-    def check_original_language_quotes(self, B:str,C:str,V:str, field_id:str, quoteField:str) -> None:
+    def check_original_language_TN_quotes(self, B:str,C:str,V:str, field_id:str, quoteField:str) -> None:
         """
         Check that the quoted portions can indeed be found in the original language versions.
 
         Moved here Feb2020 from tX TN linter
         """
-        # AppSettings.logger.debug(f"check_original_language_quotes({B},{C},{V}, {field_id}, {quoteField})…")
+        # AppSettings.logger.debug(f"check_original_language_TN_quotes({B},{C},{V}, {field_id}, {quoteField})…")
         TNid = f'{B} {C}:{V} ({field_id})'
-        verse_text = self.get_passage(B,C,V)
-        if not verse_text:
-            return # nothing else we can do here
+
+        if quoteField.lstrip() != quoteField:
+            self.warnings.append(f"Unexpected whitespace at start of {TNid} '{quoteField}'")
+        if quoteField.rstrip() != quoteField:
+            self.warnings.append(f"Unexpected whitespace at end of {TNid} '{quoteField}'")
+        quoteField = quoteField.strip() # so we don't get consequential errors
 
         if '...' in quoteField:
-            AppSettings.logger.debug(f"Bad ellipse characters in {TNid} '{quoteField}'")
+            # AppSettings.logger.debug(f"Bad ellipse characters in {TNid} '{quoteField}'")
             self.warnings.append(f"Should use proper ellipse character in {TNid} '{quoteField}'")
 
         if '…' in quoteField:
@@ -2458,6 +2489,10 @@ class TnPreprocessor(Preprocessor):
         else:
             quoteBits = None
 
+        verse_text = self.get_passage(B,C,V)
+        if not verse_text:
+            return # nothing else we can do here
+
         if quoteBits:
             numQuoteBits = len(quoteBits)
             if numQuoteBits >= 2:
@@ -2471,12 +2506,27 @@ class TnPreprocessor(Preprocessor):
                         self.warnings.append(f"Unable to find {TNid} {description} of '{quoteField}' in '{verse_text}'")
             else: # < 2
                 self.warnings.append(f"Ellipsis without surrounding snippet in {TNid} '{quoteField}'")
-        elif quoteField not in verse_text:
-            # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
-            extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
-            if extra_text: quoteField = quoteField.replace('\u00A0', '~')
-            self.warnings.append(f"Unable to find {TNid} '{quoteField}'{extra_text} in '{verse_text}'")
-    # end of TnPreprocessor.check_original_language_quotes function
+        else: # Only a single quote (no ellipsis)
+            if quoteField in verse_text:
+                # Double check that it doesn't start/stop in the middle of a word
+                remainingBits = verse_text.split(quoteField, 1)
+                assert len(remainingBits) == 2
+                if remainingBits[0] and remainingBits[0][-1].isalpha():
+                    badChar = remainingBits[0][-1]
+                    badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
+                    AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not start at the beginning of a word—it's preceded {badCharString} in '{verse_text}'")
+                    self.warnings.append(f"Seems {TNid} '{quoteField}' might not start at the beginning of a word—it's (preceded {badCharString} in '{verse_text}'")
+                if remainingBits[1] and remainingBits[1][0].isalpha():
+                    badChar = remainingBits[1][0]
+                    badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
+                    AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
+                    self.warnings.append(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
+            else: # can't find it
+                # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
+                extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
+                if extra_text: quoteField = quoteField.replace('\u00A0', '~')
+                self.warnings.append(f"Unable to find {TNid} '{quoteField}'{extra_text} in '{verse_text}'")
+    # end of TnPreprocessor.check_original_language_TN_quotes function
 
 
     def get_passage(self, B:str, C:str,V:str) -> str:
