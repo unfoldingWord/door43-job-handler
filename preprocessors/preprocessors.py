@@ -92,6 +92,7 @@ class Preprocessor:
         self.source_dir = source_dir  # Local directory
         self.output_dir = output_dir  # Local directory
         self.num_files_written = 0
+        self.messages:List[str] = [] # { Messages only display if there's warnings or errors
         self.errors:List[str] = []   # { Errors float to the top of the list
         self.warnings:List[str] = [] # {    above warnings
 
@@ -164,7 +165,7 @@ class Preprocessor:
         else:
             AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of Preprocessor.run()
 
 
@@ -399,7 +400,7 @@ class ObsPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
 
@@ -475,7 +476,7 @@ class ObsNotesPreprocessor(Preprocessor):
                         url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/obs.zip"
                         successFlag = self.preload_original_text_archive('obs', url)
                     if successFlag:
-                        self.warnings.append(f"Note: Using {url} for checking OBS quotes against.")
+                        self.messages.append(f"Note: Using {url} for checking OBS quotes against.")
                         self.need_to_check_quotes = True
         elif rels:
             AppSettings.logger.debug(f"OBS notes preprocessor get_quoted_version expected a list not {rels!r}")
@@ -562,7 +563,7 @@ class ObsNotesPreprocessor(Preprocessor):
             remove_tree(self.preload_dir)
 
         AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of ObsNotesPreprocessor run()
 
 
@@ -623,7 +624,9 @@ class ObsNotesPreprocessor(Preprocessor):
                 qid = f'line {j} in {story_number}-{frame_number}'
 
                 # TODO: A Bible story from (en_obs-tn): What about translated languages ???
-                if 'Bible story' not in quote and 'General Information' not in quote:
+                if 'Bible story' not in quote \
+                and 'General Information' not in quote \
+                and 'Connecting Statement' not in quote:
                     if '...' in quote:
                         # AppSettings.logger.debug(f"Bad ellipse characters in {qid} '{quoteField}'")
                         self.warnings.append(f"Should use proper ellipse character in \"{qid}\": '{quote}'")
@@ -1301,7 +1304,7 @@ class BiblePreprocessor(Preprocessor):
 
         AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of BiblePreprocessor.run()
 # end of class BiblePreprocessor
 
@@ -1492,7 +1495,7 @@ class TaPreprocessor(Preprocessor):
                         successFlag = self.preload_translated_text_archive('ult', url)
                     if successFlag:
                         extra = '' if version else ' (No version number specified in manifest.)'
-                        self.warnings.append(f"Note: Using {url} for checking ULT quotes against.{extra}")
+                        self.messages.append(f"Note: Using {url} for checking ULT quotes against.{extra}")
                         self.need_to_check_quotes = True
                 if 'en/ust' in rel:
                     if '?v=' in rel:
@@ -1509,7 +1512,7 @@ class TaPreprocessor(Preprocessor):
                         successFlag = self.preload_translated_text_archive('ust', url)
                     if successFlag:
                         extra = '' if version else ' (No version number specified in manifest.)'
-                        self.warnings.append(f"Note: Using {url} for checking UST quotes against.{extra}")
+                        self.messages.append(f"Note: Using {url} for checking UST quotes against.{extra}")
                         self.need_to_check_quotes = True
                 # if 'en/tn' in rel:
                 #     if '?v=' in rel:
@@ -1598,7 +1601,7 @@ class TaPreprocessor(Preprocessor):
             remove_tree(self.preload_dir)
 
         AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TaPreprocessor run()
 
 
@@ -1959,7 +1962,7 @@ class TqPreprocessor(Preprocessor):
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
         AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
 
@@ -2136,7 +2139,7 @@ class TwPreprocessor(Preprocessor):
         else:
             AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
         AppSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TwPreprocessor run()
 
 
@@ -2365,7 +2368,7 @@ class TnPreprocessor(Preprocessor):
                         url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/uhb.zip"
                         successFlag = self.preload_original_text_archive('uhb', url)
                     if successFlag:
-                        self.warnings.append(f"Note: Using {url} for checking Hebrew quotes against.")
+                        self.messages.append(f"Note: Using {url} for checking Hebrew quotes against.")
                         self.need_to_check_quotes = True
                 if 'el-x-koine/ugnt' in rel:
                     if '?v=' not in rel:
@@ -2377,7 +2380,7 @@ class TnPreprocessor(Preprocessor):
                         url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/ugnt.zip"
                         successFlag = self.preload_original_text_archive('ugnt', url)
                     if successFlag:
-                        self.warnings.append(f"Note: Using {url} for checking Greek quotes against.")
+                        self.messages.append(f"Note: Using {url} for checking Greek quotes against.")
                         self.need_to_check_quotes = True
         elif rels:
             AppSettings.logger.debug(f"tN preprocessor get_quoted_versions expected a list not {rels!r}")
@@ -2628,7 +2631,7 @@ class TnPreprocessor(Preprocessor):
             remove_tree(self.preload_dir)
 
         # AppSettings.logger.debug(f"tN Preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TnPreprocessor run()
 
 
@@ -3123,7 +3126,7 @@ class LexiconPreprocessor(Preprocessor):
         str_list_adjusted = str_list if len(str_list)<1500 \
                                 else f'{str_list[:1000]} …… {str_list[-500:]}'
         AppSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
-        return self.num_files_written, self.errors + self.warnings
+        return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of LexiconPreprocessor run()
 
 
