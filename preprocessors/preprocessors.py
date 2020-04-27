@@ -81,7 +81,7 @@ class Preprocessor:
 
     def __init__(self, commit_url:str, rc:RC, repo_owner:str, source_dir:str, output_dir:str) -> None:
         """
-        :param URLString commit_url:    URL of this commit on DCS -- used for fixing links
+        :param URLString commit_url:    URL of this commit on DCS—used for fixing links
         :param RC rc:
         :param string source_dir:
         :param string output_dir:
@@ -224,7 +224,7 @@ class Preprocessor:
             if pairStartCount or pairEndCount:
                 found_any_paired_chars = True
             if pairStartCount > pairEndCount:
-                self.warnings.append(f"{ref}: Possible missing closing '{pairEnd}' -- found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
+                self.warnings.append(f"{ref}: Possible missing closing '{pairEnd}' — found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
                 # found_mismatch = True
             elif pairEndCount > pairStartCount:
                 if allow_close_parenthesis_points:
@@ -233,7 +233,7 @@ class Preprocessor:
                     possible_point_count = len(re.findall(r'\s\d\) ', some_text))
                     pairEndCount -= possible_point_count
                 if pairEndCount > pairStartCount: # still
-                    self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' -- found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
+                    self.warnings.append(f"{ref}: Possible missing opening '{pairStart}' — found {pairStartCount:,} '{pairStart}' but {pairEndCount:,} '{pairEnd}'")
                     # found_mismatch = True
         if found_any_paired_chars: # and not found_mismatch:
             # Double-check the nesting
@@ -254,10 +254,10 @@ class Preprocessor:
                         and ix>0 and some_text[ix-1].isdigit() \
                         and ix<len(some_text)-1 and some_text[ix+1] in ' \t':
                             # This could be part of a list like 1) ... 2) ...
-                            pass # Just ignore this -- at least they'll still get the above mismatched count message
+                            pass # Just ignore this—at least they'll still get the above mismatched count message
                         else:
                             locateString = f" after recent '{nestingString[-1]}'" if nestingString else ''
-                            self.warnings.append(f"{ref} line {line_number:,}: Possible nesting error -- found unexpected '{char}'{locateString} near {lines[line_number-1]}")
+                            self.warnings.append(f"{ref} line {line_number:,}: Possible nesting error—found unexpected '{char}'{locateString} near {lines[line_number-1]}")
                 elif char == '\n':
                     line_number += 1
             if nestingString: # handle left-overs
@@ -409,10 +409,89 @@ class ObsNotesPreprocessor(Preprocessor):
     def __init__(self, *args, **kwargs) -> None:
         super(ObsNotesPreprocessor, self).__init__(*args, **kwargs)
         self.section_container_id = 1
+        self.frame_cache = {}
+        self.need_to_check_quotes = False
+        self.preload_dir = tempfile.mkdtemp(prefix='tX_OBSNotes_linter_preload_')
+
+
+    def preload_original_text_archive(self, name:str, zip_url:str) -> bool:
+        """
+        Fetch and unpack the OBS zip file.
+
+        Adapted April 2020 from TN version below
+
+        Sets self.OBS_content_folderpath
+
+        Returns a True/False success flag
+        """
+        AppSettings.logger.info(f"OBSNotes preprocessorpreload_original_text_archive({name}, {zip_url})…")
+        zip_path = os.path.join(self.preload_dir, f'{name}.zip')
+        try:
+            download_file(zip_url, zip_path)
+            unzip(zip_path, self.preload_dir)
+            remove_file(zip_path)
+        except Exception as e:
+            AppSettings.logger.error(f"Unable to download {zip_url}: {e}")
+            self.warnings.append(f"Unable to download '{name}' from {zip_url}")
+            return False
+
+        # Find the actual content directory
+        for something1 in os.listdir(self.preload_dir):
+            path1 = os.path.join(self.preload_dir,something1)
+            if os.path.isdir(path1) and something1.endswith('_obs'): # Assume it's the right dir
+                for something2 in os.listdir(os.path.join(self.preload_dir,something1)):
+                    path2 = os.path.join(self.preload_dir,something1,something2)
+                    if os.path.isdir(path2) and something2=='content': # It's the content dir
+                        self.OBS_content_folderpath = path2
+                        print("Content folder is", self.OBS_content_folderpath)
+                        return True
+                    else: print(f"What was '{something2}' in {path1}???")
+            else: print(f"What was '{something1}' in {self.preload_dir}???")
+
+        return False
+    # end of ObsNotesPreprocessor.preload_original_text_archive function
+
+    def get_quoted_version(self) -> None:
+        """
+        See if manifest has relationships back to original language versions
+        Compares with the unfoldingWord version if possible
+          otherwise falls back to the Door43Catalog version
+
+        Adapted April 2020 from TN version below
+
+        Sets self.need_to_check_quotes to True if successful.
+        """
+        AppSettings.logger.debug("OBSNotes preprocessor get_quoted_version()…")
+        rels = self.rc.resource.relation
+        if isinstance(rels, list):
+            for rel in rels:
+                if 'en/obs' in rel:
+                    if '?v=' not in rel:
+                        self.warnings.append(f"No OBS version number specified in manifest: '{rel}'")
+                    version = rel[rel.find('?v=')+3:]
+                    url = f"https://git.door43.org/unfoldingWord/en_obs/archive/v{version}.zip"
+                    successFlag = self.preload_original_text_archive('obs', url)
+                    if not successFlag: # Try the Door43 Catalog version
+                        url = f"https://cdn.door43.org/{rel.replace('?v=', '/v')}/obs.zip"
+                        successFlag = self.preload_original_text_archive('obs', url)
+                    if successFlag:
+                        self.warnings.append(f"Note: Using {url} for checking OBS quotes against.")
+                        self.need_to_check_quotes = True
+        elif rels:
+            AppSettings.logger.debug(f"OBS notes preprocessor get_quoted_version expected a list not {rels!r}")
+
+        if not self.need_to_check_quotes:
+            self.warnings.append("Unable to find/load original language (OBS) sources for comparing snippets against.")
+    # end of ObsNotesPreprocessor.get_quoted_version()
 
 
     def run(self) -> Tuple[int, List[str]]:
         AppSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+
+        # print("repo_name", self.rc.repo_name)
+        if self.rc.repo_name.endswith('-tn') or self.rc.repo_name.endswith('-sn'): # Don't do this for 'Questions' projects
+            self.get_quoted_version() # Sets self.need_to_check_quotes
+
         for project in self.rc.projects:
             AppSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
             content_folder_path = os.path.join(self.source_dir, 'content/')
@@ -424,7 +503,7 @@ class ObsNotesPreprocessor(Preprocessor):
                 story_folder_path = os.path.join(content_folder_path, f'{story_number_string}/')
                 markdown = toc_contents = ""
                 if os.path.isdir(story_folder_path):
-                    AppSettings.logger.debug(f"Story {story_number}/ found {story_folder_path}")
+                    # AppSettings.logger.debug(f"Story {story_number}/ found {story_folder_path}")
                     for filename in sorted(os.listdir(story_folder_path)):
                         story_filepath = os.path.join(story_folder_path, filename)
                         if filename.endswith('.md'):
@@ -437,7 +516,7 @@ class ObsNotesPreprocessor(Preprocessor):
                 else: # no content/{story_number_string}/ folder
                     story_filepath = os.path.join(content_folder_path, f'{story_number_string}.md')
                     if os.path.isfile(story_filepath):
-                        AppSettings.logger.debug(f"Story {story_number}/ found {story_filepath}")
+                        # AppSettings.logger.debug(f"Story {story_number}/ found {story_filepath}")
                         markdown = read_file(story_filepath)
                         title = story_number_string # default
                         if markdown:
@@ -452,10 +531,14 @@ class ObsNotesPreprocessor(Preprocessor):
                     # if rc_count: print(f"Story number {story_number_string} has {rc_count} 'rc://' links")
                     # double_bracket_count = markdown.count('[[')
                     # if double_bracket_count: print(f"Story number {story_number_string} has {double_bracket_count} '[[…]]' links")
+                    if self.need_to_check_quotes:
+                        self.check_embedded_quotes( story_number, markdown )
                     markdown = self.fix_OBSNotes_links(markdown, self.repo_owner)
                     rc_count = markdown.count('rc://')
                     if rc_count:
-                        AppSettings.logger.error(f"Story number {story_number_string} still has {rc_count} 'rc://' links!")
+                        msg = f"Story number {story_number_string} still has {rc_count} 'rc://' links!"
+                        AppSettings.logger.error(msg)
+                        self.warnings.append(msg)
                     write_file(os.path.join(self.output_dir,f'{story_number_string}.md'), markdown)
                     self.num_files_written += 1
 
@@ -471,9 +554,109 @@ class ObsNotesPreprocessor(Preprocessor):
             self.errors.append("No OBSNotes source files discovered")
         else:
             AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+
+        # Delete temp folder
+        if prefix and debug_mode_flag:
+            AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
+        else:
+            remove_tree(self.preload_dir)
+
         AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings
     # end of ObsNotesPreprocessor run()
+
+
+    def get_story_frame( self, story_number:str, frame_number:str ) -> str:
+        """
+        Story and frame number strings should be two digits
+            frame_number can be '00' for title (otherwise an integer string like '05')
+
+        OBS files are in self.OBS_content_folderpath
+        """
+        # AppSettings.logger.debug(f"OBSNotes preprocessor get_story_frame({story_number}, {frame_number})…")
+
+        key = f'{story_number}-{frame_number}'
+        if key in self.frame_cache:
+            return self.frame_cache[key]
+
+        with open(os.path.join(self.OBS_content_folderpath,f'{story_number}.md')) as obs_file:
+            return_text = ''
+            in_frame = False
+            for j, line in enumerate(obs_file):
+                if line and line[-1]=='\n': line = line[:-1] # Remove trailing nl
+                if not line: continue
+
+                if frame_number=='00' and j==0: return line
+
+                if 'OBS Image' in line: # images are BEFORE text
+                    if in_frame: # we're up to the next frame
+                        return_text = return_text.rstrip() # Get rid of the final nl
+                        assert return_text
+                        self.frame_cache[key] = return_text
+                        return return_text
+                    if f'-{story_number}-{frame_number}.jpg' in line:
+                        in_frame = True
+                elif line.startswith('_'): # These are the references at the end
+                    if in_frame: # we're up to the next frame
+                        return_text = return_text.rstrip() # Get rid of the final nl
+                        assert return_text
+                        self.frame_cache[key] = return_text
+                        return return_text
+                elif in_frame:
+                    return_text += line + '\n' # Will add an extra nl at end
+    # end of ObsNotesPreprocessor get_story_frame function
+
+
+    def check_embedded_quotes( self, story_number:str, markdown_text:str ) -> None:
+        # AppSettings.logger.debug(f"OBSNotes preprocessor check_embedded_quotes({story_number}, {len(markdown_text):,})…")
+
+        story_number = frame_number = None
+        for j, line in enumerate(markdown_text.split('\n'), start=1):
+            if not line: continue # Just skip blank lines
+            # print( j, line )
+            if line.startswith('# <a'):
+                line_endstuff = line.rstrip()[-5:]
+                story_number, frame_number = line_endstuff.split('-')
+            elif line.startswith('# '):
+                quote = line[2:]
+                frame_text = self.get_story_frame(story_number, frame_number)
+                qid = f'line {j} in {story_number}-{frame_number}'
+
+                # TODO: A Bible story from (en_obs-tn): What about translated languages ???
+                if 'Bible story' not in quote and 'General Information' not in quote:
+                    if '...' in quote:
+                        # AppSettings.logger.debug(f"Bad ellipse characters in {qid} '{quoteField}'")
+                        self.warnings.append(f"Should use proper ellipse character in \"{qid}\": '{quote}'")
+
+                    if '…' in quote:
+                        quoteBits = quote.split('…')
+                        if ' …' in quote or '… ' in quote:
+                            AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quote}'")
+                            self.warnings.append(f"Unexpected space(s) beside ellipse character in \"{qid}\": '{quote}'")
+                    elif '...' in quote: # Yes, we still actually allow this
+                        quoteBits = quote.split('...')
+                        if ' ...' in quote or '... ' in quote:
+                            AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quote}'")
+                            self.warnings.append(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quote}'")
+                    else:
+                        quoteBits = None
+
+                    if quoteBits:
+                        numQuoteBits = len(quoteBits)
+                        if numQuoteBits >= 2:
+                            for index in range(numQuoteBits):
+                                if quoteBits[index] not in frame_text: # this is what we really want to catch
+                                    # If the quote has multiple parts, create a description of the current part
+                                    if index == 0: description = 'beginning'
+                                    elif index == numQuoteBits-1: description = 'end'
+                                    else: description = f"middle{index if numQuoteBits>3 else ''}"
+                                    # AppSettings.logger.debug(f"Unable to find {qid} '{quoteBits[index]}' ({description}) in '{verse_text}' ({ref})")
+                                    self.warnings.append(f"Unable to find \"{qid}\": {description} of '<em>{quote}</em>' <b>in</b> <em>{frame_text}</em>")
+                        else: # < 2
+                            self.warnings.append(f"Ellipsis without surrounding snippet in \"{qid}\": '{quote}'")
+                    elif quote not in frame_text:
+                        self.warnings.append(f"Unable to find '<em>{quote}</em>' from line {j} in {story_number}-{frame_number} text: <em>{frame_text}</em>")
+    # end of ObsNotesPreprocessor check_embedded_quotes function
 
 
     def fix_OBSNotes_links(self, content:str, repo_owner:str) -> str:
@@ -977,7 +1160,7 @@ class BiblePreprocessor(Preprocessor):
                 err_msg = f"{B} {C}:{V} - Possible bad {link_type} file: '{link_text}'"
                 AppSettings.logger.error(err_msg)
                 self.warnings.append(err_msg)
-        # Not needed any more -- empty the list to mark them as "processed"
+        # Not needed any more—empty the list to mark them as "processed"
         self.RC_links = []
     # end of BiblePreprocessor.clean_copy function
 
@@ -1029,7 +1212,7 @@ class BiblePreprocessor(Preprocessor):
                         else:
                             book_title = self.check_and_clean_title(project.title, 'project.title')
                             print(f"book_title1b = '{book_title}'")
-                        # if not title: # yet -- old tx-manager code
+                        # if not title: # yet—old tx-manager code
                         #     title_file = os.path.join(project_path, chapters[0], 'title.txt')
                         #     print("title_file2", title_file)
                         #     if os.path.isfile(title_file):
@@ -1039,7 +1222,7 @@ class BiblePreprocessor(Preprocessor):
                         #     else:
                         #         title = project.title
                         #         print("title3", title)
-                        # if not title: # still -- can this code ever execute???
+                        # if not title: # still—can this code ever execute???
                         #     title_file = os.path.join(project_path, 'title.txt')
                         #     if os.path.isfile(title_file):
                         #         title = read_file(os.path.join(project_path, 'title.txt'))
@@ -2542,7 +2725,7 @@ class TnPreprocessor(Preprocessor):
             AppSettings.logger.error(f"Unable to find book number for '{B} {C}:{V}' in get_passage()")
             book_number = 0
 
-        # Look for OT book first -- if not found, look for NT book
+        # Look for OT book first—if not found, look for NT book
         #   NOTE: Lazy way to determine which testament/folder the book is in
         book_path = os.path.join(self.preload_dir, f'{book_number}-{B}.usfm')
         if not os.path.isfile(book_path):
@@ -2903,7 +3086,7 @@ class LexiconPreprocessor(Preprocessor):
 
             # Now do the special stuff
             # TODO: Ideally most of the English strings below should be translated for other lexicons
-            # Create two index files -- one by Strongs number (the original) and one by lemma
+            # Create two index files—one by Strongs number (the original) and one by lemma
             index_filepath = os.path.join(project_path, 'index.md')
             if os.path.isfile(index_filepath):
                 with open(index_filepath, 'rt') as ixf:
