@@ -77,7 +77,7 @@ RESOURCE_SUBJECT_MAP = {
 
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
+    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' — expected '' or 'dev-'")
 door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
 job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler"
 webhook_stats_prefix = f'{job_handler_stats_prefix}.webhook'
@@ -135,7 +135,7 @@ def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
     try:
         AppSettings.pre_convert_s3_handler().upload_file(zip_filepath, zip_file_key, cache_time=0)
     except Exception as e:
-        AppSettings.logger.error(f"Failed to upload zipped repo up to server -- got exception: {e}")
+        AppSettings.logger.error(f"Failed to upload zipped repo up to server—got exception: {e}")
     finally:
         AppSettings.logger.debug("Upload finished.")
     return zip_file_key
@@ -318,7 +318,7 @@ def remember_job(rj_job_dict:Dict[str,Any], rj_redis_connection) -> None:
 
     try:
         outstanding_jobs_dict_bytes = rj_redis_connection.get(REDIS_JOB_LIST) # Gets None or bytes!!!
-    # This can happen ONCE if the format has changed by code updates -- shouldn't normally happen
+    # This can happen ONCE if the format has changed by code updates—shouldn't normally happen
     # NOTE: Actually this code
     except redis_exceptions.ResponseError as e:
         AppSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
@@ -368,7 +368,7 @@ def remember_job(rj_job_dict:Dict[str,Any], rj_redis_connection) -> None:
 
 #     Included here temporarily as a way to compare handling of USFM files
 #         and for a comparison of warnings/errors that are detected/displayed.
-#         (Would have to be manually compared -- nothing is done here with the BDB results.)
+#         (Would have to be manually compared—nothing is done here with the BDB results.)
 #     """
 #     AppSettings.logger.debug(f"upload_to_BDB({job_name, BDB_zip_filepath})…")
 #     BDB_url = 'http://Freely-Given.org/Software/BibleDropBox/SubmitAction.phtml'
@@ -482,7 +482,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
                         AppSettings.door43_s3_handler().redirect(key=old_repo_key, location=latest_repo_key)
                         AppSettings.door43_s3_handler().redirect(key=f'{old_repo_key}/index.html', location=latest_repo_key)
                 else:
-                    AppSettings.logger.warning(f"Unable to redirect from '{deleted_branch_name}' -- no remaining {prefix}builds for {repo_owner_username}/{repo_name}!")
+                    AppSettings.logger.warning(f"Unable to redirect from '{deleted_branch_name}' — no remaining {prefix}builds for {repo_owner_username}/{repo_name}!")
             except Exception as e:
                 AppSettings.logger.critical(f"  Removing deleted branch files threw an exception: {e}")
         else:
@@ -538,7 +538,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
                 and len(queued_job_parameter_dict['commits']) == 1:
                     queued_url_bits = queued_job_parameter_dict['commits'][0]['url'].split('/')
                     if queued_url_bits[:6] == my_url_bits[:6]: # commit number at end can be different
-                        AppSettings.logger.info("Found duplicate job later in queue -- aborting this one!")
+                        AppSettings.logger.info("Found duplicate job later in queue—aborting this one!")
                         job_descriptive_name = queued_job_parameter_dict['commits'][0]['url'].replace('https://','')
                         AppSettings.logger.info(f"  Not processing build for {job_descriptive_name}")
                         return True, job_descriptive_name
@@ -580,7 +580,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     The job is now passed to the tX system by means of a
         POST to the tX webhook (which should hopefully respond with a callback).
 
-    This code is "successful" once the job is submitted --
+    This code is "successful" once the job is submitted—
         it has no way to determine if it actually gets completed
         other than if a callback is made.
     """
@@ -654,7 +654,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
-    # Save the warnings for the user -- put any RC messages in front
+    # Save the warnings for the user—put any RC messages in front
     if rc.error_messages or preprocessor_warning_list:
         AppSettings.logger.debug(f"Prepending {len(rc.error_messages):,} RC warnings to {len(preprocessor_warning_list):,} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
@@ -996,7 +996,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     if queued_json_payload['DCS_event'] == 'delete':
         job_descriptive_name = f'{our_identifier}'
         handle_branch_delete(base_temp_dir_name, repo_owner_username, repo_name, deleted_branch_name)
-    elif commit_id: # for'push' or 'release' or create -- we have a repo to process and a page to build
+    elif commit_id: # for'push' or 'release' or create—we have a repo to process and a page to build
         # Here's our programmed failure (for remotely testing failures)
         if queued_json_payload['DCS_event']=='push' and pusher_username=='Failure' \
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':

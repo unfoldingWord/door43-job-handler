@@ -37,7 +37,7 @@ from general_tools.file_utils import write_file, remove_tree
 
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
-    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' -- expected '' or 'dev-'")
+    AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' — expected '' or 'dev-'")
 door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
 job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler" # Can't add .callback here coz we also have .total
 callback_stats_prefix = f"{job_handler_stats_prefix}.callback"
@@ -78,7 +78,7 @@ def verify_expected_job(vej_job_id:str, vej_redis_connection) -> Union[Dict[str,
         return False
     this_job_dict = outstanding_jobs_dict[vej_job_id]
 
-    # We found a match -- delete that job from the outstanding list
+    # We found a match—delete that job from the outstanding list
     AppSettings.logger.debug(f"Found job match for {vej_job_id}")
     del outstanding_jobs_dict[vej_job_id]
     if outstanding_jobs_dict:
@@ -270,8 +270,8 @@ def remove_excess_commits(commits_list:list, repo_owner_username:str, repo_name:
         So RJH added code in March 2020 to check for now non-existent branches.
     """
     MIN_WANTED_COMMITS = 1
-    # Lowered from 2,400 to 500  20Dec19 -- not sure why ru_gl/ru_tq_2lv kept getting timeout errors
-    MAX_ALLOWED_REMOVED_FOLDERS = 500 # Don't want to get job timeouts -- typically can do 3500+ in 600s
+    # Lowered from 2,400 to 500  20Dec19—not sure why ru_gl/ru_tq_2lv kept getting timeout errors
+    MAX_ALLOWED_REMOVED_FOLDERS = 500 # Don't want to get job timeouts—typically can do 3500+ in 600s
                                        #    at least project.json will slowly get smaller if we limit this.
                                        # Each commit hash to be deleted has three folders to remove.
     AppSettings.logger.debug(f"remove_excess_commits({len(commits_list)}={commits_list}, {repo_owner_username}, {repo_name})…")
@@ -285,13 +285,13 @@ def remove_excess_commits(commits_list:list, repo_owner_username:str, repo_name:
     # Process it backwards in case we want to count how many we have as we go
     for n, commit in enumerate( reversed(commits_list) ):
         # if DELETE_ENABLED or len(new_commits) < MAX_DEBUG_DISPLAYS: # don't clutter logs too much
-        AppSettings.logger.debug(f" Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} -- want min of {MIN_WANTED_COMMITS})")
+        AppSettings.logger.debug(f" Investigating {commit['type']} '{commit['id']}' commit (already have {len(new_commits)} — want min of {MIN_WANTED_COMMITS})")
         # elif len(new_commits) == MAX_DEBUG_DISPLAYS: # don't clutter logs too much
             # AppSettings.logger.debug("  Logging suppressed for remaining hashes…")
         deleted_flag = False
         if len(new_commits) >= MIN_WANTED_COMMITS \
         and removed_folder_count < MAX_ALLOWED_REMOVED_FOLDERS:
-            if commit['type'] in ('hash','artifact',): # but not 'unknown' -- can delete old master branches
+            if commit['type'] in ('hash','artifact',): # but not 'unknown'—can delete old master branches
                 # Delete the commit hash folders from both CDN and D43 buckets
                 commit_key = f"{project_folder_key}{commit['id']}"
                 AppSettings.logger.info(f"  {n:,} Removing {prefix} CDN & D43 '{commit['type']}' '{commit['id']}' commits! …")
