@@ -74,7 +74,7 @@ class ProjectDeployer:
                                             template_file)
         build_log['warnings'].extend(self.error_messages)
         if not success:
-            AppSettings.logger.critical("Templating failed -- returning False")
+            AppSettings.logger.critical("Templating failed—returning False")
             return False
 
 

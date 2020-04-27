@@ -50,7 +50,9 @@ class ClientConverterCallback:
         :param list warnings:
         :param list errors:
         """
-        AppSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors}, od={output_dir})…")
+        w = f'({len(warnings):,})' if warnings and len(warnings)>10 else str(warnings)
+        e = f'({len(errors):,})' if errors and len(errors)>10 else str(errors)
+        AppSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e}, od={output_dir})…")
         self.job = LocalJob(job_dict)
         self.identifier = identifier
         self.success = success

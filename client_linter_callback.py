@@ -28,7 +28,9 @@ class ClientLinterCallback:
                         or
                     u/user/repo/commid_id/part_id if multi-part job
         """
-        AppSettings.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={warnings}, e={errors})…")
+        w = f'({len(warnings):,})' if warnings and len(warnings)>10 else str(warnings)
+        e = f'({len(errors):,})' if errors and len(errors)>10 else str(errors)
+        AppSettings.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e})…")
         self.job_dict = job_dict
         self.identifier = identifier
         self.success = success

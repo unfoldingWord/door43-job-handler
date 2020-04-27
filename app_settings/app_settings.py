@@ -80,7 +80,7 @@ class AppSettings:
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'
 
-    # DB setup -- get the pw from the environment variable
+    # DB setup—get the pw from the environment variable
     db_protocol = 'mysql+pymysql'
     db_user = 'tx'
     db_pass = os.environ['TX_DATABASE_PW']
@@ -103,7 +103,7 @@ class AppSettings:
     db_echo = False  # Whether or not to echo DB queries to the debug log. Useful for debugging. Set before setup_db()
     echo = False
 
-    # AWS credentials -- get the secret ones from environment variables
+    # AWS credentials—get the secret ones from environment variables
     aws_region_name = 'us-west-2'
     aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
     aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY']
