@@ -797,7 +797,7 @@ class BiblePreprocessor(Preprocessor):
                 self.warnings.append(error_msg)
 
         # Find and warn about (useless) paragraph formatting before a section break, etc.
-        #  (probably should be after break)
+        #                                                   (probably should be after break)
         for marker1,marker2,thisRE in (
                                         ('p', 's', r'\\p *\n*?\\s'),
                                         ('p', 'ts', r'\\p *\n*?\\ts'),
@@ -879,8 +879,8 @@ class BiblePreprocessor(Preprocessor):
 
         if has_USFM3_line: # Issue any global USFM3 warnings
             # Do some global deletions to make things easier
-            preadjusted_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', preadjusted_file_contents) # Remove \k start milestones
-            preadjusted_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', preadjusted_file_contents) # Remove \zaln start milestones
+            preadjusted_file_contents = re.sub(r'\\k-s ([^\\]+?)\\\*', '', preadjusted_file_contents) # Remove \k start milestones
+            preadjusted_file_contents = re.sub(r'\\zaln-s ([^\\]+?)\\\*', '', preadjusted_file_contents) # Remove \zaln start milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\k-e\\*', '') # Remove self-closing keyterm milestones
             preadjusted_file_contents = preadjusted_file_contents.replace('\\zaln-e\\*','') # Remove \zaln end milestones
 
