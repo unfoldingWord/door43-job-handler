@@ -2415,34 +2415,51 @@ class TnPreprocessor(Preprocessor):
             if not field_data: return # Nothing to check
             assert field_name
 
+            len_field_data = len(field_data)
             if field_data[0]==' ':
                 self.warnings.append(f"Unexpected leading space(s) in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            elif field_data.lstrip() != field_data:
+                self.warnings.append(f"Unexpected leading whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if field_data.startswith('<br>'):
                 self.warnings.append(f"Unexpected leading break in '{field_data[:10].replace('<','&lt;').replace('>','&gt;')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if field_data[-1]==' ':
                 self.warnings.append(f"Unexpected trailing space(s) in '…{field_data[-10:].replace(' ','␣')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            elif field_data.rstrip() != field_data:
+                self.warnings.append(f"Unexpected trailing whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if field_data.endswith('<br>'):
                 self.warnings.append(f"Unexpected trailing break in '…{field_data[-10:].replace('<','&lt;').replace('>','&gt;')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
 
-            # ix = field_data.find('  ')
-            if ix:=field_data.find('  ') != -1:
-                self.warnings.append(f"Unexpected double spaces in '…{field_data[ix-5:ix+6].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            # ix = field_data.find('\u00A0')
-            if ix:=field_data.find('\u00A0') != -1:
-                extract = field_data[ix-5:ix+6].replace('\u00A0','⍽')
-                self.warnings.append(f"Unexpected non-break space in '…{extract}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            # ix = field_data.find('\n')
-            if ix:=field_data.find('\n') != -1:
-                self.warnings.append(f"Unexpected newLine character in '…{field_data[ix-5:ix+6]}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            # ix = field_data.find('\r')
-            if ix:=field_data.find('\r') != -1:
-                self.warnings.append(f"Unexpected carriageReturn character in '…{field_data[ix-5:ix+6]}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            # ix = field_data.find(' …')
-            if ix:=field_data.find(' …') != -1:
-                self.warnings.append(f"Unexpected space before ellipse character in …'{field_data[ix-5:ix+6].replace(' ','␣')}'… in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            # ix = field_data.find('… ')
-            if ix:=field_data.find('… ') != -1:
-                self.warnings.append(f"Unexpected space after ellipse character in …'{field_data[ix-5:ix+6].replace(' ','␣')}'… in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            beforeCount, afterCount = 5, 6
+            if (ix:=field_data.find('  ')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected double spaces in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\u00A0')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u00A0','⍽')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected non-break space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\n')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount]
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected newLine character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\r')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount]
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find(' …')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('… ')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
         # end of do_basic_text_checks
 
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
@@ -2700,11 +2717,11 @@ class TnPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"check_original_language_TN_quotes({B},{C},{V}, {field_id}, {quoteField})…")
         TNid = f'{B} {C}:{V} ({field_id})'
 
-        if quoteField.lstrip() != quoteField:
-            self.warnings.append(f"Unexpected whitespace at start of {TNid} '{quoteField}'")
-        if quoteField.rstrip() != quoteField:
-            self.warnings.append(f"Unexpected whitespace at end of {TNid} '{quoteField}'")
-        quoteField = quoteField.strip() # so we don't get consequential errors
+        # if quoteField.lstrip() != quoteField:
+        #     self.warnings.append(f"Unexpected whitespace at start of {TNid} '{quoteField}'")
+        # if quoteField.rstrip() != quoteField:
+        #     self.warnings.append(f"Unexpected whitespace at end of {TNid} '{quoteField}'")
+        # quoteField = quoteField.strip() # so we don't get consequential errors
 
         if '...' in quoteField:
             # AppSettings.logger.debug(f"Bad ellipse characters in {TNid} '{quoteField}'")
