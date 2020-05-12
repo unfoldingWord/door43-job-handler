@@ -1714,8 +1714,8 @@ class TaPreprocessor(Preprocessor):
                 self.warnings.append(f"Ellipsis without surrounding snippet in \"{qid}\": '{quoteField}'")
         elif quoteField not in verse_text:
             # AppSettings.logger.debug(f"Unable to find {qid} '{quoteField}' in '{verse_text}' ({ref})")
-            extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
-            if extra_text: quoteField = quoteField.replace('\u00A0', '~')
+            extra_text = " (contains No-Break Space shown as '⍽')" if '\u00A0' in quoteField else ""
+            if extra_text: quoteField = quoteField.replace('\u00A0', '⍽')
             self.warnings.append(f"Unable to find \"{qid}\": <em>{quoteField}</em> {extra_text} <b>in</b> <em>{verse_text}</em> ({ref})")
     # end of TaPreprocessor.check_embedded_quote function
 
@@ -2406,6 +2406,62 @@ class TnPreprocessor(Preprocessor):
 
         self.get_quoted_versions() # Sets self.need_to_check_quotes
 
+        def do_basic_text_checks(field_name:str, field_data:str) -> None:
+            """
+            Checks for basic things like leading/trailing/doubled spaces, etc.
+
+            Relies on outer variables for forming warning messages.
+            """
+            if not field_data: return # Nothing to check
+            assert field_name
+
+            len_field_data = len(field_data)
+            if field_data[0]==' ':
+                self.warnings.append(f"Unexpected leading space(s) in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            elif field_data.lstrip() != field_data:
+                self.warnings.append(f"Unexpected leading whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data.startswith('<br>'):
+                self.warnings.append(f"Unexpected leading break in '{field_data[:10].replace('<','&lt;').replace('>','&gt;')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[-1]==' ':
+                self.warnings.append(f"Unexpected trailing space(s) in '…{field_data[-10:].replace(' ','␣')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            elif field_data.rstrip() != field_data:
+                self.warnings.append(f"Unexpected trailing whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data.endswith('<br>'):
+                self.warnings.append(f"Unexpected trailing break in '…{field_data[-10:].replace('<','&lt;').replace('>','&gt;')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+
+            beforeCount, afterCount = 5, 6
+            if (ix:=field_data.find('  ')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected double spaces in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\u00A0')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u00A0','⍽')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected non-break space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\n')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount]
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected newLine character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\r')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount]
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find(' …')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('… ')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+        # end of do_basic_text_checks
+
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         EXPECTED_TSV_SOURCE_TAB_COUNT = 8 # So there's one more column than this
         for project in self.rc.projects:
@@ -2428,7 +2484,7 @@ class TnPreprocessor(Preprocessor):
                         field_id_list:List[str] = []
                         with open(this_filepath, 'rt') as tsv_source_file:
                             with open(os.path.join(self.output_dir, os.path.basename(this_filepath)), 'wt') as tsv_output_file:
-                                for tsv_line in tsv_source_file:
+                                for n, tsv_line in enumerate(tsv_source_file, start=1):
                                     tsv_line = tsv_line.rstrip('\n')
                                     tab_count = tsv_line.count('\t')
                                     if line_number == 1:
@@ -2439,7 +2495,7 @@ class TnPreprocessor(Preprocessor):
                                         AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
-                                    B, C, V, field_id, SupportReference, OrigQuote, Occurrence, _GLQuote, OccurrenceNote = tsv_line.split('\t')
+                                    B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
                                     if B!=lastB or C!=lastC or V!=lastV:
                                         field_id_list:List[str] = [] # IDs only need to be unique within each verse
                                         lastB, lastC, lastV = B, C, V
@@ -2484,13 +2540,22 @@ class TnPreprocessor(Preprocessor):
                                         field_id_list.append(field_id)
 
                                         if SupportReference:
+                                            do_basic_text_checks('SupportReference', SupportReference)
                                             self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
+
+                                        if OrigQuote:
+                                            do_basic_text_checks('OrigQuote', OrigQuote)
 
                                         if not Occurrence.replace('-','0').isdigit() or -1>int(Occurrence)>30: # How many words in the longest verse???
                                             self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (Should be number -1,0,1,2,…)")
                                         elif OccurrenceNote == '-1' and '…' in OrigQuote:
                                             self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
 
+                                        if GLQuote:
+                                            do_basic_text_checks('GLQuote', GLQuote)
+
+                                        if OccurrenceNote:
+                                            do_basic_text_checks('OccurrenceNote', OccurrenceNote)
                                         if '://' in OccurrenceNote or '[[' in OccurrenceNote:
                                             OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                                         if 'rc://' in OccurrenceNote:
@@ -2652,11 +2717,11 @@ class TnPreprocessor(Preprocessor):
         # AppSettings.logger.debug(f"check_original_language_TN_quotes({B},{C},{V}, {field_id}, {quoteField})…")
         TNid = f'{B} {C}:{V} ({field_id})'
 
-        if quoteField.lstrip() != quoteField:
-            self.warnings.append(f"Unexpected whitespace at start of {TNid} '{quoteField}'")
-        if quoteField.rstrip() != quoteField:
-            self.warnings.append(f"Unexpected whitespace at end of {TNid} '{quoteField}'")
-        quoteField = quoteField.strip() # so we don't get consequential errors
+        # if quoteField.lstrip() != quoteField:
+        #     self.warnings.append(f"Unexpected whitespace at start of {TNid} '{quoteField}'")
+        # if quoteField.rstrip() != quoteField:
+        #     self.warnings.append(f"Unexpected whitespace at end of {TNid} '{quoteField}'")
+        # quoteField = quoteField.strip() # so we don't get consequential errors
 
         if '...' in quoteField:
             # AppSettings.logger.debug(f"Bad ellipse characters in {TNid} '{quoteField}'")
@@ -2709,8 +2774,8 @@ class TnPreprocessor(Preprocessor):
                     self.warnings.append(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
             else: # can't find it
                 # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
-                extra_text = " (contains No-Break Space shown as '~')" if '\u00A0' in quoteField else ""
-                if extra_text: quoteField = quoteField.replace('\u00A0', '~')
+                extra_text = " (contains No-Break Space shown as '⍽')" if '\u00A0' in quoteField else ""
+                if extra_text: quoteField = quoteField.replace('\u00A0', '⍽')
                 self.warnings.append(f"Unable to find {TNid} '{quoteField}'{extra_text} in '{verse_text}'")
     # end of TnPreprocessor.check_original_language_TN_quotes function
 

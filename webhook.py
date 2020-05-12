@@ -142,19 +142,7 @@ def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
 # end of upload_preconvert_zip_file function
 
 
-def get_repo_files(base_temp_dir_name:str, commit_url:str, repo_name:str) -> str:
-    """
-    """
-    temp_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix=f'{repo_name}_')
-    download_repo(base_temp_dir_name, commit_url, temp_dir)
-    repo_dir = os.path.join(temp_dir, repo_name.lower())
-    if not os.path.isdir(repo_dir):
-        repo_dir = temp_dir
-    return repo_dir
-# end of get_repo_files function
-
-
-def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
+def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
     """
     Downloads and unzips a git repository from Github or git.door43.org
         Has a number of tries
@@ -214,7 +202,37 @@ def download_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
     if not prefix: # For dev- save this file longer
         if os.path.isfile(repo_zip_file):
             os.remove(repo_zip_file)
-# end of download_repo function
+# end of download_and_unzip_repo function
+
+
+def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str, repo_name:str) -> str:
+    """
+    """
+    temp_folderpath = tempfile.mkdtemp(dir=base_temp_dir_name, prefix=f'{repo_name}_')
+    download_and_unzip_repo(base_temp_dir_name, commit_url, temp_folderpath)
+    repo_folderpath = os.path.join(temp_folderpath, repo_name.lower())
+    if os.path.isdir(repo_folderpath):
+        print("Returning1", repo_folderpath)
+        return repo_folderpath
+    # else the folder that we were expecting from inside the zipped repo is not there
+    # NOTE: This can happen if the repo has been renamed in DCS -- maybe a Gitea bug???
+    AppSettings.logger.error(f"Unable to find expected '{repo_name.lower()}' folder inside {temp_folderpath}")
+    possibleFolderpaths = []
+    for something in os.listdir(temp_folderpath):
+        somepath = os.path.join(temp_folderpath, something)
+        isDir = os.path.isdir(somepath)
+        isFile = os.path.isfile(somepath)
+        assert isDir or isFile
+        AppSettings.logger.warning(f"  Seems we have: '{something}' {'folder' if isDir else 'file'}")
+        if isDir: possibleFolderpaths.append( somepath )
+    if len(possibleFolderpaths) == 1:
+        AppSettings.logger.warning(f"  Assuming that '{something}' folder (only one found) is the repo folder")
+        print("Returning2", possibleFolderpaths[0])
+        return possibleFolderpaths[0]
+    # else:
+    print("Returning3", temp_folderpath)
+    return temp_folderpath
+# end of download_repos_files_into_temp_folder function
 
 
 def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
@@ -587,7 +605,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     global project_types_invoked_string
 
     try: # Download and unzip the repo files
-        repo_dir = get_repo_files(base_temp_dir_name, repo_data_url, repo_name)
+        repo_dir = download_repos_files_into_temp_folder(base_temp_dir_name, repo_data_url, repo_name)
     except HTTPError as e:
         if 'HTTP Error 404: Not Found' in str(e):
             raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url}")

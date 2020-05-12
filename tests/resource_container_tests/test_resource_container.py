@@ -184,7 +184,7 @@ class TestResourceContainer(unittest.TestCase):
         manifest = get_manifest_from_repo_name('aa_mat-ts')
         self.assertEqual(manifest['dublin_core']['language']['identifier'], 'aa')
         self.assertEqual(manifest['dublin_core']['language']['title'], 'Afaraf')
-        self.assertEqual(manifest['dublin_core']['identifier'], 'bible')
+        self.assertEqual(manifest['dublin_core']['identifier'], 'aa_mat-ts') # was 'bible'
         self.assertEqual(manifest['projects'][0]['identifier'], 'mat')
 
 if __name__ == '__main__':
