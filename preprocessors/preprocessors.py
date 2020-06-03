@@ -782,9 +782,6 @@ class BiblePreprocessor(Preprocessor):
                                 ('\\wh ', '\\wh*'),
                                 ('\\wj ', '\\wj*'),
 
-                                ('\\ca ', '\\ca*'),
-                                ('\\va ', '\\va*'),
-
                                 ('\\f ', '\\f*'),
                                 ('\\x ', '\\x*'),
                              ):
@@ -834,19 +831,12 @@ class BiblePreprocessor(Preprocessor):
 
         # Check USFM3 pairs
         for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
-                                # See http://ubsicap.github.io/usfm/master/about/releasenotes.html
                                 # Character formatting
-                                ('\\fw ', '\\fw*'),
-                                ('\\jmp ', '\\jmp*'),
-                                ('\\lik ', '\\lik*'),
-                                ('\\litl ', '\\litl*'),
-                                ('\\liv ', '\\liv*'),
                                 ('\\png ', '\\png*'),
                                 ('\\rb ', '\\rb*'),
                                 ('\\sup ', '\\sup*'),
                                 ('\\wa ', '\\wa*'),
-                                ('\\xop ', '\\xop*'),
-                                ('\\xta ', '\\xta*'),
+                                ('\\va ', '\\va*'),
                                 # Milestones
                                 ('\\qt-s\\*', '\\qt-e\\*'), # NOTE: Will this still work if it has attributes?
                                 ('\\qt1-s\\*', '\\qt1-e\\*'), # NOTE: Will this still work if it has attributes?
