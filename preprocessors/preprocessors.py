@@ -2480,16 +2480,17 @@ class TnPreprocessor(Preprocessor):
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
                 self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            if (ix:=field_data.find(' …')) != -1:
-                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
-                if ix-beforeCount > 0: extract = f'…{extract}'
-                if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            if (ix:=field_data.find('… ')) != -1:
-                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
-                if ix-beforeCount > 0: extract = f'…{extract}'
-                if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_name == 'OrigQuote':
+                if (ix:=field_data.find(' …')) != -1:
+                    extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                    if ix-beforeCount > 0: extract = f'…{extract}'
+                    if ix+afterCount < len_field_data: extract = f'{extract}…'
+                    self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                if (ix:=field_data.find('… ')) != -1:
+                    extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                    if ix-beforeCount > 0: extract = f'…{extract}'
+                    if ix+afterCount < len_field_data: extract = f'{extract}…'
+                    self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
         # end of do_basic_text_checks
 
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
