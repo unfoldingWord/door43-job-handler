@@ -746,12 +746,32 @@ class BiblePreprocessor(Preprocessor):
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
 
-        # Check illegal characters
+        # Check for GIT conflicts
+        for conflict_chars in ('<<<<<<<', '>>>>>>>', '======='): # 7-chars in each one
+            if conflict_chars in file_contents:
+                error_msg = f"{B} - There appears to be {file_contents.count(conflict_chars)} unresolved conflicts in USFM file (See '{conflict_chars}')"
+                AppSettings.logger.critical(error_msg)
+                self.errors.append(error_msg)
+                break # Only want one error per file
+
+        # Check illegal characters -- gives errors
         for illegal_chars in ('\\\\', '**',):
             if illegal_chars in file_contents:
-                error_msg = f"{B} - {file_contents.count(illegal_chars)} unexpected '{illegal_chars}' in USFM file"
+                count = file_contents.count( illegal_chars )
+                error_msg = f"{B} - {'One' if count==1 else count} unexpected '{illegal_chars}' in USFM file"
                 AppSettings.logger.error(error_msg)
                 self.errors.append(error_msg)
+
+        # Check unusual characters -- gives warnings
+        for unusual_chars in ('␣', '  ',
+                            ' .', ' ,', ' :', ' ?', ' !',
+                            '..',       '::', '??', '!!', # NOTE: doubled commas can occur inside \w fields
+                            ):
+            if unusual_chars in file_contents:
+                count = file_contents.count( unusual_chars )
+                error_msg = f"{B} - {'One' if count==1 else count} unusual '{unusual_chars.replace(' ','␣')}' in USFM file"
+                AppSettings.logger.error(error_msg)
+                self.warnings.append(error_msg)
 
         # Check USFM pairs
         for opener,closer in (
@@ -795,7 +815,7 @@ class BiblePreprocessor(Preprocessor):
                 self.errors.append(error_msg)
             cnt = file_contents.count(f'{opener}{closer}') + file_contents.count(f'{opener} {closer}')
             if cnt:
-                error_msg = f"{B} - {cnt} empty '{opener}{closer}' field{'' if cnt==1 else 's'}"
+                error_msg = f"{B} - {'One' if cnt==1 else cnt} empty '{opener}{closer}' field{'' if cnt==1 else 's'}"
                 AppSettings.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
@@ -830,7 +850,7 @@ class BiblePreprocessor(Preprocessor):
             bad_count = len(re.findall(thisRE, preadjusted_file_contents))
             if bad_count:
                 s_suffix = '' if bad_count==1 else 's'
-                self.warnings.append(f"{B} - {bad_count:,} useless \\{marker1} marker{s_suffix} before \\{marker2} marker{s_suffix}")
+                self.warnings.append(f"{B} - {'One' if bad_count==1 else bad_count} useless \\{marker1} marker{s_suffix} before \\{marker2} marker{s_suffix}")
 
         # Check USFM3 pairs
         for opener,closer in ( # NOTE: These are in addition to the USFM2 ones above
@@ -866,7 +886,7 @@ class BiblePreprocessor(Preprocessor):
             bad_count = len(re.findall(thisRE, preadjusted_file_contents))
             if bad_count:
                 s_suffix = '' if bad_count==1 else 's'
-                self.warnings.append(f"{B} - {bad_count:,} unexpected \\{pmarker} marker{s_suffix} immediately following verse number")
+                self.warnings.append(f"{B} - {'One' if bad_count==1 else bad_count} unexpected \\{pmarker} marker{s_suffix} immediately following verse number")
 
         # Remove translation chunk milestones
         preadjusted_file_contents = preadjusted_file_contents.replace('\\ts\\*\n', '').replace('\\ts\\*', '')
@@ -2460,16 +2480,17 @@ class TnPreprocessor(Preprocessor):
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
                 self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            if (ix:=field_data.find(' …')) != -1:
-                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
-                if ix-beforeCount > 0: extract = f'…{extract}'
-                if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            if (ix:=field_data.find('… ')) != -1:
-                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
-                if ix-beforeCount > 0: extract = f'…{extract}'
-                if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_name == 'OrigQuote':
+                if (ix:=field_data.find(' …')) != -1:
+                    extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                    if ix-beforeCount > 0: extract = f'…{extract}'
+                    if ix+afterCount < len_field_data: extract = f'{extract}…'
+                    self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                if (ix:=field_data.find('… ')) != -1:
+                    extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
+                    if ix-beforeCount > 0: extract = f'…{extract}'
+                    if ix+afterCount < len_field_data: extract = f'{extract}…'
+                    self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
         # end of do_basic_text_checks
 
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
