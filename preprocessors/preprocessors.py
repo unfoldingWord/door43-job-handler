@@ -732,6 +732,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
         # AppSettings.logger.debug(f"check_clean_write_USFM_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
+        assert file_name.endswith('.usfm') or file_name.endswith('.USFM')
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -741,10 +742,17 @@ class BiblePreprocessor(Preprocessor):
         make_dir(os.path.dirname(file_name))
 
         # Clean the USFM
-        B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
-        needs_global_check = False
+        main_filename_part = file_name[:-5] # Remove .usfm from end
+        if main_filename_part.endswith('_book'): main_filename_part = main_filename_part[:-5]
+        B = main_filename_part[-3:].upper() # Extract book abbreviation from somepath/nn-BBB.usfm
+        if B not in USFM_BOOK_IDENTIFIERS:
+            error_msg = f"Unable to determine book code -- got {B!r}"
+            AppSettings.logger.critical(error_msg)
+            self.errors.append(error_msg)
+
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
+        needs_global_check = False
 
         # Check for GIT conflicts
         for conflict_chars in ('<<<<<<<', '>>>>>>>', '======='): # 7-chars in each one
