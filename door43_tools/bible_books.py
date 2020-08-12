@@ -136,7 +136,7 @@ BOOK_NUMBERS = {
     '2jn': '64',
     '3jn': '65',
     'jud': '66',
-    'rev': '67'
+    'rev': '67',
     'bak': 'A1', # RJH added Aug 2020
 }
 
