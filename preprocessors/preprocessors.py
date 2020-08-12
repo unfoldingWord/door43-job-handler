@@ -1011,8 +1011,8 @@ class BiblePreprocessor(Preprocessor):
 
             # Hide empty \p markers
             preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
-            # Invalid \p… markers
-            preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+            # Invalid \p… markers -- allowed pc ph(#) pi(#) pm po pr pe(riph)
+            preadjusted_file_contents, n = re.subn(r'\\p([^ chimore])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
             if n: self.errors.append(f"{B} - {n:,} badly formed \\p markers")
             # Restore empty \p markers
             preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
@@ -2811,7 +2811,7 @@ class TnPreprocessor(Preprocessor):
                     badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
                     AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
                     self.warnings.append(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
-            else: # can't find it
+            else: # can't find the given text
                 # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
                 extra_text = " (contains No-Break Space shown as '⍽')" if '\u00A0' in quoteField else ""
                 if extra_text: quoteField = quoteField.replace('\u00A0', '⍽')
