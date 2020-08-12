@@ -259,7 +259,7 @@ class AppSettings:
     def db_close(cls):
         #print("AppSettings.db_close()…")
         if cls._db_session:
-            cls._db_session.close_all()
+            cls._db_session.close() # Was close_all() but that's deprecated
             cls._db_session = None
         if cls._db_engine:
             cls._db_engine.dispose()
