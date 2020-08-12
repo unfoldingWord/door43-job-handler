@@ -65,7 +65,7 @@ BOOK_NAMES = {
     '2jn': '2 John',
     '3jn': '3 John',
     'jud': 'Jude',
-    'rev': 'Revelation'
+    'rev': 'Revelation',
     'bak': 'Back Matter',
 }
 
