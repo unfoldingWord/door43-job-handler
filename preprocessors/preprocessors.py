@@ -732,6 +732,7 @@ class BiblePreprocessor(Preprocessor):
         TODO: Remove most of this once tX Job Handler handles full USFM3
         """
         # AppSettings.logger.debug(f"check_clean_write_USFM_file( {file_name}, {file_contents[:500]+('…' if len(file_contents)>500 else '')!r} )")
+        assert file_name.endswith('.usfm') or file_name.endswith('.USFM')
 
         # Replacing this code:
         # write_file(file_name, file_contents)
@@ -741,10 +742,17 @@ class BiblePreprocessor(Preprocessor):
         make_dir(os.path.dirname(file_name))
 
         # Clean the USFM
-        B = file_name[-8:-5] # Extract book abbreviation from somepath/nn-BBB.usfm
-        needs_global_check = False
+        main_filename_part = file_name[:-5] # Remove .usfm from end
+        if main_filename_part.endswith('_book'): main_filename_part = main_filename_part[:-5]
+        B = main_filename_part[-3:].upper() # Extract book abbreviation from somepath/nn-BBB.usfm
+        if B not in USFM_BOOK_IDENTIFIERS:
+            error_msg = f"Unable to determine book code -- got {B!r}"
+            AppSettings.logger.critical(error_msg)
+            self.errors.append(error_msg)
+
         has_USFM3_line = '\\usfm 3' in file_contents
         preadjusted_file_contents = file_contents
+        needs_global_check = False
 
         # Check for GIT conflicts
         for conflict_chars in ('<<<<<<<', '>>>>>>>', '======='): # 7-chars in each one
@@ -1003,8 +1011,8 @@ class BiblePreprocessor(Preprocessor):
 
             # Hide empty \p markers
             preadjusted_file_contents = re.sub(r'\\p\n', r'\\PPP\n', preadjusted_file_contents) # Hide valid \p markers
-            # Invalid \p… markers
-            preadjusted_file_contents, n = re.subn(r'\\p([^ chimor])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
+            # Invalid \p… markers -- allowed pc ph(#) pi(#) pm po pr pe(riph)
+            preadjusted_file_contents, n = re.subn(r'\\p([^ chimore])', r'\\p \1', preadjusted_file_contents) # Fix bad USFM \p without following space
             if n: self.errors.append(f"{B} - {n:,} badly formed \\p markers")
             # Restore empty \p markers
             preadjusted_file_contents = re.sub(r'\\PPP\n', r'\\p\n', preadjusted_file_contents) # Repair valid \p markers
@@ -2803,7 +2811,7 @@ class TnPreprocessor(Preprocessor):
                     badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
                     AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
                     self.warnings.append(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
-            else: # can't find it
+            else: # can't find the given text
                 # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
                 extra_text = " (contains No-Break Space shown as '⍽')" if '\u00A0' in quoteField else ""
                 if extra_text: quoteField = quoteField.replace('\u00A0', '⍽')
@@ -2845,11 +2853,13 @@ class TnPreprocessor(Preprocessor):
                 self.loaded_file_contents = book_file.read()
             self.loaded_file_path = book_path
             # Do some initial cleaning and convert to lines
+            # NOTE: We still have to handle older versions of these files (which might be specified in the manifest)
             self.loaded_file_contents = self.loaded_file_contents \
                                             .replace('\\zaln-e\\*','') \
                                             .replace('\\k-e\\*', '')
-            self.loaded_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \zaln start milestones
-            self.loaded_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \k start milestones
+            self.loaded_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', self.loaded_file_contents) # Remove self-closed \zaln start milestones
+            self.loaded_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', self.loaded_file_contents) # Remove self-closed \k start milestones
+            self.loaded_file_contents = re.sub(r'\\k-s (.+?)[\n\\]', '', self.loaded_file_contents) # Remove older unclosed \k start milestones
             self.loaded_file_contents = self.loaded_file_contents.split('\n')
 
         found_chapter = found_verse = False
@@ -2884,13 +2894,20 @@ class TnPreprocessor(Preprocessor):
             ixW = verseText.find('\\w ', ixW+1) # Might be another one
         # print(f"Got verse text2: '{verseText}'")
 
+        # Remove markers belonging to the next verse
+        if verseText.endswith('\\p'):
+            verseText = verseText[:-2]
+
         # Remove footnotes
         verseText = re.sub(r'\\f (.+?)\\f\*', '', verseText)
         # Remove alternative versifications
         verseText = re.sub(r'\\va (.+?)\\va\*', '', verseText)
         # print(f"Got verse text3: '{verseText}'")
 
-        # Final clean-up (shouldn't be necessary, but just in case)
+        if '\\' in verseText:
+            AppSettings.logger.critical(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
+
+        # Final clean-up
         return verseText.replace('  ', ' ')
     # end of TnPreprocessor.get_passage function
 

@@ -600,12 +600,12 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
             # print(f"Now have {len(final_build_log['warnings'])} warnings")
         final_build_log['status'] = 'errors'
     elif final_build_log['warnings']:
-        print(f"Had {len(final_build_log['warnings'])} warnings")
+        print(f"Had {len(final_build_log['warnings']):,} warnings")
         final_build_log['status'] = 'warnings'
     else:
         final_build_log['status'] = 'success'
     if final_build_log['warnings']:
-        final_build_log['warnings'].append(f"{len(final_build_log['warnings'])} total preprocessor and linter warnings")
+        final_build_log['warnings'].append(f"{len(final_build_log['warnings']):,} total preprocessor and linter warnings")
     final_build_log['success'] = queued_json_payload['converter_success']
     final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     update_project_file(final_build_log, our_temp_dir)

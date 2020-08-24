@@ -1,4 +1,5 @@
 BOOK_NAMES = {
+    'frt': 'Front Matter',
     'gen': 'Genesis',
     'exo': 'Exodus',
     'lev': 'Leviticus',
@@ -64,7 +65,8 @@ BOOK_NAMES = {
     '2jn': '2 John',
     '3jn': '3 John',
     'jud': 'Jude',
-    'rev': 'Revelation'
+    'rev': 'Revelation',
+    'bak': 'Back Matter',
 }
 
 BOOK_NUMBERS = {
@@ -134,7 +136,8 @@ BOOK_NUMBERS = {
     '2jn': '64',
     '3jn': '65',
     'jud': '66',
-    'rev': '67'
+    'rev': '67',
+    'bak': 'A1', # RJH added Aug 2020
 }
 
 BOOK_CHAPTER_VERSES = {
