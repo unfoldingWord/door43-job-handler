@@ -2905,7 +2905,7 @@ class TnPreprocessor(Preprocessor):
         # print(f"Got verse text3: '{verseText}'")
 
         if '\\' in verseText:
-            AppSettings.logger.critical(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
+            AppSettings.logger.error(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
 
         # Final clean-up
         return verseText.replace('  ', ' ')
