@@ -2853,11 +2853,13 @@ class TnPreprocessor(Preprocessor):
                 self.loaded_file_contents = book_file.read()
             self.loaded_file_path = book_path
             # Do some initial cleaning and convert to lines
+            # NOTE: We still have to handle older versions of these files (which might be specified in the manifest)
             self.loaded_file_contents = self.loaded_file_contents \
                                             .replace('\\zaln-e\\*','') \
                                             .replace('\\k-e\\*', '')
-            self.loaded_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \zaln start milestones
-            self.loaded_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', self.loaded_file_contents) # Remove \k start milestones
+            self.loaded_file_contents = re.sub(r'\\zaln-s (.+?)\\\*', '', self.loaded_file_contents) # Remove self-closed \zaln start milestones
+            self.loaded_file_contents = re.sub(r'\\k-s (.+?)\\\*', '', self.loaded_file_contents) # Remove self-closed \k start milestones
+            self.loaded_file_contents = re.sub(r'\\k-s (.+?)[\n\\]', '', self.loaded_file_contents) # Remove older unclosed \k start milestones
             self.loaded_file_contents = self.loaded_file_contents.split('\n')
 
         found_chapter = found_verse = False
@@ -2892,13 +2894,20 @@ class TnPreprocessor(Preprocessor):
             ixW = verseText.find('\\w ', ixW+1) # Might be another one
         # print(f"Got verse text2: '{verseText}'")
 
+        # Remove markers belonging to the next verse
+        if verseText.endswith('\\p'):
+            verseText = verseText[:-2]
+
         # Remove footnotes
         verseText = re.sub(r'\\f (.+?)\\f\*', '', verseText)
         # Remove alternative versifications
         verseText = re.sub(r'\\va (.+?)\\va\*', '', verseText)
         # print(f"Got verse text3: '{verseText}'")
 
-        # Final clean-up (shouldn't be necessary, but just in case)
+        if '\\' in verseText:
+            AppSettings.logger.critical(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
+
+        # Final clean-up
         return verseText.replace('  ', ' ')
     # end of TnPreprocessor.get_passage function
 
