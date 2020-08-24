@@ -975,6 +975,34 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         sender_username = queued_json_payload['sender']['username']
         our_identifier = f"'{sender_username}' deleting '{repo_owner_username}/{repo_name}/{deleted_branch_name}'"
 
+    elif queued_json_payload['DCS_event'] == 'fork':
+        original_repo_owner_username, original_repo_name = repo_owner_username, repo_name
+        repo_owner_username = queued_json_payload['forkee']['owner']['username']
+        if queued_json_payload['forkee']['name'] != repo_name:
+            AppSettings.logger.debug(f"Changing forked repo name from '{repo_name}' to '{queued_json_payload['forkee']['name']}'")
+            repo_name = queued_json_payload['forkee']['name']
+
+        try:
+            commit_branch = queued_json_payload['forkee']['default_branch']
+        except (IndexError, AttributeError):
+            AppSettings.logger.critical(f"Could not determine branch from '{queued_json_payload['forkee']}'")
+            commit_branch = 'UnknownCommitBranch'
+        except KeyError:
+            AppSettings.logger.critical("No branch specified")
+            commit_branch = 'NoCommitBranch'
+        AppSettings.logger.debug(f"Got forked branch='{commit_branch}'")
+
+        repo_data_url = f"{queued_json_payload['repository']['parent']['html_url']}/archive/{commit_branch}.zip"
+        action_message = "fork"
+
+        if 'sender' in queued_json_payload:
+            sender_dict = queued_json_payload['sender']
+        else:
+            sender_dict = {'username': commit['author']['username']}
+        sender_username = sender_dict['username']
+
+        our_identifier = f"'{sender_username}' forking '{original_repo_owner_username}/{original_repo_name}' to '{repo_owner_username}{'/'+repo_name if repo_name!=original_repo_name else ''}'"
+
     else:
         AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
