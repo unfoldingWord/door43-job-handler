@@ -180,15 +180,16 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
             finally:
                 AppSettings.logger.debug("  Unzipping finished.")
             break # Get out of lopp
-        # except HTTPError as e: # Could this also be a race condition within Gitea ???
-        #     # We do less tries for this condition (with shorter waits also)
-        #     AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
-        #     if try_number < MAX_TRIES-1:
-        #         AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
-        #         sleep(SECONDS_BETWEEN_TRIES-1) # Try again after a few seconds
-        #         try_number += 1
-        #     else:
-        #         raise HTTPError(f"Unable to download file from {repo_zip_url} after {try_number} tries")
+        except HTTPError as e: # Could this also be a race condition within Gitea ???
+            # We do less tries for this condition (with shorter waits also)
+            AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
+            if try_number < MAX_TRIES-1:
+                AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
+                sleep(SECONDS_BETWEEN_TRIES-1) # Try again after a few seconds
+                try_number += 1
+            else:
+                AppSettings.logger.error(f"Unable to download file from {repo_zip_url} after {try_number} tries")
+                raise e
         except BadZipFile as e: # I suspect a race condition within Gitea ???
             AppSettings.logger.error(f"Try {try_number}: Got bad zip file when downloading repo from {repo_zip_url}: {e}")
             if try_number < MAX_TRIES:
@@ -608,7 +609,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         repo_dir = download_repos_files_into_temp_folder(base_temp_dir_name, repo_data_url, repo_name)
     except HTTPError as e:
         if 'HTTP Error 404: Not Found' in str(e):
-            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url}")
+            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url} at {repo_data_url if repo_data_url.endswith('.zip') else (repo_data_url.replace('commit','archive')+'.zip')}")
         else:
             raise e # Can't download/unzip repo files
 
