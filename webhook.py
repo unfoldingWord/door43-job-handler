@@ -1127,8 +1127,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             job_descriptive_name = process_webhook_job(queued_json_payload, current_job.connection, our_queue)
         except Exception as e:
             # Catch most exceptions here so we can log them to CloudWatch
-            AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
-            AppSettings.logger.critical(f"{e}: {traceback.format_exc()}")
+            AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing:\n{queued_json_payload}\ngetting exception:\n{e}: {traceback.format_exc()}")
             AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
             # Now attempt to log it to an additional, separate FAILED log
             import logging
@@ -1152,8 +1151,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             logger2.addHandler(failure_watchtower_log_handler)
             logger2.setLevel(logging.DEBUG)
             logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")
-            logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing: {queued_json_payload}")
-            logger2.critical(f"{e}: {traceback.format_exc()}")
+            logger2.critical(f"{prefixed_our_name} webhook threw an exception while processing:\n{queued_json_payload}\ngetting exception:\n{e}: {traceback.format_exc()}")
             failure_watchtower_log_handler.close()
             # NOTE: following line removed as stats recording used too much disk space
             # stats_client.gauge(user_projects_invoked_string, 1) # Mark as 'failed'
