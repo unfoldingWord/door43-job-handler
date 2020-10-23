@@ -2484,19 +2484,27 @@ class TnPreprocessor(Preprocessor):
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
                 self.warnings.append(f"Unexpected zero-width space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
-            if (ix:=field_data.find('\u200D')) != -1:
-                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200D','⍽')
-                if ix-beforeCount > 0: extract = f'…{extract}'
-                if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected zero-width joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[0] == '\u200D':
+                extract = field_data[:afterCount].replace('\u200D','⍽')
+                if afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Starts with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[-1] == '\u200D':
+                extract = field_data[-beforeCount:].replace('\u200D','⍽')
+                if beforeCount < len_field_data: extract = f'…{extract}'
+                self.warnings.append(f"Ends with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            # if (ix:=field_data.find('\u200D')) != -1:
+            #     extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200D','⍽')
+            #     if ix-beforeCount > 0: extract = f'…{extract}'
+            #     if ix+afterCount < len_field_data: extract = f'{extract}…'
+            #     self.warnings.append(f"Unexpected zero-width joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if field_data[0] == '\u2060':
                 extract = field_data[:afterCount].replace('\u2060','⍽')
                 if afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Filed starts with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Starts with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if field_data[-1] == '\u2060':
                 extract = field_data[-beforeCount:].replace('\u2060','⍽')
                 if beforeCount < len_field_data: extract = f'…{extract}'
-                self.warnings.append(f"Filed ends with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Ends with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if (ix:=field_data.find('\n')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount]
                 if ix-beforeCount > 0: extract = f'…{extract}'
