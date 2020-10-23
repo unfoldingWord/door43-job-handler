@@ -1861,6 +1861,7 @@ class TaPreprocessor(Preprocessor):
         verseText = re.sub(r'\\f (.+?)\\f\*', '', verseText)
         # Remove alternative versifications
         verseText = re.sub(r'\\va (.+?)\\va\*', '', verseText)
+        verseText = re.sub(r'\\ca (.+?)\\ca\*', '', verseText)
         # print(f"Got verse text3: '{verseText}'")
 
         # Final clean-up (shouldn't be necessary, but just in case)
@@ -2478,6 +2479,32 @@ class TnPreprocessor(Preprocessor):
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
                 self.warnings.append(f"Unexpected non-break space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if (ix:=field_data.find('\u200B')) != -1:
+                extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200B','⍽')
+                if ix-beforeCount > 0: extract = f'…{extract}'
+                if ix+afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Unexpected zero-width space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[0] == '\u200D':
+                extract = field_data[:afterCount].replace('\u200D','⍽')
+                if afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Starts with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[-1] == '\u200D':
+                extract = field_data[-beforeCount:].replace('\u200D','⍽')
+                if beforeCount < len_field_data: extract = f'…{extract}'
+                self.warnings.append(f"Ends with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            # if (ix:=field_data.find('\u200D')) != -1:
+            #     extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200D','⍽')
+            #     if ix-beforeCount > 0: extract = f'…{extract}'
+            #     if ix+afterCount < len_field_data: extract = f'{extract}…'
+            #     self.warnings.append(f"Unexpected zero-width joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[0] == '\u2060':
+                extract = field_data[:afterCount].replace('\u2060','⍽')
+                if afterCount < len_field_data: extract = f'{extract}…'
+                self.warnings.append(f"Starts with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            if field_data[-1] == '\u2060':
+                extract = field_data[-beforeCount:].replace('\u2060','⍽')
+                if beforeCount < len_field_data: extract = f'…{extract}'
+                self.warnings.append(f"Ends with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
             if (ix:=field_data.find('\n')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount]
                 if ix-beforeCount > 0: extract = f'…{extract}'
@@ -2585,7 +2612,8 @@ class TnPreprocessor(Preprocessor):
                                         if OrigQuote:
                                             do_basic_text_checks('OrigQuote', OrigQuote)
 
-                                        if not Occurrence.replace('-','0').isdigit() or -1>int(Occurrence)>30: # How many words in the longest verse???
+                                        if (not Occurrence.replace('-','0').isdigit() # allows for -1 as well
+                                        or -1>int(Occurrence)>30): # How many words in the longest verse???
                                             self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (Should be number -1,0,1,2,…)")
                                         elif OccurrenceNote == '-1' and '…' in OrigQuote:
                                             self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
@@ -2902,6 +2930,7 @@ class TnPreprocessor(Preprocessor):
         verseText = re.sub(r'\\f (.+?)\\f\*', '', verseText)
         # Remove alternative versifications
         verseText = re.sub(r'\\va (.+?)\\va\*', '', verseText)
+        verseText = re.sub(r'\\ca (.+?)\\ca\*', '', verseText)
         # print(f"Got verse text3: '{verseText}'")
 
         if '\\' in verseText:
@@ -2956,9 +2985,16 @@ class TnPreprocessor(Preprocessor):
             if not link_title:
                 AppSettings.logger.error(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
                 self.errors.append(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
-            # elif f'/{shortReference}' not in fullNote:
-            #     AppSettings.logger.warning(f"Possible tN mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
-            #     self.warnings.append(f"Possible mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+            elif f'/{shortReference}' not in fullNote:
+                AppSettings.logger.warning(f"Possible tN mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+                self.warnings.append(f"Possible mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+            elif not shortReference.startswith('figs-') \
+              and not shortReference.startswith('grammar-') \
+              and not shortReference.startswith('translate-') \
+              and not shortReference.startswith('writing-') \
+              and shortReference != 'guidelines-sonofgodprinciples':
+                AppSettings.logger.warning(f"Unexpected tN {BCV} ({field_id}) SupportReference='{shortReference}' is not Just-In-Time article")
+                self.warnings.append(f"Unexpected {BCV} ({field_id}) SupportReference='{shortReference}' is not Just-In-Time article")
     # end of TnPreprocessor.check_support_reference function
 
 
