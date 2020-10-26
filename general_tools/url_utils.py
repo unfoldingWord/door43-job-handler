@@ -13,6 +13,11 @@ from urllib.error import HTTPError
 from app_settings.app_settings import AppSettings
 
 
+def get_json_from_url(url:str) -> Dict:
+    """
+    """
+    return json.loads(get_url(url))
+
 
 def get_url(url:str, catch_exception:bool=False) -> Union[str,bool]:
     """
@@ -143,7 +148,7 @@ def get_languages() -> Dict[str,Any]:
     ]
     """
     url = 'http://td.unfoldingword.org/exports/langnames.json'
-    return json.loads(get_url(url))
+    return get_json_from_url(url)
 
 
 def join_url_parts(*args) -> str:

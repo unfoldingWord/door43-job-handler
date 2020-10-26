@@ -28,7 +28,7 @@ from statsd import StatsClient # Graphite front-end
 # Local imports
 from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
-from general_tools.url_utils import download_file
+from general_tools.url_utils import download_file, get_json_from_url
 from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
@@ -142,7 +142,7 @@ def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
 # end of upload_preconvert_zip_file function
 
 
-def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str) -> None:
+def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str, repo_owner_username:str, repo_name:str) -> None:
     """
     Downloads and unzips a git repository from Github or git.door43.org
         Has a number of tries
@@ -180,9 +180,26 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
             finally:
                 AppSettings.logger.debug("  Unzipping finished.")
             break # Get out of lopp
-        except HTTPError as e: # Could this also be a race condition within Gitea ???
-            # We do less tries for this condition (with shorter waits also)
+        except HTTPError as e: # Can be caused by private repos -- could this also be a race condition within Gitea ???
             AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
+            if try_number == 1: # Only on the first fail
+                # # See if the repo is private -- no need coz we now check this in door43-enqueue as it's in the payload
+                # repo_dict = get_json_from_url(f"https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}")
+                # AppSettings.logger.debug(f"  Got repo_dict={repo_dict}")
+                # if repo_dict['private']:
+                #     AppSettings.logger.critical(f"Repo '{repo_name}' for {repo_owner_username} is PRIVATE!")
+                #     e.msg = f"Repo '{repo_name}' for {repo_owner_username} is PRIVATE!: {e}"
+                #     raise e
+                # else:
+                # See if the user/org is private
+                owner_dict = get_json_from_url(f"https://git.door43.org/api/v1/orgs/{repo_owner_username}")
+                AppSettings.logger.debug(f"  Got owner_dict={owner_dict}")
+                if owner_dict['visibility'] != 'public':
+                    AppSettings.logger.critical(f"Owner '{repo_owner_username}' of '{repo_name}' is PRIVATE!")
+                    e.msg = f"Owner '{repo_owner_username}' of '{repo_name}' is PRIVATE!: {e}"
+                    raise e
+
+            # We do less tries for this condition (with shorter waits also)
             if try_number < MAX_TRIES-1:
                 AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
                 sleep(SECONDS_BETWEEN_TRIES-1) # Try again after a few seconds
@@ -206,11 +223,11 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
 # end of download_and_unzip_repo function
 
 
-def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str, repo_name:str) -> str:
+def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str, repo_owner_username:str, repo_name:str) -> str:
     """
     """
     temp_folderpath = tempfile.mkdtemp(dir=base_temp_dir_name, prefix=f'{repo_name}_')
-    download_and_unzip_repo(base_temp_dir_name, commit_url, temp_folderpath)
+    download_and_unzip_repo(base_temp_dir_name, commit_url, temp_folderpath, repo_owner_username, repo_name)
     repo_folderpath = os.path.join(temp_folderpath, repo_name.lower())
     if os.path.isdir(repo_folderpath):
         print("Returning1", repo_folderpath)
@@ -606,7 +623,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     global project_types_invoked_string
 
     try: # Download and unzip the repo files
-        repo_dir = download_repos_files_into_temp_folder(base_temp_dir_name, repo_data_url, repo_name)
+        repo_dir = download_repos_files_into_temp_folder(base_temp_dir_name, repo_data_url, repo_owner_username, repo_name)
     except HTTPError as e:
         if 'HTTP Error 404: Not Found' in str(e):
             raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url} at {repo_data_url if repo_data_url.endswith('.zip') else (repo_data_url.replace('commit','archive')+'.zip')}")
@@ -887,7 +904,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     repo_owner_username = queued_json_payload['repository']['owner']['username']
     repo_name = queued_json_payload['repository']['name']
 
-    commit_branch = commit_hash = repo_data_url = tag_name = None
+    commit_branch = after_commit_hash = repo_data_url = tag_name = None
     if queued_json_payload['DCS_event'] == 'push':
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
@@ -903,21 +920,25 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         #     return False, {'error': f"{err_msg}."}
         AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
-        commit_hash = queued_json_payload['after']
-        commit = None
+        after_commit_hash = queued_json_payload['after']
+        found_commit = None
         for some_commit in queued_json_payload['commits']:
-            if some_commit['id'] == commit_hash:
-                commit = some_commit
+            if some_commit['id'] == after_commit_hash:
+                found_commit = some_commit
                 break
-        commit_hash = commit_hash[:10]  # Only use the short form
-        AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
-        repo_data_url = commit['url']
-        action_message = commit['message'].strip() # Seems to always end with a newline
+        after_commit_hash = after_commit_hash[:10]  # Only use the short form
+        AppSettings.logger.debug(f"Got original after_commit_hash='{after_commit_hash}'")
+        if found_commit:
+            repo_data_url = found_commit['url']
+            action_message = found_commit['message'].strip() # Seems to always end with a newline
+        else: # we didn't find the commit -- not totally sure yet what user actions cause this situation
+            AppSettings.logger.critical(f"Unable to find 'after' commit hash in {len(queued_json_payload['commits'])} commits -- WHY???")
 
         if 'pusher' in queued_json_payload:
             pusher_dict = queued_json_payload['pusher']
         else:
-            pusher_dict = {'username': commit['author']['username']}
+            pusher_dict = {'username': found_commit['author']['username'] if found_commit else 'UNKNOWN'}
+
         pusher_username = pusher_dict['username']
         our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
 
@@ -996,15 +1017,10 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         repo_data_url = f"{queued_json_payload['repository']['parent']['html_url']}/archive/{commit_branch}.zip"
         action_message = "fork"
 
-        if 'sender' in queued_json_payload:
-            sender_dict = queued_json_payload['sender']
-        else:
-            sender_dict = {'username': commit['author']['username']}
-        sender_username = sender_dict['username']
-
+        sender_username = queued_json_payload['sender']['username'] if 'sender' in queued_json_payload else 'UNKNOWN'
         our_identifier = f"'{sender_username}' forking '{original_repo_owner_username}/{original_repo_name}' to '{repo_owner_username}{'/'+repo_name if repo_name!=original_repo_name else ''}'"
 
-    else:
+    else: # not a push, release, delete, or fork
         AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
 
     if commit_branch == default_branch:
@@ -1022,8 +1038,8 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     else:
         commit_type = 'unknown'
         commit_id = None
-    commit_id_string = commit_id if commit_id is None else "'"+commit_id+"'"
-    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id={commit_id_string} (commit_hash={commit_hash})")
+    commit_id_string = None if commit_id is None else f"'{commit_id}'"
+    AppSettings.logger.debug(f"Got new '{commit_type}' commit_id={commit_id_string} (after_commit_hash={after_commit_hash})")
     if repo_data_url:
         AppSettings.logger.debug(f"Got repo_data_url='{repo_data_url}'")
 
@@ -1049,7 +1065,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
             deliberateFailureForTesting  # type: ignore
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, commit_hash, repo_data_url,
+                            commit_type, commit_id, after_commit_hash, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
                             our_identifier, our_queue)
     else:
