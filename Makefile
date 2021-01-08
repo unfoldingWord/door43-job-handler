@@ -74,7 +74,9 @@ runDev: checkEnvVariables
 runDevDebug: checkEnvVariables
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the local redis dev- queue
-	QUEUE_PREFIX="dev-" DEBUG_MODE="true" rq worker --config rq_settings --name D43_Dev_JobHandler
+        # Without Docker:
+        # QUEUE_PREFIX="dev-" DEBUG_MODE="true" rq worker --config rq_settings --name D43_Dev_JobHandler
+	docker run -e QUEUE_PREFIX="dev-" -e DEBUG_MODE=true -e REDIS_URL="redis://door43-enqueue-job_redis_1:6379" -e GOGS_USER_TOKEN -v ${PWD}:/scripts --name D43_DevJob_Handler --rm --network "tx-net" python:3 /bin/bash -c "pip install rq; cd /scripts; rq worker --config rq_settings --name D43_Dev_JobHandler"
 
 run:
 	# This runs the rq job handler
