@@ -1,14 +1,13 @@
 from typing import Dict, List, Any, Optional, Tuple
 import os
 import tempfile
+import shutil
 from datetime import datetime
 
 from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from general_tools.file_utils import unzip, write_file, remove_tree, remove_file
 from general_tools.url_utils import download_file
-
-
 
 class LocalJob:
     """
@@ -136,7 +135,11 @@ class ClientConverterCallback:
 
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
             # This is required for the print function to work
-            self.upload_converted_files_to_CDN(upload_key, unzip_dirpath)
+            if debug_mode_flag:
+                os.makedirs('/site', exist_ok=True)
+                shutil.copytree(unzip_dirpath, '/site')
+            else:
+                self.upload_converted_files_to_CDN(upload_key, unzip_dirpath)
         else:
             unzip_dirpath = None # So we have something to return (fail later -- is that an advantage?)
 

@@ -112,19 +112,29 @@ class ProjectDeployer:
                 if os.path.isdir(filepath):
                     continue
                 key = s3_commit_key + filepath.replace(output_dir, '').replace(os.path.sep, '/')
-                AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
-                AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
+                if debug_mode_flag:
+                    AppSettings.logger.debug(f"Copying {filepath} to /{key} …")
+                    os.makedirs(os.path.dirname(f'/{key}'), exist_ok=True)
+                    copyfile(filepath, f'/{key}')
+                else:
+                    AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
+                    AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
         AppSettings.logger.info("Copying json files and setting up redirect…")
         try:
-            AppSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=AppSettings.cdn_bucket_name)
-            AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
-                                                    to_key=f'{s3_repo_key}/manifest.json')
-            AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location='/' + s3_commit_key)
-            AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html',
-                                                        location='/' + s3_commit_key)
-            self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
+            if debug_mode_flag:
+                AppSettings.cdn_s3_handler().download_file(f'{s3_repo_key}/project.json', f'/{s3_repo_key}/project.json')
+                os.makedirs(f'{s3_repo_key}', exist_ok=True)
+                copyfile(f'/{s3_commit_key}/manifest.json', f'/{s3_repo_key}/manifest.json')
+            else:
+                AppSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=AppSettings.cdn_bucket_name)
+                AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
+                                                        to_key=f'{s3_repo_key}/manifest.json')
+                AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location='/' + s3_commit_key)
+                AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html',
+                                                            location='/' + s3_commit_key)
+                self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except Exception as e:
             AppSettings.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")
 

@@ -86,8 +86,8 @@ prefixed_our_name = prefix + OUR_NAME
 
 long_prefix = 'develop' if prefix else 'git'
 DOOR43_CALLBACK_URL = f'https://{long_prefix}.door43.org/client/webhook/tx-callback/'
-ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
-                                    if prefix and debug_mode_flag and ':8090' in tx_post_url \
+ADJUSTED_DOOR43_CALLBACK_URL = 'http://d43proxy/tx-callback/' \
+                                    if prefix and debug_mode_flag \
                                  else DOOR43_CALLBACK_URL
 
 
@@ -773,8 +773,8 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
                                 else input_format, # special case for .txt Bibles
             'output_format': 'html',
             'source': source_url_base + '/' + file_key,
-            'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                            if prefix and debug_mode_flag and ':8090' in tx_post_url \
+            'callback': 'http://d43proxy/tx-callback/' \
+                            if prefix and debug_mode_flag \
                         else DOOR43_CALLBACK_URL,
             # TODO: gogs_user_token logic can be completely removed from the program
             #           if we're certain we're not worried about Host header spoofing.
