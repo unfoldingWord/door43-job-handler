@@ -18,6 +18,7 @@ from time import time, sleep
 import traceback
 from zipfile import BadZipFile
 from urllib.error import HTTPError
+from urllib.parse import urlparse
 
 # Library (PyPI) imports
 import requests
@@ -765,12 +766,16 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
         # Pass the work request onto the tX system
         AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
+        url_parts = urlparse(repo_data_url)
+        dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
         tx_payload = {
             'job_id': our_job_id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
             'repo_name': repo_name,
             'repo_owner': repo_owner_username,
             'repo_ref': commit_branch,
+            'repo_data_url': repo_data_url,
+            'dcs_domain': dcs_domain,
             'resource_type': resource_subject, # This used to be rc.resource.identifier
             'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                                 else input_format, # special case for .txt Bibles
