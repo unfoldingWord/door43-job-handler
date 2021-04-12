@@ -807,7 +807,7 @@ def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, 
     clear_commit_directory_in_cdn(s3_commit_key)
 
     # Pass the work request onto the tX system
-    AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
+    AppSettings.logger.info(f"Pages Job: Post request to tX system @ {tx_post_url} …")
     tx_payload['job_id'] = our_job_id
     tx_payload['output_format'] = 'html'
 
@@ -840,7 +840,7 @@ def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, 
 # end of handle_page_build function
 
 
-def handle_pdf_build(repo_owner_username: str, repo_name: str, commit_branch: str, pdf_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+def handle_pdf_build(repo_owner_username: str, repo_name: str, commit_id: str, pdf_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
     """
     A job dict is now setup and remembered in REDIS
         so that we can match it when we get a future callback.
@@ -872,7 +872,7 @@ def handle_pdf_build(repo_owner_username: str, repo_name: str, commit_branch: st
     remember_job(pdf_job_dict, redis_connection)
 
     # Pass the work request onto the tX system
-    AppSettings.logger.info(f"Post request to pdf tX system @ {tx_post_url} …")
+    AppSettings.logger.info(f"PDF Job: Post request to tX system @ {tx_post_url} …")
     tx_payload['job_id'] = our_job_id
     tx_payload['output_format'] = 'pdf'
 
