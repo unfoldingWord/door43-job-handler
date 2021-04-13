@@ -1421,7 +1421,7 @@ class TaPreprocessor(Preprocessor):
         :return:
         """
         # if prefix and debug_mode_flag:
-        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['id']}' {level=} …")
+        #     AppSettings.logger.debug(f"{'  '*level}compile_ta_section for '{section['title']}' {level=} …")
 
         if 'link' in section:
             link = section['link']
@@ -1468,14 +1468,14 @@ class TaPreprocessor(Preprocessor):
                 for subsection in section['sections']:
                     subsection_markdown = self.compile_ta_section(project, subsection, level + 1)
                     if self.need_to_check_quotes:
-                        try: self.check_embedded_quotes(f"{project.identifier}/{section['id']}", subsection['id'], subsection_markdown)
+                        try: self.check_embedded_quotes(f"{project.identifier}/{section['title']}", subsection['title'], subsection_markdown)
                         except Exception as e:
                             msg = f"{project.identifier} {subsection} Unable to check embedded quotes: {e}"
                             AppSettings.logger.warning(msg)
                             self.warnings.append(msg)
                     markdown += subsection_markdown
             else: # why is it empty? probably user error
-                msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['id']}'"
+                msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['title']}'"
                 AppSettings.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown
