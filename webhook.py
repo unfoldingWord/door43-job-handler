@@ -13,6 +13,7 @@ import tempfile
 import json
 import hashlib
 import shutil
+import re
 from datetime import datetime, timedelta
 from time import time, sleep
 import traceback
@@ -982,10 +983,14 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
             if some_commit['id'] == commit_hash:
                 commit = some_commit
                 break
+        if not commit:
+            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', 'https://develop.door43.org/unfoldingWord/en_ta/compare/0000000000000000000000000000000000000000...018e0256280c871745418ad46ad447c82a7f0090'),
+            action_message = f'{commit_branch} branch created'
+        else:
+            repo_data_url = commit['url']
+            action_message = commit['message'].strip() # Seems to always end with a newline
         commit_hash = commit_hash[:10]  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
-        repo_data_url = commit['url']
-        action_message = commit['message'].strip() # Seems to always end with a newline
 
         if 'pusher' in queued_json_payload:
             pusher_dict = queued_json_payload['pusher']
