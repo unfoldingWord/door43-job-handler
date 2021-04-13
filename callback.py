@@ -441,56 +441,56 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     # if 'ended_at' in build_log:
     #     current_commit['ended_at'] = build_log['ended_at']
 
-    def is_hash(commit_str:str) -> bool:
-        """
-        Checks to see if this looks like a hexadecimal (abbreviated to 10 chars) hash
-        """
-        if len(commit_str) != 10: return False
-        for char in commit_str:
-            if char not in 'abcdef1234567890': return False
-        return True
+    # def is_hash(commit_str:str) -> bool:
+    #     """
+    #     Checks to see if this looks like a hexadecimal (abbreviated to 10 chars) hash
+    #     """
+    #     if len(commit_str) != 10: return False
+    #     for char in commit_str:
+    #         if char not in 'abcdef1234567890': return False
+    #     return True
 
-    AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
-    commits:List[Dict[str,Any]] = []
-    no_job_id_count = 0
-    for ix, c in enumerate(project_json['commits']):
-        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
-        # if c['id'] == commit_id: # the old entry for the current commit id
-            # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
-            # zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
-            # AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
-            # try:
-            #     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
-            # except Exception as e:
-            #     AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
-            # Not appended to commits here coz it happens below instead
-        if c['id'] != commit_id: # a different commit from the current one
-            if 'job_id' not in c: # Might be able to remove this eventually
-                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
-                # Returned job id might have been None
-                if not c['job_id']: no_job_id_count += 1
-            if 'type' not in c: # Might be able to remove this eventually
-                c['type'] = 'hash' if is_hash(c['id']) \
-                      else 'artifact' if c['id']in ('latest','OhDear') \
-                      else 'unknown'
-            commits.append(c)
-    if no_job_id_count > 10:
-        len_commits = len(commits)
-        AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
-    commits.append(current_commit)
+    # # AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
+    # commits:List[Dict[str,Any]] = []
+    # no_job_id_count = 0
+    # for ix, c in enumerate(project_json['commits']):
+    #     AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
+    #     # if c['id'] == commit_id: # the old entry for the current commit id
+    #         # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
+    #         # zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
+    #         # AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
+    #         # try:
+    #         #     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
+    #         # except Exception as e:
+    #         #     AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
+    #         # Not appended to commits here coz it happens below instead
+    #     if c['id'] != commit_id: # a different commit from the current one
+    #         if 'job_id' not in c: # Might be able to remove this eventually
+    #             c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
+    #             # Returned job id might have been None
+    #             if not c['job_id']: no_job_id_count += 1
+    #         if 'type' not in c: # Might be able to remove this eventually
+    #             c['type'] = 'hash' if is_hash(c['id']) \
+    #                   else 'artifact' if c['id']in ('latest','OhDear') \
+    #                   else 'unknown'
+    #         commits.append(c)
+    # if no_job_id_count > 10:
+    #     len_commits = len(commits)
+    #     AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
+    # commits.append(current_commit)
 
-    cleaned_commits = remove_excess_commits(commits, repo_owner_username, repo_name)
-    if len(cleaned_commits) < len(commits): # Then we removed some
-        # Save a dated (coz this could happen more than once) backup of the project.json file
-        save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-        save_project_filepath = os.path.join(output_dirpath, save_project_filename)
-        write_file(save_project_filepath, project_json)
-        save_project_json_key = f'{project_folder_key}{save_project_filename}'
-        # Don't need to save this twice (March 2020)
-        # AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
-        AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
-    # Now save the updated project.json file in both places
-    project_json['commits'] = cleaned_commits
+    # cleaned_commits = remove_excess_commits(commits, repo_owner_username, repo_name)
+    # if len(cleaned_commits) < len(commits): # Then we removed some
+    #     # Save a dated (coz this could happen more than once) backup of the project.json file
+    #     save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    #     save_project_filepath = os.path.join(output_dirpath, save_project_filename)
+    #     write_file(save_project_filepath, project_json)
+    #     save_project_json_key = f'{project_folder_key}{save_project_filename}'
+    #     # Don't need to save this twice (March 2020)
+    #     # AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
+    #     AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
+    # # Now save the updated project.json file in both places
+    # project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
     AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
