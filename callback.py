@@ -632,7 +632,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
         tf = tempfile.NamedTemporaryFile()
         write_file(tf.name, build_log)
-        AppSettings.logger.debug(f"Uploading build log to {AppSettings.cdn_bucket_name}/{upload_key} and {AppSettings.door43_bucket_name}/{upload_key} …")
+        AppSettings.logger.debug(f"Uploading build log to {AppSettings.cdn_bucket_name}/{url_part2}/pdf_build_log.json and {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
         AppSettings.cdn_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
 
