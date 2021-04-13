@@ -984,7 +984,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
                 commit = some_commit
                 break
         if not commit:
-            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', 'https://develop.door43.org/unfoldingWord/en_ta/compare/0000000000000000000000000000000000000000...018e0256280c871745418ad46ad447c82a7f0090'),
+            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', 'https://develop.door43.org/unfoldingWord/en_ta/compare/0000000000000000000000000000000000000000...018e0256280c871745418ad46ad447c82a7f0090')
             action_message = f'{commit_branch} branch created'
         else:
             repo_data_url = commit['url']
