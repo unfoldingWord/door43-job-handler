@@ -462,7 +462,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 
     project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     project_json_key = f'{project_folder_key}project.json'
-    project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
+    project_json = AppSettings.door43_s3_handler().get_json(project_json_key)
 
     AppSettings.logger.info("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
@@ -669,7 +669,6 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
-    # Save the warnings for the user—put any RC messages in front
     if rc.error_messages or preprocessor_warning_list:
         AppSettings.logger.debug(f"Prepending {len(rc.error_messages):,} RC warnings to {len(preprocessor_warning_list):,} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
@@ -762,19 +761,23 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
         
         AppSettings.logger.debug(f"Generic tx_payload: {tx_payload}")
 
-        handle_page_build(job_dict, tx_payload, redis_connection)
+        pages_job_dict = job_dict.copy()
+        pages_tx_payload = tx_payload.copy()
+        handle_pages_build(pages_job_dict, pages_tx_payload, redis_connection)
         
-        # Get S3 cdn bucket/dir and empty it since handle_page_build didn't throw errors
+        # Get S3 cdn bucket/dir and empty it since handle_page_build() didn't throw errors
         s3_commit_key = f"u/{repo_owner_username}/{repo_name}/{commit_id}"
         clear_commit_directory_in_cdn(s3_commit_key)
 
-        handle_pdf_build(job_dict, tx_payload, redis_connection)
+        pdf_job_dict = job_dict.copy()
+        pdf_tx_payload = tx_payload.copy()
+        handle_pdf_build(pdf_job_dict, pdf_tx_payload, redis_connection)
         
     return job_descriptive_name
 # end of handle_build function
 
 
-def handle_page_build(pages_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+def handle_pages_build(pages_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
     """
     A job dict is now setup and remembered in REDIS
         so that we can match it when we get a future callback.

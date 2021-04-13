@@ -382,7 +382,7 @@ def remove_excess_commits(commits_list:list, repo_owner_username:str, repo_name:
 # end of remove_excess_commits
 
 
-def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
+def update_project_file(build_log:Dict[str,Any], pdf_build_log, output_dirpath:str) -> None:
     """
     project.json is read by the Javascript in door43.org/js/project-page-functions.js
         The commits are used to update the Revision list in the left side-bar.
@@ -404,16 +404,36 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
     project_json['repo_url'] = f'https://{AppSettings.gogs_url}/{repo_owner_username}/{repo_name}'
-    current_commit = {
-        'id': commit_id,
-        'job_id': build_log['job_id'],
-        'type': build_log['commit_type'],
-        'created_at': build_log['created_at'],
-        'status': build_log['status'],
-        'success': build_log['success'],
-        # 'started_at': None,
-        # 'ended_at': None
-    }
+
+    if 'commits' not in project_json:
+        project_json['commits'] = []
+
+    current_commit = None
+    for commit in project_json['commits']:
+        if commit['id'] == commit_id:
+            current_commit = commit
+            break
+    if not current_commit:
+        current_commit = {
+            'id': commit_id,
+            'status': None,
+            'success': False,
+            'pdf_status': None,
+            'pdf_success': False,
+            'pdf_url': None,
+        }
+        project_json['commits'].append(current_commit)
+        
+    current_commit['job_id'] = build_log['job_id']
+    current_commit['type'] = build_log['commit_type']
+    current_commit['created_at'] = build_log['created_at']
+    if build_log['output_format'] == 'html':
+        current_commit['status']: build_log['status']
+        current_commit['success']: build_log['success']
+    if build_log['output_format'] == 'pdf':
+        current_commit['pdf_status']: build_log['status']
+        current_commit['pdf_success']: build_log['success']
+        current_commit['pdf_url']: build_log['']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
@@ -430,8 +450,6 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             if char not in 'abcdef1234567890': return False
         return True
 
-    if 'commits' not in project_json:
-        project_json['commits'] = []
     AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
     commits:List[Dict[str,Any]] = []
     no_job_id_count = 0
@@ -626,15 +644,13 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         # Now copy the zip file with the PDF to the door43.org bucket
         AppSettings.logger.info(f"Deploying PDF bundle to the website (convert status='{final_build_log['status']}')…")
         pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
-        AppSettings.logger.info("Copying {this_job_dict['output'] to {AppSettings.cdn_bucket_name}/{pdf_zip_file_key}…")
-        AppSettings.cdn_s3_handler().copy(from_key=this_job_dict['cdn_file'], to_key=pdf_zip_file_key)
         AppSettings.logger.info("Copying {this_job_dict['output'] to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
         AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
+        build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name}/{pdf_zip_file_key}'
         deployed = True
         tf = tempfile.NamedTemporaryFile()
         write_file(tf.name, build_log)
         AppSettings.logger.debug(f"Uploading build log to {AppSettings.cdn_bucket_name}/{url_part2}/pdf_build_log.json and {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
-        AppSettings.cdn_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
 
     if prefix and debug_mode_flag:
