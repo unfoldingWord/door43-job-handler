@@ -523,7 +523,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to or receive back from tX
     for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'commit_hash',
-                      'output', 'cdn_key', 'cdn_bucket',
+                      'output', 'cdn_file', 'cdn_bucket',
                       'input_format', 'door43_webhook_received_at'):
         if prefix and debug_mode_flag: assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
