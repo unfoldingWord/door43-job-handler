@@ -626,15 +626,14 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         AppSettings.logger.info(f"Deploying PDF bundle to the website (convert status='{final_build_log['status']}')…")
         pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
         AppSettings.logger.info("Copying {this_job_dict['output'] to {AppSettings.cdn_bucket_name}/{pdf_zip_file_key}…")
-        AppSettings.cdn_s3_handler.copy(from_key=this_job_dict['cdn_file'], to_key=pdf_zip_file_key)
+        AppSettings.cdn_s3_handler().copy(from_key=this_job_dict['cdn_file'], to_key=pdf_zip_file_key)
         AppSettings.logger.info("Copying {this_job_dict['output'] to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
-        AppSettings.door43_s3_handler.copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
+        AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
         tf = tempfile.NamedTemporaryFile()
         write_file(tf.name, build_log)
-        upload_key = f'{url_part2}/{file_name}'
         AppSettings.logger.debug(f"Uploading build log to {AppSettings.cdn_bucket_name}/{upload_key} and {AppSettings.door43_bucket_name}/{upload_key} …")
-        AppSettings.cdn_s3_handler().upload_file(tf.name, upload_key, cache_time=cache_time)
-        AppSettings.door43_s3_handler().upload_file(tf.name, upload_key, cache_time=cache_time)
+        AppSettings.cdn_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
+        AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
 
     if prefix and debug_mode_flag:
         AppSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
