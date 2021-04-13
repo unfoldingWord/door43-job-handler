@@ -729,6 +729,8 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
         job_dict['resource_type'] = resource_subject
         job_dict['input_format'] = input_format
         job_dict['source'] = f'{source_url_base}/{file_key}'
+        job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
+        job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
         job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
         if preprocessor_warning_list:
             job_dict['preprocessor_warnings'] = preprocessor_warning_list
@@ -759,19 +761,19 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
         
         AppSettings.logger.debug(f"Generic tx_payload: {tx_payload}")
 
-        handle_page_build(repo_name, repo_owner_username, commit_id, job_dict, tx_payload, redis_connection)
+        handle_page_build(job_dict, tx_payload, redis_connection)
         
         # Get S3 cdn bucket/dir and empty it since handle_page_build didn't throw errors
         s3_commit_key = f"u/{repo_owner_username}/{repo_name}/{commit_id}"
         clear_commit_directory_in_cdn(s3_commit_key)
 
-        handle_pdf_build(repo_name, repo_owner_username, commit_id, job_dict, tx_payload, redis_connection)
+        handle_pdf_build(job_dict, tx_payload, redis_connection)
         
     return job_descriptive_name
 # end of handle_build function
 
 
-def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, pages_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+def handle_page_build(pages_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
     """
     A job dict is now setup and remembered in REDIS
         so that we can match it when we get a future callback.
@@ -784,11 +786,9 @@ def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, 
     AppSettings.logger.debug("Webhook.handle_build setting up page job dict…")
     our_job_id = get_unique_job_id()
     pages_job_dict['job_id'] = our_job_id
-    pages_job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
+    pages_job_dict['output_format'] = 'html'
     pages_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
     pages_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pages_job_dict['cdn_file']}"
-    pages_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-    pages_job_dict['output_format'] = 'html'
     # NOTE: following line removed as stats recording used too much disk space
     # pages_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pages_job_dict['links'] = {
@@ -801,10 +801,6 @@ def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, 
 
     # Save the job info in Redis for the callback to use
     remember_job(pages_job_dict, redis_connection)
-
-    # Get S3 cdn bucket/dir and empty it
-    s3_commit_key = f"u/{pages_job_dict['repo_owner_username']}/{pages_job_dict['repo_name']}/{pages_job_dict['commit_id']}"
-    clear_commit_directory_in_cdn(s3_commit_key)
 
     # Pass the work request onto the tX system
     AppSettings.logger.info(f"Pages Job: Post request to tX system @ {tx_post_url} …")
@@ -840,7 +836,7 @@ def handle_page_build(repo_name: str, repo_owner_username: str, commit_id: str, 
 # end of handle_page_build function
 
 
-def handle_pdf_build(repo_owner_username: str, repo_name: str, commit_id: str, pdf_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+def handle_pdf_build(pdf_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
     """
     A job dict is now setup and remembered in REDIS
         so that we can match it when we get a future callback.
@@ -853,11 +849,9 @@ def handle_pdf_build(repo_owner_username: str, repo_name: str, commit_id: str, p
     AppSettings.logger.debug("Webhook.handle_build setting up pdf job dict…")
     our_job_id = get_unique_job_id()
     pdf_job_dict['job_id'] = our_job_id
-    pdf_job_dict['cdn_bucket'] = AppSettings.door43_bucket_name
-    pdf_job_dict['cdn_file'] = f'u/{repo_owner_username}/{repo_name}/{commit_id}/{repo_name}_{commit_id}.zip'
-    pdf_job_dict['output'] = f"https://{AppSettings.door43_bucket_name}/{pdf_job_dict['cdn_file']}"
-    pdf_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-    pdf_job_dict['output_format'] = 'html'
+    pdf_job_dict['output_format'] = 'pdf'
+    pdf_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+    pdf_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pdf_job_dict['cdn_file']}"
     # NOTE: following line removed as stats recording used too much disk space
     # pdf_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
     pdf_job_dict['links'] = {
