@@ -382,7 +382,7 @@ def remove_excess_commits(commits_list:list, repo_owner_username:str, repo_name:
 # end of remove_excess_commits
 
 
-def update_project_file(build_log:Dict[str,Any], pdf_build_log, output_dirpath:str) -> None:
+def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     """
     project.json is read by the Javascript in door43.org/js/project-page-functions.js
         The commits are used to update the Revision list in the left side-bar.
@@ -646,12 +646,13 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
         AppSettings.logger.info("Copying {this_job_dict['output'] to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
         AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
-        build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name}/{pdf_zip_file_key}'
+        final_build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name}/{pdf_zip_file_key}'
         deployed = True
         tf = tempfile.NamedTemporaryFile()
-        write_file(tf.name, build_log)
+        write_file(tf.name, final_build_log)
         AppSettings.logger.debug(f"Uploading build log to {AppSettings.cdn_bucket_name}/{url_part2}/pdf_build_log.json and {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
+        update_project_file(final_build_log, our_temp_dir)
 
     if prefix and debug_mode_flag:
         AppSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
