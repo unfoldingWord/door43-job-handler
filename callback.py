@@ -393,7 +393,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     build_log_copy = build_log.copy() # Sometimes this gets too big
     if 'warnings' in build_log_copy and len(build_log_copy['warnings']) > 10:
         build_log_copy['warnings'] = f"{build_log_copy['warnings'][:5]} …… {build_log_copy['warnings'][-5:]}"
-    AppSettings.logger.info(f"Callback.update_project_file({build_log_copy}, output_dir={output_dirpath})…")
+    AppSettings.logger.debug(f"Callback.update_project_file({build_log_copy}, output_dir={output_dirpath})…")
 
     commit_id = build_log['commit_id']
     repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
@@ -429,17 +429,15 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     current_commit['job_id'] = build_log['job_id']
     current_commit['type'] = build_log['commit_type']
     current_commit['created_at'] = build_log['created_at']
-    AppSettings.logger.info(f"===========> OUTPUT FORMAT IS: {build_log['output_format']}")
     if build_log['output_format'] == 'html':
         current_commit['status'] = build_log['status']
         current_commit['success'] = build_log['success']
     if build_log['output_format'] == 'pdf':
         current_commit['pdf_status'] = build_log['status']
         current_commit['pdf_success'] = build_log['success']
-        current_commit['pdf_url']: build_log['pdf_url']
+        current_commit['pdf_url'] = build_log['pdf_url']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
-    AppSettings.logger.info(f"CURRENT COMMIT: {current_commit}")
     # if 'started_at' in build_log:
     #     current_commit['started_at'] = build_log['started_at']
     # if 'ended_at' in build_log:
@@ -497,7 +495,6 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     # project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
-    AppSettings.logger.info(f"Uploading project.json: {project_json}")
     AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
     AppSettings.door43_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
 # end of update_project_file function
@@ -656,7 +653,6 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         tf = tempfile.NamedTemporaryFile()
         AppSettings.logger.info(f"Uploading build log to {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
-        AppSettings.logger.info(f"Updating project file...")
         update_project_file(final_build_log, our_temp_dir)
 
     if prefix and debug_mode_flag:
