@@ -435,7 +435,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     if build_log['output_format'] == 'pdf':
         current_commit['pdf_status']: build_log['status']
         current_commit['pdf_success']: build_log['success']
-        current_commit['pdf_url']: build_log['']
+        current_commit['pdf_url']: build_log['pdf_url']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
@@ -495,6 +495,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     # project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
+    AppSettings.logger.info(f"Uploading project.json: {project_json}")
     AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
     AppSettings.door43_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
 # end of update_project_file function
