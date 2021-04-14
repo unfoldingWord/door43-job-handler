@@ -429,6 +429,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     current_commit['job_id'] = build_log['job_id']
     current_commit['type'] = build_log['commit_type']
     current_commit['created_at'] = build_log['created_at']
+    AppSettings.logger.info(f"===========> OUTPUT FORMAT IS: {build_log['output_format']}")
     if build_log['output_format'] == 'html':
         current_commit['status']: build_log['status']
         current_commit['success']: build_log['success']
@@ -438,6 +439,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
         current_commit['pdf_url']: build_log['pdf_url']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
+    AppSettings.logger.info(f"CURRENT COMMIT: {current_commit}")
     # if 'started_at' in build_log:
     #     current_commit['started_at'] = build_log['started_at']
     # if 'ended_at' in build_log:
