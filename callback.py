@@ -431,11 +431,11 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     current_commit['created_at'] = build_log['created_at']
     AppSettings.logger.info(f"===========> OUTPUT FORMAT IS: {build_log['output_format']}")
     if build_log['output_format'] == 'html':
-        current_commit['status']: build_log['status']
-        current_commit['success']: build_log['success']
+        current_commit['status'] = build_log['status']
+        current_commit['success'] = build_log['success']
     if build_log['output_format'] == 'pdf':
-        current_commit['pdf_status']: build_log['status']
-        current_commit['pdf_success']: build_log['success']
+        current_commit['pdf_status'] = build_log['status']
+        current_commit['pdf_success'] = build_log['success']
         current_commit['pdf_url']: build_log['pdf_url']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
