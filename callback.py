@@ -393,7 +393,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     build_log_copy = build_log.copy() # Sometimes this gets too big
     if 'warnings' in build_log_copy and len(build_log_copy['warnings']) > 10:
         build_log_copy['warnings'] = f"{build_log_copy['warnings'][:5]} …… {build_log_copy['warnings'][-5:]}"
-    AppSettings.logger.debug(f"Callback.update_project_file({build_log_copy}, output_dir={output_dirpath})…")
+    AppSettings.logger.info(f"Callback.update_project_file({build_log_copy}, output_dir={output_dirpath})…")
 
     commit_id = build_log['commit_id']
     repo_owner_username = build_log['repo_owner_username'] # was 'repo_owner'
