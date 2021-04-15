@@ -644,13 +644,14 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         update_project_file(final_build_log, our_temp_dir)
     elif queued_json_payload['output_format'] == 'pdf':
         # Now copy the zip file with the PDF to the door43.org bucket
-        AppSettings.logger.info(f"Deploying PDF bundle to the website (convert status='{final_build_log['status']}')…")
+        AppSettings.logger.info(f"Deploying PDF zip file to the website (convert status='{final_build_log['status']}')…")
         pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
         AppSettings.logger.info(f"Copying {this_job_dict['output']} to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
         AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
         final_build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name.replace("-", ".")}/{pdf_zip_file_key}'
         deployed = True
         tf = tempfile.NamedTemporaryFile()
+        write_file(tf.name, final_build_log)
         AppSettings.logger.info(f"Uploading build log to {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
         update_project_file(final_build_log, our_temp_dir)
