@@ -170,8 +170,8 @@ class ProjectDeployer:
                     """
                 content += '<div><ul><li>' + '</li><li>'.join(build_log['errors']) + '</li></ul></div>'
             else:
-                content += f'<h1 class="conversion-requested">{build_log["message"]}</h1>'
-                content += f'<p><em>No content is available to show for {repo_name} yet.</em></p>'
+                content += f'<h1>{build_log["message"]}</h1>'
+                content += f'<p><em>No content is available to show for {repo_name}.</em></p>'
             html = f"""
                     <html lang="en">
                         <head>

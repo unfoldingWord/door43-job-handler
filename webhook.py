@@ -570,7 +570,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
 def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
-                        commit_type:str, commit_id:str, commit_hash:Optional[str], commit_branch:Optional[str],
+                        commit_type:str, commit_id:str, commit_hash:Optional[str], commit_message:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
                         source_url_base:str, our_identifier:str,
                         our_queue) -> str:
@@ -749,7 +749,7 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
             'identifier': our_identifier,  # So we can recognise this job inside tX Job Handler
             'repo_name': repo_name,
             'repo_owner': repo_owner_username,
-            'repo_ref': commit_branch,
+            'repo_ref': commit_id,
             'repo_data_url': repo_data_url,
             'dcs_domain': dcs_domain,
             'resource_type': resource_subject,  # This used to be rc.resource.identifier
@@ -761,14 +761,14 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
         
         AppSettings.logger.debug(f"Generic tx_payload: {tx_payload}")
 
+        # Get S3 cdn bucket/dir and empty it before we make two build requests for html and pdf
+        s3_commit_key = f"u/{repo_owner_username}/{repo_name}/{commit_id}"
+        clear_commit_directory_in_cdn(s3_commit_key)
+
         pages_job_dict = job_dict.copy()
         pages_tx_payload = tx_payload.copy()
         handle_pages_build(pages_job_dict, pages_tx_payload, redis_connection)
         
-        # Get S3 cdn bucket/dir and empty it since handle_page_build() didn't throw errors
-        s3_commit_key = f"u/{repo_owner_username}/{repo_name}/{commit_id}"
-        clear_commit_directory_in_cdn(s3_commit_key)
-
         pdf_job_dict = job_dict.copy()
         pdf_tx_payload = tx_payload.copy()
         handle_pdf_build(pdf_job_dict, pdf_tx_payload, redis_connection)
@@ -987,7 +987,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
                 commit = some_commit
                 break
         if not commit:
-            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', 'https://develop.door43.org/unfoldingWord/en_ta/compare/0000000000000000000000000000000000000000...018e0256280c871745418ad46ad447c82a7f0090')
+            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', queued_json_payload['compare_url'])
             action_message = f'{commit_branch} branch created'
         else:
             repo_data_url = commit['url']
@@ -1130,7 +1130,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
             deliberateFailureForTesting  # type: ignore
         job_descriptive_name = handle_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, commit_hash, commit_id, repo_data_url,
+                            commit_type, commit_id, commit_hash, commit_id, action_message, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
                             our_identifier, our_queue)
     else:
