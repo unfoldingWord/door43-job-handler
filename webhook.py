@@ -1130,7 +1130,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
             deliberateFailureForTesting  # type: ignore
         job_descriptive_name = handle_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, commit_hash, commit_id, action_message, repo_data_url,
+                            commit_type, commit_id, commit_hash, action_message, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
                             our_identifier, our_queue)
     else:
