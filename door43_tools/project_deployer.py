@@ -104,8 +104,12 @@ class ProjectDeployer:
         file_utils.write_file(os.path.join(output_dir, 'build_log.json'), build_log)
         AppSettings.logger.debug(f"Final build_log.json: {json.dumps(build_log)[:256]} …")
 
+        # Clear out the door43.org bucket's commit dir
+        AppSettings.logger.info(f"Deleting all files in the website bucket directory: {AppSettings.door43_bucket_name}/{s3_commit_key} …")
+        AppSettings.door43_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
+
         # Upload all files to the S3 door43.org bucket
-        AppSettings.logger.info(f"Uploading all files to the website bucket: {AppSettings.door43_bucket_name} …")
+        AppSettings.logger.info(f"Uploading all files to the website bucket directory: {AppSettings.door43_bucket_name}/{s3_commit_key} …")
         for root, _dirs, files in os.walk(output_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
