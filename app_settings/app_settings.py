@@ -150,7 +150,8 @@ class AppSettings:
                          f"{'_TravisCI' if travis_flag else ''}"
         boto3_session = Session(aws_access_key_id=cls.aws_access_key_id,
                             aws_secret_access_key=cls.aws_secret_access_key,
-                            region_name=cls.aws_region_name)
+                            region_name=cls.aws_region_name,
+                            endpoint_url=cls.endpoint_url)
         cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     # use_queues=False, # Because this forked process is quite transient
                                                     log_group=log_group_name,
@@ -195,7 +196,8 @@ class AppSettings:
             cls._cdn_s3_handler = S3Handler(bucket_name=cls.cdn_bucket_name,
                                             aws_access_key_id=cls.aws_access_key_id,
                                             aws_secret_access_key=cls.aws_secret_access_key,
-                                            aws_region_name=cls.aws_region_name)
+                                            aws_region_name=cls.aws_region_name,
+                                            endpoint_url=cls.endpoint_url)
         return cls._cdn_s3_handler
 
     @classmethod
