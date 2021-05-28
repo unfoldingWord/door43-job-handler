@@ -10,11 +10,12 @@ from typing import Any, Optional
 class S3Handler:
     def __init__(self, bucket_name:Optional[str]=None,
                     aws_access_key_id:Optional[str]=None, aws_secret_access_key:Optional[str]=None,
-                    aws_region_name:str='us-west-2') -> None:
+                    aws_region_name:str='us-west-2', endpoint_url:str=None) -> None:
         self.bucket_name = bucket_name
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
+        self.endpoint_url = endpoint_url
         self.bucket:Optional[Any] = None
         self.client:Optional[Any] = None
         self.resource:Optional[Any] = None
@@ -25,18 +26,21 @@ class S3Handler:
         if self.aws_access_key_id and self.aws_secret_access_key:
             session = Session(aws_access_key_id=self.aws_access_key_id,
                               aws_secret_access_key=self.aws_secret_access_key,
-                              region_name=self.aws_region_name)
+                              region_name=self.aws_region_name,
+                              endpoint_url=self.endpoint_url)
             self.resource = session.resource('s3')
             self.client = session.client('s3')
         else:
             self.resource = boto3.resource('s3',
                                            aws_access_key_id=self.aws_access_key_id,
                                            aws_secret_access_key=self.aws_secret_access_key,
-                                           region_name=self.aws_region_name)
+                                           region_name=self.aws_region_name,
+                                           endpoint_url=self.endpoint_url)
             self.client = boto3.client('s3',
                                        aws_access_key_id=self.aws_access_key_id,
                                        aws_secret_access_key=self.aws_secret_access_key,
-                                       region_name=self.aws_region_name)
+                                       region_name=self.aws_region_name,
+                                       endpoint_url=self.endpoint_url)
 
         self.bucket = None
         if self.bucket_name:
