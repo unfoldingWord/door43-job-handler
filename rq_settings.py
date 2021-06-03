@@ -17,7 +17,6 @@ REDIS_URL = getenv('REDIS_URL', 'redis://127.0.0.1:6379')
 ENQUEUE_NAME = 'Door43_webhook' # Becomes the queue name -- MUST match enqueueMain.py in door43-enqueue-job
 CALLBACK_SUFFIX = '_callback'
 prefix = getenv('QUEUE_PREFIX', '') # Gets (optional) QUEUE_PREFIX environment variable -- set to 'dev-' for development
-aws_endpoint = getenv('AWS_ENDPOINT', None) # Gets (optional) AWS_ENDPOINT environment variable -- None goes to actual AWS
 QUEUE_NAME_SUFFIX = '' # Used to switch to a different queue, e.g., '_1'
 webhook_queue_name = prefix + ENQUEUE_NAME + QUEUE_NAME_SUFFIX
 callback_queue_name = prefix + ENQUEUE_NAME + CALLBACK_SUFFIX + QUEUE_NAME_SUFFIX
@@ -39,11 +38,8 @@ debug_mode_flag = getenv('DEBUG_MODE', '')
 #                 else f'https://git.door43.org/{prefix}tx/'
 aws_endpoint_url = getenv('AWS_ENDPOINT_URL', None)
 if prefix:
-    if debug_mode_flag:
-        tx_post_url = 'http://txproxy/'
-    else: # development on AWS
-        tx_post_url = 'https://develop.door43.org/tx/'
+    tx_post_url = getenv('TX_POST_URL', 'https://develop.door43.org/tx/')
 else: # production
-    tx_post_url = 'https://git.door43.org/tx/'
+    tx_post_url = getenv('TX_POST_URL', 'https://git.door43.org/tx/')
 
 REDIS_JOB_LIST = f'{prefix}Door43_outstanding_jobs'

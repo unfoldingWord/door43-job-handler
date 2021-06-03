@@ -28,7 +28,7 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name, endpoint_url # gogs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -87,10 +87,7 @@ prefixed_our_name = prefix + OUR_NAME
 
 
 long_prefix = 'develop' if prefix else 'git'
-DOOR43_CALLBACK_URL = f'https://{long_prefix}.door43.org/client/webhook/tx-callback/'
-ADJUSTED_DOOR43_CALLBACK_URL = 'http://d43proxy/tx-callback/' \
-                                    if prefix and debug_mode_flag \
-                                 else DOOR43_CALLBACK_URL
+DOOR43_CALLBACK_URL = os.getenv('D43_CALLBACK_URL', f'https://{long_prefix}.door43.org/client/webhook/') + 'tx-callback/'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -756,7 +753,7 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
             'input_format': 'usfm' if resource_subject == 'bible' and input_format == 'txt' \
                                 else input_format,  # special case for .txt Bibles
             'source': source_url_base + '/' + file_key,
-            'callback': 'http://d43proxy/tx-callback/' if prefix and debug_mode_flag else DOOR43_CALLBACK_URL
+            'callback': DOOR43_CALLBACK_URL
         }
         
         AppSettings.logger.debug(f"Generic tx_payload: {tx_payload}")
