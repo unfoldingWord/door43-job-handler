@@ -37,11 +37,8 @@ debug_mode_flag = getenv('DEBUG_MODE', '')
 # tx_post_url = 'http://127.0.0.1:8090/' if prefix and debug_mode_flag \
 #                 else f'https://git.door43.org/{prefix}tx/'
 if prefix:
-    if debug_mode_flag:
-        tx_post_url = 'http://txproxy/'
-    else: # development on AWS
-        tx_post_url = 'https://develop.door43.org/tx/'
+    tx_post_url = getenv('TX_POST_URL', 'https://develop.door43.org/tx/')
 else: # production
-    tx_post_url = 'https://git.door43.org/tx/'
+    tx_post_url = getenv('TX_POST_URL', 'https://git.door43.org/tx/')
 
 REDIS_JOB_LIST = f'{prefix}Door43_outstanding_jobs'
