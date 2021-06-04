@@ -151,7 +151,7 @@ class AppSettings:
         boto3_session = Session(aws_access_key_id=cls.aws_access_key_id,
                             aws_secret_access_key=cls.aws_secret_access_key,
                             region_name=cls.aws_region_name,
-                            endpoint_url=cls.endpoint_url)
+                            endpoint_url=cls.aws_endpoint_url)
         cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     # use_queues=False, # Because this forked process is quite transient
                                                     log_group=log_group_name,
@@ -197,7 +197,7 @@ class AppSettings:
                                             aws_access_key_id=cls.aws_access_key_id,
                                             aws_secret_access_key=cls.aws_secret_access_key,
                                             aws_region_name=cls.aws_region_name,
-                                            endpoint_url=cls.endpoint_url)
+                                            endpoint_url=cls.aws_endpoint_url)
         return cls._cdn_s3_handler
 
     @classmethod
