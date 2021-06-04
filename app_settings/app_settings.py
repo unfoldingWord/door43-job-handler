@@ -79,6 +79,7 @@ class AppSettings:
     module_table_name = 'modules'
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'
+    aws_endpoint_url = None
 
     # DB setup—get the pw from the environment variable
     db_protocol = 'mysql+pymysql'
