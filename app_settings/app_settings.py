@@ -198,7 +198,7 @@ class AppSettings:
                                             aws_access_key_id=cls.aws_access_key_id,
                                             aws_secret_access_key=cls.aws_secret_access_key,
                                             aws_region_name=cls.aws_region_name,
-                                            endpoint_url=cls.aws_endpoint_url)
+                                            aws_endpoint_url=cls.aws_endpoint_url)
         return cls._cdn_s3_handler
 
     @classmethod
@@ -208,7 +208,8 @@ class AppSettings:
             cls._door43_s3_handler = S3Handler(bucket_name=cls.door43_bucket_name,
                                                aws_access_key_id=cls.aws_access_key_id,
                                                aws_secret_access_key=cls.aws_secret_access_key,
-                                               aws_region_name=cls.aws_region_name)
+                                               aws_region_name=cls.aws_region_name,
+                                               aws_endpoint_url=cls.aws_endpoint_url)
         return cls._door43_s3_handler
 
     @classmethod
@@ -218,7 +219,8 @@ class AppSettings:
             cls._pre_convert_s3_handler = S3Handler(bucket_name=cls.pre_convert_bucket_name,
                                                     aws_access_key_id=cls.aws_access_key_id,
                                                     aws_secret_access_key=cls.aws_secret_access_key,
-                                                    aws_region_name=cls.aws_region_name)
+                                                    aws_region_name=cls.aws_region_name,
+                                                    aws_endpiont_url=cls.aws_endpoint_url)
         return cls._pre_convert_s3_handler
 
 
