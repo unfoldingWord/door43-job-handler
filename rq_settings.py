@@ -36,7 +36,6 @@ debug_mode_flag = getenv('DEBUG_MODE', '')
 # long_prefix = 'develop.' if prefix else ''
 # tx_post_url = 'http://127.0.0.1:8090/' if prefix and debug_mode_flag \
 #                 else f'https://git.door43.org/{prefix}tx/'
-aws_endpoint_url = getenv('AWS_ENDPOINT_URL', None)
 if prefix:
     tx_post_url = getenv('TX_POST_URL', 'https://develop.door43.org/tx/')
 else: # production

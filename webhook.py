@@ -28,7 +28,7 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, aws_endpoint_url, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -77,7 +77,7 @@ RESOURCE_SUBJECT_MAP = {
 
 
 
-AppSettings(prefix=prefix, aws_endpoint_url=aws_endpoint_url)
+AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
     AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' — expected '' or 'dev-'")
 door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
@@ -1219,15 +1219,13 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
                             f"{'_TEST' if test_mode_flag else ''}" \
                             f"{'_TravisCI' if travis_flag else ''}"
             aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-            aws_endpoint_url = os.getenv('AWS_ENDPOINT_URL', None)
             boto3_session = Session(aws_access_key_id=aws_access_key_id,
                                 aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                                 region_name='us-west-2')
             failure_watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                         use_queues=False,
                                                         log_group=log_group_name,
-                                                        stream_name=prefixed_our_name,
-                                                        endpoint_url=aws_endpoint_url)
+                                                        stream_name=prefixed_our_name)
             logger2.addHandler(failure_watchtower_log_handler)
             logger2.setLevel(logging.DEBUG)
             logger2.info(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{aws_access_key_id[-2:]}'.")

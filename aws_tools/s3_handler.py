@@ -10,12 +10,11 @@ from typing import Any, Optional
 class S3Handler:
     def __init__(self, bucket_name:Optional[str]=None,
                     aws_access_key_id:Optional[str]=None, aws_secret_access_key:Optional[str]=None,
-                    aws_region_name:str='us-west-2', aws_endpoint_url:str=None) -> None:
+                    aws_region_name:str='us-west-2') -> None:
         self.bucket_name = bucket_name
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
-        self.aws_endpoint_url = aws_endpoint_url
         self.bucket:Optional[Any] = None
         self.client:Optional[Any] = None
         self.resource:Optional[Any] = None
@@ -27,19 +26,17 @@ class S3Handler:
             session = Session(aws_access_key_id=self.aws_access_key_id,
                               aws_secret_access_key=self.aws_secret_access_key,
                               region_name=self.aws_region_name)
-            self.resource = session.resource('s3', endpoint_url=self.aws_endpoint_url)
-            self.client = session.client('s3', endpoint_url=self.aws_endpoint_url)
+            self.resource = session.resource('s3'
+            self.client = session.client('s3')
         else:
             self.resource = boto3.resource('s3',
                                            aws_access_key_id=self.aws_access_key_id,
                                            aws_secret_access_key=self.aws_secret_access_key,
-                                           region_name=self.aws_region_name,
-                                           endpoint_url=self.aws_endpoint_url)
+                                           region_name=self.aws_region_name)
             self.client = boto3.client('s3',
                                        aws_access_key_id=self.aws_access_key_id,
                                        aws_secret_access_key=self.aws_secret_access_key,
-                                       region_name=self.aws_region_name,
-                                       endpoint_url=self.aws_endpoint_url)
+                                       region_name=self.aws_region_name)
 
         self.bucket = None
         if self.bucket_name:

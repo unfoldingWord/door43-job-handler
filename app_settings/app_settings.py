@@ -79,7 +79,6 @@ class AppSettings:
     module_table_name = 'modules'
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'
-    aws_endpoint_url = None
 
     # DB setup—get the pw from the environment variable
     db_protocol = 'mysql+pymysql'
@@ -155,8 +154,7 @@ class AppSettings:
         cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
                                                     # use_queues=False, # Because this forked process is quite transient
                                                     log_group=log_group_name,
-                                                    stream_name=cls.name,
-                                                    endpoint_url=cls.aws_endpoint_url)
+                                                    stream_name=cls.name)
         setup_logger(cls.logger, cls.watchtower_log_handler,
                             logging.DEBUG if debug_mode_flag else logging.INFO)
         cls.logger.debug(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
@@ -197,8 +195,7 @@ class AppSettings:
             cls._cdn_s3_handler = S3Handler(bucket_name=cls.cdn_bucket_name,
                                             aws_access_key_id=cls.aws_access_key_id,
                                             aws_secret_access_key=cls.aws_secret_access_key,
-                                            aws_region_name=cls.aws_region_name,
-                                            aws_endpoint_url=cls.aws_endpoint_url)
+                                            aws_region_name=cls.aws_region_name)
         return cls._cdn_s3_handler
 
     @classmethod
@@ -208,8 +205,7 @@ class AppSettings:
             cls._door43_s3_handler = S3Handler(bucket_name=cls.door43_bucket_name,
                                                aws_access_key_id=cls.aws_access_key_id,
                                                aws_secret_access_key=cls.aws_secret_access_key,
-                                               aws_region_name=cls.aws_region_name,
-                                               aws_endpoint_url=cls.aws_endpoint_url)
+                                               aws_region_name=cls.aws_region_name)
         return cls._door43_s3_handler
 
     @classmethod
@@ -219,8 +215,7 @@ class AppSettings:
             cls._pre_convert_s3_handler = S3Handler(bucket_name=cls.pre_convert_bucket_name,
                                                     aws_access_key_id=cls.aws_access_key_id,
                                                     aws_secret_access_key=cls.aws_secret_access_key,
-                                                    aws_region_name=cls.aws_region_name,
-                                                    aws_endpiont_url=cls.aws_endpoint_url)
+                                                    aws_region_name=cls.aws_region_name)
         return cls._pre_convert_s3_handler
 
 
