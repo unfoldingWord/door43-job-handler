@@ -87,7 +87,7 @@ class AppSettings:
     db_end_point = os.environ['DB_ENDPOINT']
     db_port = '3306'
     db_name = 'tx'
-    db_connection_string = None
+    db_connection_string = os.getenv('DB_CONNECTION_STRING', None)
     db_connection_string_params = 'charset=utf8mb4&use_unicode=0'
 
     # Prefixing vars
