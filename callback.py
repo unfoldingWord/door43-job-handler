@@ -400,20 +400,42 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     repo_name = build_log['repo_name']
     project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     project_json_key = f'{project_folder_key}project.json'
+    AppSettings.logger.info(f"Fetching project file with {project_json_key}...")
     project_json = AppSettings.door43_s3_handler().get_json(project_json_key)
+    AppSettings.logger.info(f"Got project file from {project_json_key}: {project_json}")
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
     project_json['repo_url'] = f'https://{AppSettings.gogs_url}/{repo_owner_username}/{repo_name}'
-    current_commit = {
-        'id': commit_id,
-        'job_id': build_log['job_id'],
-        'type': build_log['commit_type'],
-        'created_at': build_log['created_at'],
-        'status': build_log['status'],
-        'success': build_log['success'],
-        # 'started_at': None,
-        # 'ended_at': None
-    }
+
+    if 'commits' not in project_json:
+        project_json['commits'] = []
+
+    current_commit = None
+    for commit in project_json['commits']:
+        if commit['id'] == commit_id:
+            current_commit = commit
+            break
+    if not current_commit:
+        current_commit = {
+            'id': commit_id,
+            'status': None,
+            'success': False,
+            'pdf_status': None,
+            'pdf_success': False,
+            'pdf_url': None,
+        }
+        project_json['commits'].append(current_commit)
+        
+    current_commit['job_id'] = build_log['job_id']
+    current_commit['type'] = build_log['commit_type']
+    current_commit['created_at'] = build_log['created_at']
+    if build_log['output_format'] == 'html':
+        current_commit['status'] = build_log['status']
+        current_commit['success'] = build_log['success']
+    if build_log['output_format'] == 'pdf':
+        current_commit['pdf_status'] = build_log['status']
+        current_commit['pdf_success'] = build_log['success']
+        current_commit['pdf_url'] = build_log['pdf_url']
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
@@ -421,58 +443,56 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     # if 'ended_at' in build_log:
     #     current_commit['ended_at'] = build_log['ended_at']
 
-    def is_hash(commit_str:str) -> bool:
-        """
-        Checks to see if this looks like a hexadecimal (abbreviated to 10 chars) hash
-        """
-        if len(commit_str) != 10: return False
-        for char in commit_str:
-            if char not in 'abcdef1234567890': return False
-        return True
+    # def is_hash(commit_str:str) -> bool:
+    #     """
+    #     Checks to see if this looks like a hexadecimal (abbreviated to 10 chars) hash
+    #     """
+    #     if len(commit_str) != 10: return False
+    #     for char in commit_str:
+    #         if char not in 'abcdef1234567890': return False
+    #     return True
 
-    if 'commits' not in project_json:
-        project_json['commits'] = []
-    AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
-    commits:List[Dict[str,Any]] = []
-    no_job_id_count = 0
-    for ix, c in enumerate(project_json['commits']):
-        AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
-        # if c['id'] == commit_id: # the old entry for the current commit id
-            # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
-            # zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
-            # AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
-            # try:
-            #     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
-            # except Exception as e:
-            #     AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
-            # Not appended to commits here coz it happens below instead
-        if c['id'] != commit_id: # a different commit from the current one
-            if 'job_id' not in c: # Might be able to remove this eventually
-                c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
-                # Returned job id might have been None
-                if not c['job_id']: no_job_id_count += 1
-            if 'type' not in c: # Might be able to remove this eventually
-                c['type'] = 'hash' if is_hash(c['id']) \
-                      else 'artifact' if c['id']in ('latest','OhDear') \
-                      else 'unknown'
-            commits.append(c)
-    if no_job_id_count > 10:
-        len_commits = len(commits)
-        AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
-    commits.append(current_commit)
+    # # AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
+    # commits:List[Dict[str,Any]] = []
+    # no_job_id_count = 0
+    # for ix, c in enumerate(project_json['commits']):
+    #     AppSettings.logger.debug(f"  Looking at {len(commits)}/ '{c['id']}'. Is current commit={c['id'] == commit_id}…")
+    #     # if c['id'] == commit_id: # the old entry for the current commit id
+    #         # Why did this code ever get in here in callback!!!! (Deletes pre-convert folder when it shouldn't!)
+    #         # zip_file_key = f"preconvert/{current_commit['job_id']}.zip"
+    #         # AppSettings.logger.info(f"  Removing obsolete {prefix}pre-convert '{current_commit['type']}' '{commit_id}' {zip_file_key} …")
+    #         # try:
+    #         #     clear_commit_directory_from_bucket(AppSettings.pre_convert_s3_handler(), zip_file_key)
+    #         # except Exception as e:
+    #         #     AppSettings.logger.critical(f"  Remove obsolete pre-convert zipfile threw an exception while attempted to delete '{zip_file_key}': {e}")
+    #         # Not appended to commits here coz it happens below instead
+    #     if c['id'] != commit_id: # a different commit from the current one
+    #         if 'job_id' not in c: # Might be able to remove this eventually
+    #             c['job_id'] = get_jobID_from_commit_buildLog(project_folder_key, ix, c['id'])
+    #             # Returned job id might have been None
+    #             if not c['job_id']: no_job_id_count += 1
+    #         if 'type' not in c: # Might be able to remove this eventually
+    #             c['type'] = 'hash' if is_hash(c['id']) \
+    #                   else 'artifact' if c['id']in ('latest','OhDear') \
+    #                   else 'unknown'
+    #         commits.append(c)
+    # if no_job_id_count > 10:
+    #     len_commits = len(commits)
+    #     AppSettings.logger.info(f"{no_job_id_count} job ids were unable to be found. Have {len_commits} historical commit{'' if len_commits==1 else 's'}.")
+    # commits.append(current_commit)
 
-    cleaned_commits = remove_excess_commits(commits, repo_owner_username, repo_name)
-    if len(cleaned_commits) < len(commits): # Then we removed some
-        # Save a dated (coz this could happen more than once) backup of the project.json file
-        save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-        save_project_filepath = os.path.join(output_dirpath, save_project_filename)
-        write_file(save_project_filepath, project_json)
-        save_project_json_key = f'{project_folder_key}{save_project_filename}'
-        # Don't need to save this twice (March 2020)
-        # AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
-        AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
-    # Now save the updated project.json file in both places
-    project_json['commits'] = cleaned_commits
+    # cleaned_commits = remove_excess_commits(commits, repo_owner_username, repo_name)
+    # if len(cleaned_commits) < len(commits): # Then we removed some
+    #     # Save a dated (coz this could happen more than once) backup of the project.json file
+    #     save_project_filename = f"project.save.{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    #     save_project_filepath = os.path.join(output_dirpath, save_project_filename)
+    #     write_file(save_project_filepath, project_json)
+    #     save_project_json_key = f'{project_folder_key}{save_project_filename}'
+    #     # Don't need to save this twice (March 2020)
+    #     # AppSettings.cdn_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
+    #     AppSettings.door43_s3_handler().upload_file(save_project_filepath, save_project_json_key, cache_time=100)
+    # # Now save the updated project.json file in both places
+    # project_json['commits'] = cleaned_commits
     project_filepath = os.path.join(output_dirpath, 'project.json')
     write_file(project_filepath, project_json)
     AppSettings.cdn_s3_handler().upload_file(project_filepath, project_json_key, cache_time=1)
@@ -523,7 +543,8 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to or receive back from tX
     for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'commit_hash',
-                                        'input_format', 'door43_webhook_received_at'):
+                      'output', 'cdn_file', 'cdn_bucket',
+                      'input_format', 'door43_webhook_received_at'):
         if prefix and debug_mode_flag: assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
     # Remove unneeded fields that we saved or received back from tX
@@ -608,19 +629,31 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         final_build_log['warnings'].append(f"{len(final_build_log['warnings']):,} total preprocessor and linter warnings")
     final_build_log['success'] = queued_json_payload['converter_success']
     final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    update_project_file(final_build_log, our_temp_dir)
     # NOTE: The following is disabled coz it's done (again) later by the deployer
     # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
 
     if unzip_dir is None:
         AppSettings.logger.critical("Unable to deploy because file download failed previously")
         deployed = False
-    else:
+    elif queued_json_payload['output_format'] == 'html':
         # Now deploy the new pages (was previously a separate AWS Lambda call)
         AppSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
         deployer = ProjectDeployer(unzip_dir, our_temp_dir)
         deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
-        deployed = True
+    elif queued_json_payload['output_format'] == 'pdf':
+        # Now copy the zip file with the PDF to the door43.org bucket
+        AppSettings.logger.info(f"Deploying PDF zip file to the website (convert status='{final_build_log['status']}')…")
+        pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
+        AppSettings.logger.info(f"Copying {this_job_dict['output']} to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
+        AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
+        final_build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name.replace("-", ".")}/{pdf_zip_file_key}'
+        tf = tempfile.NamedTemporaryFile()
+        write_file(tf.name, final_build_log)
+        AppSettings.logger.info(f"Uploading build log to {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
+        AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
+
+    deployed = True
+    update_project_file(final_build_log, our_temp_dir)
 
     if prefix and debug_mode_flag:
         AppSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")

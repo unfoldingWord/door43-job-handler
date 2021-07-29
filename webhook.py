@@ -13,11 +13,13 @@ import tempfile
 import json
 import hashlib
 import shutil
+import re
 from datetime import datetime, timedelta
 from time import time, sleep
 import traceback
 from zipfile import BadZipFile
 from urllib.error import HTTPError
+from urllib.parse import urlparse
 
 # Library (PyPI) imports
 import requests
@@ -85,10 +87,7 @@ prefixed_our_name = prefix + OUR_NAME
 
 
 long_prefix = 'develop' if prefix else 'git'
-DOOR43_CALLBACK_URL = f'https://{long_prefix}.door43.org/client/webhook/tx-callback/'
-ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
-                                    if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                                 else DOOR43_CALLBACK_URL
+DOOR43_CALLBACK_URL = os.getenv('D43_CALLBACK_URL', f'https://{long_prefix}.door43.org/client/webhook/') + 'tx-callback/'
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -477,7 +476,7 @@ def handle_branch_delete(base_temp_dir_name:str, repo_owner_username:str, repo_n
 
     project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     project_json_key = f'{project_folder_key}project.json'
-    project_json = AppSettings.cdn_s3_handler().get_json(project_json_key)
+    project_json = AppSettings.door43_s3_handler().get_json(project_json_key)
 
     AppSettings.logger.info("Rebuilding commits list for project.json…")
     if 'commits' not in project_json:
@@ -584,8 +583,8 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
-def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
-                        commit_type:str, commit_id:str, commit_hash:Optional[str],
+def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
+                        commit_type:str, commit_id:str, commit_hash:Optional[str], commit_message:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
                         source_url_base:str, our_identifier:str,
                         our_queue) -> str:
@@ -605,20 +604,15 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     The preprocessed files are zipped up in the temp folder
         and then uploaded to the pre-convert bucket in S3.
 
-    A job dict is now setup and remembered in REDIS
-        so that we can match it when we get a future callback.
+    A generic job dict and tx payload are created with fields that both pages and pdf jobs user
 
-    An S3 CDN folder is now named and emptied
-        and a build log dictionary is created and uploaded to it.
-
-    The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
-
-    The job is now passed to the tX system by means of a
-        POST to the tX webhook (which should hopefully respond with a callback).
-
+    Two job functions are then called, one to generate the pages, and one to generate a PDF
     This code is "successful" once the job is submitted—
         it has no way to determine if it actually gets completed
         other than if a callback is made.
+
+    An S3 CDN folder is now named and emptied
+        and a build log dictionary is created and uploaded to it.
     """
     global project_types_invoked_string
 
@@ -684,13 +678,11 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         AppSettings.logger.debug(f"Inserting manifest into manifest table: {tx_manifest}")
         tx_manifest.insert()
 
-
     # Preprocess the files
     AppSettings.logger.debug("Preprocessing files…")
     preprocess_dir = tempfile.mkdtemp(dir=base_temp_dir_name, prefix='preprocess_')
     num_preprocessor_files_written, preprocessor_warning_list = do_preprocess(resource_subject, repo_owner_username, repo_data_url, rc, repo_dir, preprocess_dir)
 
-    # Save the warnings for the user—put any RC messages in front
     if rc.error_messages or preprocessor_warning_list:
         AppSettings.logger.debug(f"Prepending {len(rc.error_messages):,} RC warnings to {len(preprocessor_warning_list):,} preprocessor warnings")
     preprocessor_warning_list = list(rc.error_messages) + preprocessor_warning_list
@@ -735,110 +727,192 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         our_job_id = get_unique_job_id()
         file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
 
-
-        # We no longer use txJob class but just create our own Python dict
-        #   This gets saved in Redis so it can be recalled by the callback function
-        #       (only a very small subset gets posted to the tX-enqueue-job)
-        AppSettings.logger.debug("Webhook.handle_page_build setting up job dict…")
-        pj_job_dict:Dict[str,Any] = {}
-        pj_job_dict['job_id'] = our_job_id
-        pj_job_dict['identifier'] = our_identifier # So we can recognise this job inside tX Job Handler
-        pj_job_dict['repo_owner_username'] = repo_owner_username
-        pj_job_dict['repo_name'] = repo_name
-        pj_job_dict['commit_type'] = commit_type
-        pj_job_dict['commit_id'] = commit_id
-        pj_job_dict['commit_hash'] = commit_hash
-        pj_job_dict['manifests_id'] = tx_manifest.id
-        pj_job_dict['created_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        pj_job_dict['resource_type'] = resource_subject # This used to be rc.resource.identifier
-        pj_job_dict['input_format'] = input_format
-        pj_job_dict['source'] = f'{source_url_base}/{file_key}'
-        pj_job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
-        pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
-        pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
-        pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-        pj_job_dict['output_format'] = 'html'
-        # NOTE: following line removed as stats recording used too much disk space
-        # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
-        pj_job_dict['links'] = {
-            'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
-            'rel': 'self',
-            'method': 'GET'
-        }
-        pj_job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
+        AppSettings.logger.debug("Webhook.handle_build setting up generic job dict…")    
+        job_dict: Dict[str, Any] = {}
+        # So we can recognise this job inside tX Job Handler
+        job_dict['identifier'] = our_identifier
+        job_dict['repo_owner_username'] = repo_owner_username
+        job_dict['repo_name'] = repo_name
+        job_dict['commit_type'] = commit_type
+        job_dict['commit_id'] = commit_id
+        job_dict['commit_hash'] = commit_hash
+        job_dict['manifests_id'] = tx_manifest.id
+        job_dict['created_at'] = datetime.utcnow().strftime(
+            '%Y-%m-%dT%H:%M:%SZ')
+        # This used to be rc.resource.identifier
+        job_dict['resource_type'] = resource_subject
+        job_dict['input_format'] = input_format
+        job_dict['source'] = f'{source_url_base}/{file_key}'
+        job_dict['cdn_bucket'] = AppSettings.cdn_bucket_name
+        job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
+        job_dict['door43_webhook_received_at'] = submitted_json_payload['door43_webhook_received_at']
         if preprocessor_warning_list:
-            pj_job_dict['preprocessor_warnings'] = preprocessor_warning_list
-        if 'echoed_from_production' in submitted_json_payload: # helps us keep track of where jobs are coming from in dev- chain
-            pj_job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
-        pj_job_dict['status'] = None
-        pj_job_dict['success'] = False
+            job_dict['preprocessor_warnings'] = preprocessor_warning_list
+        # helps us keep track of where jobs are coming from in dev- chain
+        if 'echoed_from_production' in submitted_json_payload:
+            job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
+        job_dict['status'] = None
+        job_dict['success'] = False
+        
+        AppSettings.logger.debug(f"Generic job_dict: {job_dict}")
+        
+        AppSettings.logger.debug("Webhook.handle_build setting up generic tx payload…")    
+        url_parts = urlparse(repo_data_url)
+        dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
+        tx_payload = {
+            'identifier': our_identifier,  # So we can recognise this job inside tX Job Handler
+            'repo_name': repo_name,
+            'repo_owner': repo_owner_username,
+            'repo_ref': commit_id,
+            'repo_data_url': repo_data_url,
+            'dcs_domain': dcs_domain,
+            'resource_type': resource_subject,  # This used to be rc.resource.identifier
+            'input_format': 'usfm' if resource_subject == 'bible' and input_format == 'txt' \
+                                else input_format,  # special case for .txt Bibles
+            'source': source_url_base + '/' + file_key,
+            'callback': DOOR43_CALLBACK_URL
+        }
+        
+        AppSettings.logger.debug(f"Generic tx_payload: {tx_payload}")
 
-        # Save the job info in Redis for the callback to use
-        remember_job(pj_job_dict, redis_connection)
-
-        # Get S3 cdn bucket/dir and empty it
-        s3_commit_key = f"u/{pj_job_dict['repo_owner_username']}/{pj_job_dict['repo_name']}/{pj_job_dict['commit_id']}"
+        # Get S3 cdn bucket/dir and empty it before we make two build requests for html and pdf
+        s3_commit_key = f"u/{repo_owner_username}/{repo_name}/{commit_id}"
         clear_commit_directory_in_cdn(s3_commit_key)
 
-        # Pass the work request onto the tX system
-        AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
-        tx_payload = {
-            'job_id': our_job_id,
-            'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-            'resource_type': resource_subject, # This used to be rc.resource.identifier
-            'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
-                                else input_format, # special case for .txt Bibles
-            'output_format': 'html',
-            'source': source_url_base + '/' + file_key,
-            'callback': 'http://127.0.0.1:8080/tx-callback/' \
-                            if prefix and debug_mode_flag and ':8090' in tx_post_url \
-                        else DOOR43_CALLBACK_URL,
-            # TODO: gogs_user_token logic can be completely removed from the program
-            #           if we're certain we're not worried about Host header spoofing.
-            #           (Checking Host header is our new/current ID mechanism.)
-            # 'user_token': gogs_user_token, # Used to be checked by tX enqueue job
-            #   but it now authenticates because we usually send this from git.door43.org
-            #       (or when debugging, from 127.0.0.1:80).
-            }
-        if 'options' in pj_job_dict and pj_job_dict['options']:
-            AppSettings.logger.info(f"Have convert job options: {pj_job_dict['options']}!")
-            tx_payload['options'] = pj_job_dict['options']
-
-        AppSettings.logger.debug(f"Payload for tX: {tx_payload}")
-        response:Optional[requests.Response]
-        try:
-            response = requests.post(tx_post_url, json=tx_payload)
-        except requests.exceptions.ConnectionError as e:
-            AppSettings.logger.critical(f"Callback connection error: {e}")
-            response = None
-        if response:
-            #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
-            #AppSettings.logger.debug(f"response.headers = {response.headers}")
-            try:
-                AppSettings.logger.info(f"response.json = {response.json()}")
-            except json.decoder.JSONDecodeError:
-                AppSettings.logger.info("No valid response JSON found")
-                AppSettings.logger.debug(f"response.text = {response.text}")
-            if response.status_code != 200:
-                AppSettings.logger.critical(f"Failed to submit job to tX:"
-                                            f" {response.status_code}={response.reason}")
-        else: # no response
-            error_msg = "Submission of job to tX system got no response"
-            AppSettings.logger.critical(error_msg)
-            raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
-
-
-        # if rc.resource.file_ext in ('usfm', 'usfm3'): # Upload source files to BibleDropBox
-        #     if prefix and not debug_mode_flag: # Only for dev- chain
-        #         # This was intended for comparing USFM linting during development of that area of code
-        #         AppSettings.logger.info(f"Submitting {job_descriptive_name} originals to BDB…")
-        #         original_zip_filepath = os.path.join(base_temp_dir_name, commit_url.rpartition(os.path.sep)[2] + '.zip')
-        #         upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", original_zip_filepath)
-        #         # Not using the preprocessed files (only the originals above)
-        #         # AppSettings.logger.info(f"Submitting {job_descriptive_name} preprocessed to BDB…")
-        #         # upload_to_BDB(f"{repo_owner_username}__{repo_name}__({pusher_username})", preprocessed_zip_file.name)
-
+        pages_job_dict = job_dict.copy()
+        pages_tx_payload = tx_payload.copy()
+        handle_pages_build(pages_job_dict, pages_tx_payload, redis_connection)
+        
+        pdf_job_dict = job_dict.copy()
+        pdf_tx_payload = tx_payload.copy()
+        handle_pdf_build(pdf_job_dict, pdf_tx_payload, redis_connection)
+        
     return job_descriptive_name
+# end of handle_build function
+
+
+def handle_pages_build(pages_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+    """
+    A job dict is now setup and remembered in REDIS
+        so that we can match it when we get a future callback.
+
+    The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
+
+    The job is now passed to the tX system by means of a
+        POST to the tX webhook (which should hopefully respond with a callback).
+    """
+    AppSettings.logger.debug("Webhook.handle_build setting up page job dict…")
+    our_job_id = get_unique_job_id()
+    pages_job_dict['job_id'] = our_job_id
+    pages_job_dict['output_format'] = 'html'
+    pages_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+    pages_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pages_job_dict['cdn_file']}"
+    # NOTE: following line removed as stats recording used too much disk space
+    # pages_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+    pages_job_dict['links'] = {
+        'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
+        'rel': 'self',
+        'method': 'GET'
+    }
+    
+    AppSettings.logger.debug(f"pages_job_dict: {pages_job_dict}")
+
+    # Save the job info in Redis for the callback to use
+    remember_job(pages_job_dict, redis_connection)
+
+    # Pass the work request onto the tX system
+    AppSettings.logger.info(f"Pages Job: Post request to tX system @ {tx_post_url} …")
+    tx_payload['job_id'] = our_job_id
+    tx_payload['output_format'] = 'html'
+
+    AppSettings.logger.debug(f"Payload for pdf tX: {tx_payload}")
+
+    response: Optional[requests.Response]
+    try:
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        AppSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
+    if response:
+        #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #AppSettings.logger.debug(f"response.headers = {response.headers}")
+        try:
+            AppSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            AppSettings.logger.info("No valid response JSON found")
+            AppSettings.logger.debug(f"response.text = {response.text}")
+        if response.status_code != 200:
+            AppSettings.logger.critical(f"Failed to submit job to tX:"
+                                        f" {response.status_code}={response.reason}")
+    else:  # no response
+        error_msg = "Submission of job to tX system got no response"
+        AppSettings.logger.critical(error_msg)
+        # So we go into the FAILED queue and monitoring system
+        raise Exception(error_msg)
+    
+    return our_job_id
+# end of handle_page_build function
+
+
+def handle_pdf_build(pdf_job_dict: Dict[str, Any], tx_payload, redis_connection) -> str:
+    """
+    A job dict is now setup and remembered in REDIS
+        so that we can match it when we get a future callback.
+
+    The project.json (in the folder above the CDN one) is also updated, e.g., with new commits.
+
+    The job is now passed to the tX system by means of a
+        POST to the tX webhook (which should hopefully respond with a callback).
+    """
+    AppSettings.logger.debug("Webhook.handle_build setting up pdf job dict…")
+    our_job_id = get_unique_job_id()
+    pdf_job_dict['job_id'] = our_job_id
+    pdf_job_dict['output_format'] = 'pdf'
+    pdf_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
+    pdf_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pdf_job_dict['cdn_file']}"
+    # NOTE: following line removed as stats recording used too much disk space
+    # pdf_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
+    pdf_job_dict['links'] = {
+        'href': f'{AppSettings.api_url}/tx/job/{our_job_id}',
+        'rel': 'self',
+        'method': 'GET'
+    }
+
+    AppSettings.logger.debug(f"pdf_job_dict: {pdf_job_dict}")
+
+    # Save the job info in Redis for the callback to use
+    remember_job(pdf_job_dict, redis_connection)
+
+    # Pass the work request onto the tX system
+    AppSettings.logger.info(f"PDF Job: Post request to tX system @ {tx_post_url} …")
+    tx_payload['job_id'] = our_job_id
+    tx_payload['output_format'] = 'pdf'
+
+    AppSettings.logger.debug(f"Payload for pdf tX: {tx_payload}")
+    response: Optional[requests.Response]
+    try:
+        response = requests.post(tx_post_url, json=tx_payload)
+    except requests.exceptions.ConnectionError as e:
+        AppSettings.logger.critical(f"Callback connection error: {e}")
+        response = None
+    if response:
+        #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
+        #AppSettings.logger.debug(f"response.headers = {response.headers}")
+        try:
+            AppSettings.logger.info(f"response.json = {response.json()}")
+        except json.decoder.JSONDecodeError:
+            AppSettings.logger.info("No valid response JSON found")
+            AppSettings.logger.debug(f"response.text = {response.text}")
+        if response.status_code != 200:
+            AppSettings.logger.critical(f"Failed to submit job to tX:"
+                                        f" {response.status_code}={response.reason}")
+    else:  # no response
+        error_msg = "Submission of job to tX system got no response"
+        AppSettings.logger.critical(error_msg)
+        # So we go into the FAILED queue and monitoring system
+        raise Exception(error_msg)
+    
+    return our_job_id
 # end of handle_page_build function
 
 
@@ -926,6 +1000,12 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
             if some_commit['id'] == after_commit_hash:
                 found_commit = some_commit
                 break
+        if not found_commit:
+            repo_data_url = re.sub(r'/compare/\d+\.\.\.', '/commit/', queued_json_payload['compare_url'])
+            action_message = f'{commit_branch} branch created'
+        else:
+            repo_data_url = found_commit['url']
+            action_message = found_commit['message'].strip() # Seems to always end with a newline
         after_commit_hash = after_commit_hash[:10]  # Only use the short form
         AppSettings.logger.debug(f"Got original after_commit_hash='{after_commit_hash}'")
         if found_commit:
@@ -1064,8 +1144,8 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         if queued_json_payload['DCS_event']=='push' and pusher_username=='Failure' \
         and 'full_name' in pusher_dict and pusher_dict['full_name']=='Push Test':
             deliberateFailureForTesting  # type: ignore
-        job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
-                            commit_type, commit_id, after_commit_hash, repo_data_url,
+        job_descriptive_name = handle_build(base_temp_dir_name, queued_json_payload, redis_connection,
+                            commit_type, commit_id, after_commit_hash, action_message, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
                             our_identifier, our_queue)
     else:
