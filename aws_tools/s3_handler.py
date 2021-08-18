@@ -153,3 +153,17 @@ class S3Handler:
                 return False
         else:
             return self.resource.Object(bucket_name=self.bucket_name, key=key).delete()
+
+
+    def object_exists(self, file_path:str, catch_exception:bool=True):
+        if catch_exception:
+            try:
+                result = self.client.list_objects(Bucket=self.bucket_name, Prefix=file_path)
+            except:
+                return False
+        else:
+            result = self.client.list_objects(Bucket=self.bucket_name, Prefix=file_path)
+        if 'Contents' in result:
+            return True
+        else:
+            return False

@@ -33,7 +33,9 @@ from client_linter_callback import ClientLinterCallback
 from door43_tools.project_deployer import ProjectDeployer
 from general_tools.file_utils import write_file, remove_tree
 
-
+MY_NAME = 'tX PDF creator'
+MY_VERSION_STRING = '2.0.0' # Mostly to determine PDF fixes
+MY_NAME_VERSION_STRING = f"{MY_NAME} v{MY_VERSION_STRING}"
 
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
@@ -646,10 +648,22 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
         AppSettings.logger.info(f"Copying {this_job_dict['output']} to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
         AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
-        final_build_log['pdf_url'] = f'https://{AppSettings.door43_bucket_name.replace("-", ".")}/{pdf_zip_file_key}'
-        tf = tempfile.NamedTemporaryFile()
-        write_file(tf.name, final_build_log)
-        AppSettings.logger.info(f"Uploading build log to {AppSettings.door43_bucket_name}/{url_part2}/pdf_build_log.json …")
+        # Now update the PDF_details.json file in the root dir of this repo in the door43.org bucket (create if doesn't exist) for this ref
+        pdf_details_key = f'u/{this_job_dict["repo_owner_username"]}/{this_job_dict["repo_name"]}/PDF_details.json'
+        pdf_details_contents = AppSettings.door43_s3_handler().get_file_contents(pdf_details_key)
+        pdf_details_dict = {}
+        try:
+            pdf_details_dict = json.loads(pdf_details_contents)
+        except Exception as e:
+            pdf_details_dict = {}
+        ref = pdf_details_dict['commit_id']
+        if ref not in pdf_details_dict:
+            pdf_details_dict[ref] = {}
+        pdf_details_dict[ReferenceError]['PDF_creator'] = MY_NAME
+        pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
+        pdf_details_dict[ref]['source_url'] = payload['source']
+    if optionsDict: PDF_log_dict[tag_or_branch_name]['options'] = payload['options']
+        AppSettings.logger.info(f"Uploading PDF details {AppSettings.door43_bucket_name}/{pdf_details_key} …")
         AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
 
     deployed = True
