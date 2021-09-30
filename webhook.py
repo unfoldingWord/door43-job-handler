@@ -783,9 +783,9 @@ def handle_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], r
         pages_tx_payload = tx_payload.copy()
         handle_pages_build(pages_job_dict, pages_tx_payload, redis_connection)
         
-        pdf_job_dict = job_dict.copy()
-        pdf_tx_payload = tx_payload.copy()
-        handle_pdf_build(pdf_job_dict, pdf_tx_payload, redis_connection)
+        # pdf_job_dict = job_dict.copy()
+        # pdf_tx_payload = tx_payload.copy()
+        # handle_pdf_build(pdf_job_dict, pdf_tx_payload, redis_connection)
         
     return job_descriptive_name
 # end of handle_build function

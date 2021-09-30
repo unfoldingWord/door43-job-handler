@@ -135,8 +135,8 @@ class ProjectDeployer:
                 AppSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=AppSettings.cdn_bucket_name)
                 AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
                                                         to_key=f'{s3_repo_key}/manifest.json')
-                master_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/master')
-                main_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/main')
+                master_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/master/index.html')
+                main_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/main/index.html')
                 if commit_id == 'master' or commit_id == 'main' or (not master_exists and not main_exists):
                     AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location='/' + s3_commit_key)
                     AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html',
