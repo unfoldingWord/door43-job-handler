@@ -661,11 +661,8 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
             pdf_details_dict[ref] = {}
         pdf_details_dict[ReferenceError]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
-        pdf_details_dict[ref]['source_url'] = payload['source']
-    if optionsDict: PDF_log_dict[tag_or_branch_name]['options'] = payload['options']
-        AppSettings.logger.info(f"Uploading PDF details {AppSettings.door43_bucket_name}/{pdf_details_key} …")
-        AppSettings.door43_s3_handler().upload_file(tf.name, f'{url_part2}/pdf_build_log.json', cache_time=600)
-
+        pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
+ 
     deployed = True
     update_project_file(final_build_log, our_temp_dir)
 
