@@ -29,10 +29,11 @@ QUEUES = [callback_queue_name, webhook_queue_name] # Callback (i.e., finishing o
 
 # Our stuff
 # This is placed here so it fails at start-up if the environment variable is missing
-gogs_user_token = environ['GOGS_USER_TOKEN']
+dcs_user_token = environ['DCS_USER_TOKEN']
 
 debug_mode_flag = getenv('DEBUG_MODE', '')
 
+use_watchtower = getenv('USE_WATCHTOWER', True)
 # long_prefix = 'develop.' if prefix else ''
 # tx_post_url = 'http://127.0.0.1:8090/' if prefix and debug_mode_flag \
 #                 else f'https://git.door43.org/{prefix}tx/'

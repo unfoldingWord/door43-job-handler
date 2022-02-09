@@ -12,7 +12,7 @@ from aws_tools.s3_handler import S3Handler
 from boto3 import Session
 from watchtower import CloudWatchLogHandler
 
-from rq_settings import debug_mode_flag
+from rq_settings import debug_mode_flag, use_watchtower
 
 
 # TODO: Investigate if this AppSettings (was tx-Manager App) class still needs to be resetable now
@@ -50,7 +50,8 @@ def setup_logger(logger, watchtower_log_handler, level):
     sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
     logger.addHandler(sh)
-    logger.addHandler(watchtower_log_handler)
+    if watchtower_log_handler:
+        logger.addHandler(watchtower_log_handler)
     logger.setLevel(level)
     # Change these loggers to only report errors:
     logging.getLogger('boto3').setLevel(logging.ERROR)
@@ -70,12 +71,12 @@ class AppSettings:
     prefix = ''
     api_url = os.getenv('API_URL', 'https://api.door43.org')
     pre_convert_bucket_name = os.getenv('PRE_CONVERT_BUCKET_NAME', 'tx-webhook-client')
-    cdn_bucket_name = os.getenv('CD_BUCKET_NAME', 'cdn.door43.org')
-    door43_bucket_name = os.getenv('DOOR$#_BUCKET_NAME', 'door43.org')
-    gogs_user_token = os.getenv('GOGS_USER_TOKEN', None)
-    gogs_url = os.getenv('GOGS_URL', 'https://git.door43.org')
-    gogs_domain_name = os.getenv('GOGS_DOMAIN_NAME', 'git.door43.org')
-    gogs_ip_address = os.getenv('GOGS_IP_ADDRESS', '127.0.0.1')
+    cdn_bucket_name = os.getenv('CDN_BUCKET_NAME', 'cdn.door43.org')
+    door43_bucket_name = os.getenv('DOOR43_BUCKET_NAME', 'door43.org')
+    dcs_user_token = os.getenv('DCS_USER_TOKEN', None)
+    dcs_url = os.getenv('DCS_URL', 'https://git.door43.org')
+    dcs_domain_name = os.getenv('DCS_DOMAIN_NAME', 'git.door43.org')
+    dcs_ip_address = os.getenv('DCS_IP_ADDRESS', '127.0.0.1')
     module_table_name = 'modules'
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'
@@ -151,10 +152,12 @@ class AppSettings:
         boto3_session = Session(aws_access_key_id=cls.aws_access_key_id,
                             aws_secret_access_key=cls.aws_secret_access_key,
                             region_name=cls.aws_region_name)
-        cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
-                                                    # use_queues=False, # Because this forked process is quite transient
-                                                    log_group=log_group_name,
-                                                    stream_name=cls.name)
+        cls.watchtower_log_handler = None
+        if use_watchtower:
+            cls.watchtower_log_handler = CloudWatchLogHandler(boto3_session=boto3_session,
+                                                        # use_queues=False, # Because this forked process is quite transient
+                                                        log_group=log_group_name,
+                                                        stream_name=cls.name)
         setup_logger(cls.logger, cls.watchtower_log_handler,
                             logging.DEBUG if debug_mode_flag else logging.INFO)
         cls.logger.debug(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")

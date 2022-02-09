@@ -193,20 +193,20 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) ->
 # end of clear_commit_directory_from_bucket function
 
 
-def get_list_from_Gitea(Gitea_url:str) -> List[str]:
+def get_list_from_dcs(dcs_url:str) -> List[str]:
     """
     Send a GET request to the URL
         and return the list from the returned JSON.
     """
-    AppSettings.logger.debug(f"get_list_from_Gitea({Gitea_url})…")
+    AppSettings.logger.debug(f"get_list_from_dcs({dcs_url})…")
 
     this_list = []
     response:Optional[requests.Response]
     try:
-        # AppSettings.logger.debug(f"GETting list from '{Gitea_url}'…")
-        response = requests.get(Gitea_url)
+        # AppSettings.logger.debug(f"Getting list from '{dcs_url}'…")
+        response = requests.get(dcs_url)
     except requests.exceptions.ConnectionError as e:
-        AppSettings.logger.critical(f"get_list_from_Gitea connection error: {e}")
+        AppSettings.logger.critical(f"get_list_from_dcs connection error: {e}")
         response = None
     if response:
         # AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
@@ -219,25 +219,25 @@ def get_list_from_Gitea(Gitea_url:str) -> List[str]:
             AppSettings.logger.info("No valid list response JSON found")
             AppSettings.logger.debug(f"response.text = {response.text}")
         if response.status_code != 200:
-            AppSettings.logger.critical(f"Failed to submit list request to Gitea:"
+            AppSettings.logger.critical(f"Failed to submit list request to DCS:"
                                         f" {response.status_code}={response.reason}")
     else: # no response
-        error_msg = "Submission of list request to Gitea got no response"
+        error_msg = "Submission of list request to DCS got no response"
         AppSettings.logger.critical(error_msg)
         # raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
     # AppSettings.logger.debug(f"  Returning this_list={this_list}")
     return this_list
-# end of get_list_from_Gitea function
+# end of get_list_from_dcs function
 
 
 def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
-    Ask Gitea for a list of all current branches.
+    Ask DCS for a list of all current branches.
     """
     AppSettings.logger.debug(f"get_current_branch_names_list({repo_owner_username}, {repo_name})…")
 
-    current_branch_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
+    current_branch_list = get_list_from_dcs(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
     current_branch_names_list = [this_dict['name'] for this_dict in current_branch_list]
     AppSettings.logger.info(f"Returning current_branch_names_list={current_branch_names_list}")
     return current_branch_names_list
@@ -246,11 +246,11 @@ def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> Lis
 
 def get_current_tag_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
-    Ask Gitea for a list of all current release tags.
+    Ask DCS for a list of all current release tags.
     """
     AppSettings.logger.debug(f"get_current_tag_names_list({repo_owner_username}, {repo_name})…")
 
-    current_tag_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
+    current_tag_list = get_list_from_dcs(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
     current_tag_names_list = [this_dict['tag_name'] for this_dict in current_tag_list]
     AppSettings.logger.info(f"Returning current_tag_names_list={current_tag_names_list}")
     return current_tag_names_list
@@ -407,7 +407,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     AppSettings.logger.info(f"Got project file from {project_json_key}: {project_json}")
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{AppSettings.gogs_url}/{repo_owner_username}/{repo_name}'
+    project_json['repo_url'] = f'https://{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
 
     if 'commits' not in project_json:
         project_json['commits'] = []

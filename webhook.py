@@ -28,7 +28,7 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # dcs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file, get_json_from_url
 from resource_container.ResourceContainer import RC
@@ -145,7 +145,7 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
     """
     Downloads and unzips a git repository from Github or git.door43.org
         Has a number of tries
-            (in case that Gitea hasn't actually finished building the .zip file yet)
+            (in case that DCS hasn't actually finished building the .zip file yet)
 
     :param commit_url: The URL of the repository to download
     :param repo_dir:   The directory where the downloaded file should be unzipped
