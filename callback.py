@@ -237,7 +237,7 @@ def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> Lis
     """
     AppSettings.logger.debug(f"get_current_branch_names_list({repo_owner_username}, {repo_name})…")
 
-    current_branch_list = get_list_from_dcs(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
+    current_branch_list = get_list_from_dcs(f'{AppSettings.dcs_url}/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
     current_branch_names_list = [this_dict['name'] for this_dict in current_branch_list]
     AppSettings.logger.info(f"Returning current_branch_names_list={current_branch_names_list}")
     return current_branch_names_list
@@ -250,7 +250,7 @@ def get_current_tag_names_list(repo_owner_username:str, repo_name:str) -> List[s
     """
     AppSettings.logger.debug(f"get_current_tag_names_list({repo_owner_username}, {repo_name})…")
 
-    current_tag_list = get_list_from_dcs(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
+    current_tag_list = get_list_from_dcs(f'{AppSettings.dcs_url}/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
     current_tag_names_list = [this_dict['tag_name'] for this_dict in current_tag_list]
     AppSettings.logger.info(f"Returning current_tag_names_list={current_tag_names_list}")
     return current_tag_names_list
@@ -407,7 +407,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     AppSettings.logger.info(f"Got project file from {project_json_key}: {project_json}")
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
+    project_json['repo_url'] = f'{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
 
     if 'commits' not in project_json:
         project_json['commits'] = []
@@ -678,7 +678,6 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     AppSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
         AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
-        AppSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn that off.)")
     if deployed:
         AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")

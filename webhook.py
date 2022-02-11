@@ -28,7 +28,7 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # dcs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name #, dcs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file, get_json_from_url
 from resource_container.ResourceContainer import RC
@@ -143,7 +143,7 @@ def upload_preconvert_zip_file(job_id:str, zip_filepath:str) -> str:
 
 def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str, repo_owner_username:str, repo_name:str) -> None:
     """
-    Downloads and unzips a git repository from Github or git.door43.org
+    Downloads and unzips a git repository from Github or DCS
         Has a number of tries
             (in case that DCS hasn't actually finished building the .zip file yet)
 
@@ -183,7 +183,7 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
             AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
             if try_number == 1: # Only on the first fail
                 # # See if the repo is private -- no need coz we now check this in door43-enqueue as it's in the payload
-                # repo_dict = get_json_from_url(f"https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}")
+                # repo_dict = get_json_from_url(f"{AppSettings.dcs_url}/api/v1/repos/{repo_owner_username}/{repo_name}")
                 # AppSettings.logger.debug(f"  Got repo_dict={repo_dict}")
                 # if repo_dict['private']:
                 #     AppSettings.logger.critical(f"Repo '{repo_name}' for {repo_owner_username} is PRIVATE!")
@@ -191,7 +191,7 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
                 #     raise e
                 # else:
                 # See if the user/org is private
-                owner_dict = get_json_from_url(f"https://git.door43.org/api/v1/orgs/{repo_owner_username}")
+                owner_dict = get_json_from_url(f"{AppSettings.dcs_url}/api/v1/orgs/{repo_owner_username}")
                 AppSettings.logger.debug(f"  Got owner_dict={owner_dict}")
                 if owner_dict['visibility'] != 'public':
                     AppSettings.logger.critical(f"Owner '{repo_owner_username}' of '{repo_name}' is PRIVATE!")
@@ -830,10 +830,13 @@ def handle_pages_build(pages_job_dict: Dict[str, Any], tx_payload, redis_connect
     response: Optional[requests.Response]
     try:
         response = requests.post(tx_post_url, json=tx_payload)
+        print(response)
     except requests.exceptions.ConnectionError as e:
         AppSettings.logger.critical(f"Callback connection error: {e}")
         response = None
     if response:
+        print("HERE RESPONSE:")
+        print(response)
         #AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
         #AppSettings.logger.debug(f"response.headers = {response.headers}")
         try:
