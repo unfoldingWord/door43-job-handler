@@ -109,16 +109,13 @@ class ProjectDeployer:
                 if os.path.isdir(filepath):
                     continue
                 key = s3_commit_key + filepath.replace(output_dir, '').replace(os.path.sep, '/')
-                if key == filepath.replace(output_dir, '') == "/index.html":
-                    has_index_file = True
                 AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
                 AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
         redirect_to_file = "index.html"
-        if not has_index_file:
-            html_files = get_sorted_Bible_html_filepath_list(output_dir)
-            if len(html_files) > 0:
-                redirect_to_file = html_files[0].replace(output_dir, "").lstrip("/")
+        html_files = get_sorted_Bible_html_filepath_list(output_dir)
+        if len(html_files) > 0 and os.path.join(output_dir, "index.html") not in html_files:
+            redirect_to_file = html_files[0].replace(output_dir, "").lstrip("/")
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
         AppSettings.logger.info("Copying json files and setting up redirect…")
