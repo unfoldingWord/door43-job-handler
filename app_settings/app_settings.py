@@ -2,16 +2,16 @@ import sys
 import os
 import logging
 import re
+import dcs_api_client
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
-from aws_tools.s3_handler import S3Handler
 from boto3 import Session
 from watchtower import CloudWatchLogHandler
-
+from aws_tools.s3_handler import S3Handler
 from rq_settings import debug_mode_flag
 
 
@@ -67,13 +67,13 @@ class AppSettings:
     dirty = False
 
     # Stage Variables, defaults
-    prefix = ''
+    prefix = os.getenv('QUEUE_PREFIX', '')
     api_url = os.getenv('API_URL', 'https://api.door43.org')
     pre_convert_bucket_name = os.getenv('PRE_CONVERT_BUCKET_NAME', 'tx-webhook-client')
     cdn_bucket_name = os.getenv('CDN_BUCKET_NAME', 'cdn.door43.org')
     door43_bucket_name = os.getenv('DOOR43_BUCKET_NAME', 'door43.org')
     dcs_user_token = os.getenv('DCS_USER_TOKEN', None)
-    dcs_url = os.getenv('DCS_URL', 'https://git.door43.org')
+    dcs_url = os.getenv('DCS_URL', default='https://develop.door43.org' if prefix else 'https://git.door43.org')
     dcs_domain_name = os.getenv('DCS_DOMAIN_NAME', 'git.door43.org')
     dcs_ip_address = os.getenv('DCS_IP_ADDRESS', '127.0.0.1')
     module_table_name = 'modules'
@@ -157,6 +157,10 @@ class AppSettings:
         setup_logger(cls.logger, cls.watchtower_log_handler,
                             logging.DEBUG if debug_mode_flag else logging.INFO)
         cls.logger.debug(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
+
+        api_config = dcs_api_client.Configuration()
+        api_config.host = f"{cls.dcs_url}/api/v1"
+        cls.repo_api = dcs_api_client.RepositoryApi(dcs_api_client.ApiClient(api_config))
 
 
     @classmethod

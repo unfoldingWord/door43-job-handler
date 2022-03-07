@@ -6,7 +6,6 @@ from boto3.session import Session
 from typing import Any, Optional
 
 
-
 class S3Handler:
     def __init__(self, bucket_name:Optional[str]=None,
                     aws_access_key_id:Optional[str]=None, aws_secret_access_key:Optional[str]=None,
@@ -72,6 +71,11 @@ class S3Handler:
         else:
             return self.resource.Object(bucket_name=self.bucket_name, key=to_key).copy_from(
                 CopySource='{0}/{1}'.format(from_bucket, from_key))
+
+
+    def put_json(self, key, json_data):
+        s3object = self.resource.Object(self.bucket_name, key)
+        s3object.put(Body=(bytes(json.dumps(json_data).encode('UTF-8'))), ContentType='application/json')
 
 
     def upload_file(self, path:str, key:str, cache_time:int=600, content_type:Optional[str]=None) -> None:

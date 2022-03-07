@@ -88,9 +88,6 @@ class ProjectDeployer:
         # html_files = get_sorted_Bible_html_filepath_list(output_dir) if 'Bible' in resource_type \
         #                 else sorted(glob(os.path.join(output_dir, '*.html')))
         html_files = get_sorted_Bible_html_filepath_list(output_dir)
-        index_file = os.path.join(output_dir, 'index.html')
-        if html_files and not os.path.isfile(index_file):
-            copyfile(os.path.join(output_dir, html_files[0]), index_file)
 
         # Copy all other files over that don't already exist in output_dir, like css files
         #   Copying from source_dir to output_dir (both are folders inside main temp folder)
@@ -110,32 +107,37 @@ class ProjectDeployer:
 
         # Upload all files to the S3 door43.org bucket
         AppSettings.logger.info(f"Uploading all files to the website bucket directory: {AppSettings.door43_bucket_name}/{s3_commit_key} …")
+        has_index_file = False
         for root, _dirs, files in os.walk(output_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
                 if os.path.isdir(filepath):
                     continue
                 key = s3_commit_key + filepath.replace(output_dir, '').replace(os.path.sep, '/')
-                if debug_mode_flag:
-                    AppSettings.logger.debug(f"Copying {filepath} to /{key} …")
-                    os.makedirs(os.path.dirname(f'/{key}'), exist_ok=True)
-                    copyfile(filepath, f'/{key}')
-                else:
-                    AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
-                    AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
+                if key == filepath.replace(output_dir, '') == "/index.html":
+                    has_index_file = True
+                AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
+                AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
+
+        if has_index_file:
+            redirect_to_file = "index.html"
+        else:
+            redirect_to_file = html_files[0]
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
         AppSettings.logger.info("Copying json files and setting up redirect…")
         try:
             AppSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=AppSettings.cdn_bucket_name)
-            AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json',
-                                                    to_key=f'{s3_repo_key}/manifest.json')
+            AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json', to_key=f'{s3_repo_key}/manifest.json')
             master_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/master/index.html')
             main_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/main/index.html')
             if commit_id == 'master' or commit_id == 'main' or (not master_exists and not main_exists):
-                AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location='/' + s3_commit_key)
-                AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html',
-                                                            location='/' + s3_commit_key)
+                AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location=f"/{s3_commit_key}/{redirect_to_file}")
+                AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html', location=f"/{s3_commit_key}/{redirect_to_file}")
+            AppSettings.door43_s3_handler().redirect(key=s3_commit_key, location=f"/{s3_commit_key}/{redirect_to_file}")
+            if not has_index_file:
+                AppSettings.door43_s3_handler().redirect(key=f"{s3_commit_key}/index.html", location=f"/{s3_commit_key}/{redirect_to_file}")
+
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except Exception as e:
             AppSettings.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")

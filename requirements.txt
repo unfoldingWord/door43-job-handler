@@ -20,3 +20,6 @@ boto3==1.16.1
 
 # For templating
 beautifulsoup4==4.9.3
+
+# For DCS
+dcs_api_client==1.15.10

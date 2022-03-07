@@ -547,13 +547,11 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'commit_hash',
                       'output', 'cdn_file', 'cdn_bucket',
                       'input_format', 'door43_webhook_received_at'):
-        if prefix and debug_mode_flag: assert fieldname not in this_job_dict
         this_job_dict[fieldname] = matched_job_dict[fieldname]
     # Remove unneeded fields that we saved or received back from tX
     for fieldname in ('callback',):
         if fieldname in this_job_dict:
             del this_job_dict[fieldname]
-
     if 'preprocessor_warnings' in matched_job_dict:
         # AppSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
         #                            f" remembered preprocessor_warnings: {matched_job_dict['preprocessor_warnings']}")
@@ -652,16 +650,15 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_details_key = f'u/{this_job_dict["repo_owner_username"]}/{this_job_dict["repo_name"]}/PDF_details.json'
         pdf_details_contents = AppSettings.door43_s3_handler().get_file_contents(pdf_details_key)
         pdf_details_dict = {}
-        try:
+        if pdf_details_contents:
             pdf_details_dict = json.loads(pdf_details_contents)
-        except Exception as e:
-            pdf_details_dict = {}
-        ref = pdf_details_dict['commit_id']
+        ref = queued_json_payload['repo_ref']
         if ref not in pdf_details_dict:
             pdf_details_dict[ref] = {}
-        pdf_details_dict[ReferenceError]['PDF_creator'] = MY_NAME
+        pdf_details_dict[ref]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
         pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
+        AppSettings.door43_s3_handler().put_file_contents(pdf_details_key)
  
     deployed = True
     update_project_file(final_build_log, our_temp_dir)

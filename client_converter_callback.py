@@ -135,11 +135,7 @@ class ClientConverterCallback:
 
             # Upload all files to the cdn_bucket with the key of <user>/<repo_name>/<commit> of the repo
             # This is required for the print function to work
-            if debug_mode_flag:
-                os.makedirs('/site', exist_ok=True)
-                shutil.copytree(unzip_dirpath, '/site')
-            else:
-                self.upload_converted_files_to_CDN(upload_key, unzip_dirpath)
+            self.upload_converted_files_to_CDN(upload_key, unzip_dirpath)
         else:
             unzip_dirpath = None # So we have something to return (fail later -- is that an advantage?)
 
