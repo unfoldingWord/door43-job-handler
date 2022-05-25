@@ -13,14 +13,16 @@ import tempfile
 import json
 import hashlib
 import shutil
+import logging
+import traceback
+import requests
+
+from boto3 import Session
+from watchtower import CloudWatchLogHandler
 from datetime import datetime, timedelta
 from time import time, sleep
-import traceback
 from zipfile import BadZipFile
 from urllib.error import HTTPError
-
-# Library (PyPI) imports
-import requests
 from rq import get_current_job, Queue
 from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
@@ -1130,9 +1132,6 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             AppSettings.logger.critical(f"{prefixed_our_name} webhook threw an exception while processing:\n{queued_json_payload}\ngetting exception:\n{e}: {traceback.format_exc()}")
             AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
             # Now attempt to log it to an additional, separate FAILED log
-            import logging
-            from boto3 import Session
-            from watchtower import CloudWatchLogHandler
             logger2 = logging.getLogger(prefixed_our_name)
             test_mode_flag = os.getenv('TEST_MODE', '')
             travis_flag = os.getenv('TRAVIS_BRANCH', '')
