@@ -7,7 +7,7 @@
 #       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
 # Python imports
-from typing import Dict, List, Tuple, Any, Optional, Union
+from typing import Dict, Any, Optional
 import os
 import tempfile
 import json
