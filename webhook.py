@@ -7,7 +7,7 @@
 #       job() function (at bottom here) is executed by rq package when there is an available entry in the named queue.
 
 # Python imports
-from typing import Dict, List, Tuple, Any, Optional, Union
+from typing import Dict, Any, Optional, Tuple
 import os
 import tempfile
 import json
@@ -28,14 +28,13 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name # gogs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name, ENQUEUE_NAME # gogs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
 from app_settings.app_settings import AppSettings
-
 
 
 OUR_NAME = 'Door43_job_handler'
@@ -186,7 +185,7 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
             # We do less tries for this condition (with shorter waits also)
             AppSettings.logger.error(f"Try {try_number}: Unable to download repo from {repo_zip_url}: {e}")
             if try_number < MAX_TRIES-1:
-                AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
+                AppSettings.logger.info("  Waiting a few seconds before retrying…")
                 sleep(SECONDS_BETWEEN_TRIES-1) # Try again after a few seconds
                 try_number += 1
             else:
@@ -195,11 +194,11 @@ def download_and_unzip_repo(base_temp_dir_name:str, commit_url:str, repo_dir:str
         except BadZipFile as e: # I suspect a race condition within Gitea ???
             AppSettings.logger.error(f"Try {try_number}: Got bad zip file when downloading repo from {repo_zip_url}: {e}")
             if try_number < MAX_TRIES:
-                AppSettings.logger.info(f"  Waiting a few seconds before retrying…")
+                AppSettings.logger.info("  Waiting a few seconds before retrying…")
                 sleep(SECONDS_BETWEEN_TRIES) # Try again after a few seconds
                 try_number += 1
             else:
-                raise BadZipFile(f"Unable to get a good zip file from {repo_zip_url} after {try_number} tries")
+                raise BadZipFile(f"Unable to get a good zip file from {repo_zip_url} after {try_number} tries") from e
 
     # Remove the downloaded zip file (now unzipped)
     if not prefix: # For dev- save this file longer
@@ -221,15 +220,19 @@ def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str
     # NOTE: This can happen if the repo has been renamed in DCS -- maybe a Gitea bug???
     AppSettings.logger.error(f"Unable to find expected '{repo_name.lower()}' folder inside {temp_folderpath}")
     possibleFolderpaths = []
-    for something in os.listdir(temp_folderpath):
-        somepath = os.path.join(temp_folderpath, something)
-        isDir = os.path.isdir(somepath)
-        isFile = os.path.isfile(somepath)
+    contents = os.listdir(temp_folderpath)
+    lastDir = None
+    for content in contents:
+        content_path = os.path.join(temp_folderpath, content)
+        isDir = os.path.isdir(content_path)
+        isFile = os.path.isfile(content_path)
         assert isDir or isFile
-        AppSettings.logger.warning(f"  Seems we have: '{something}' {'folder' if isDir else 'file'}")
-        if isDir: possibleFolderpaths.append( somepath )
-    if len(possibleFolderpaths) == 1:
-        AppSettings.logger.warning(f"  Assuming that '{something}' folder (only one found) is the repo folder")
+        AppSettings.logger.warning(f"  Seems we have: '{content}' {'folder' if isDir else 'file'}")
+        if isDir:
+            possibleFolderpaths.append(content_path)
+            lastDir = content
+    if len(possibleFolderpaths) == 1 and lastDir:
+        AppSettings.logger.warning(f"  Assuming that '{lastDir}' folder (only one found) is the repo folder")
         print("Returning2", possibleFolderpaths[0])
         return possibleFolderpaths[0]
     # else:
@@ -343,7 +346,7 @@ def remember_job(rj_job_dict:Dict[str,Any], rj_redis_connection) -> None:
     # NOTE: Actually this code
     except redis_exceptions.ResponseError as e:
         AppSettings.logger.critical(f"Unable to load former outstanding_jobs_dict from Redis: {e}")
-        AppSettings.logger.critical(f"Losing former outstanding_jobs_dict from Redis…")
+        AppSettings.logger.critical("Losing former outstanding_jobs_dict from Redis…")
         outstanding_jobs_dict_bytes = None # Error should self-correct
         # NOTE: Could potentially cause one forthcoming callback job to fail (coz we just deleted its job data)
     if outstanding_jobs_dict_bytes is None:
@@ -611,9 +614,8 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         repo_dir = download_repos_files_into_temp_folder(base_temp_dir_name, repo_data_url, repo_name)
     except HTTPError as e:
         if 'HTTP Error 404: Not Found' in str(e):
-            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url} at {repo_data_url if repo_data_url.endswith('.zip') else (repo_data_url.replace('commit','archive')+'.zip')}")
-        else:
-            raise e # Can't download/unzip repo files
+            raise Exception(f"Unable to find any source file for {repo_owner_username}/{repo_name} for {repo_data_url} at {repo_data_url if repo_data_url.endswith('.zip') else (repo_data_url.replace('commit','archive')+'.zip')}") from e
+        raise e # Can't download/unzip repo files
 
     # Get the resource container
     # AppSettings.logger.debug(f'Getting Resource Container…')
@@ -697,7 +699,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     # Try creating a file if there's nothing else to at least cause the page to build
     #  (This gives a more helpful error message than the standard DCS "Conversion Successful" one)
     if not num_preprocessor_files_written:
-        with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt') as f:
+        with open(os.path.join(preprocess_dir,'NothingFound.md'), 'wt', encoding='utf-8') as f:
             f.write("# NO FILES FOUND\nSorry, we couldn't find any markdown files to convert (not even README.md). Please check your manifest file.")
             num_preprocessor_files_written += 1
 
@@ -1118,8 +1120,8 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     abort_duplicate_flag, job_descriptive_name = check_for_forthcoming_pushes_in_queue(queued_json_payload, our_queue)
     if not abort_duplicate_flag:
         # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
-        stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.webhook.queue.length.current', len_our_queue)
-        AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.webhook.queue.length.current' to {len_our_queue}")
+        stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.{ENQUEUE_NAME}.queue.length.current', len_our_queue)
+        AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.{ENQUEUE_NAME}.queue.length.current' to {len_our_queue}")
 
         #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
         #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
