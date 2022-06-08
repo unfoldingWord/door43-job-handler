@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 from rq_settings import prefix, debug_mode_flag
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from general_tools.file_utils import write_file, remove_tree
 
 
@@ -30,7 +30,7 @@ class ClientLinterCallback:
         """
         w = f'({len(warnings):,})' if warnings and len(warnings)>10 else str(warnings)
         e = f'({len(errors):,})' if errors and len(errors)>10 else str(errors)
-        AppSettings.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e})…")
+        dcs_url.logger.debug(f"ClientLinterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e})…")
         self.job_dict = job_dict
         self.identifier = identifier
         self.success = success
@@ -46,10 +46,10 @@ class ClientLinterCallback:
         self.job = None
 
     def do_post_processing(self) -> Dict[str,Any]:
-        AppSettings.logger.debug(f"ClientLinterCallback.do_post_processing()…")
+        dcs_url.logger.debug(f"ClientLinterCallback.do_post_processing()…")
         if not self.identifier:
             error = 'No identifier found'
-            AppSettings.logger.error(error)
+            dcs_url.logger.error(error)
             raise Exception(error)
 
         # if not self.s3_results_key:
@@ -67,7 +67,7 @@ class ClientLinterCallback:
             #                  format(part_id, part_count, book))
             # s3__master_results_key = '/'.join(self.s3_results_key.split('/')[:-1])
         else:
-            AppSettings.logger.debug('Single project')
+            dcs_url.logger.debug('Single project')
             # NOTE: Disabled 4Mar2019 coz unused
             # s3__master_results_key = self.s3_results_key
 
@@ -84,9 +84,9 @@ class ClientLinterCallback:
         if not self.success:
             msg = "Linter failed for identifier: " + self.identifier
             build_log['warnings'].append(msg)
-            AppSettings.logger.error(msg)
+            dcs_url.logger.error(msg)
         else:
-            AppSettings.logger.debug(f"Linter {self.identifier} had success with"
+            dcs_url.logger.debug(f"Linter {self.identifier} had success with"
                                         f" {len(self.warnings)} warnings: {', '.join(self.warnings[:5])} …")
 
         has_warnings = len(build_log['warnings']) > 0
@@ -110,7 +110,7 @@ class ClientLinterCallback:
         #     AppSettings.logger.debug(f"Temp folder '{self.temp_dir}' has been left on disk for debugging!")
         # else:
         #     remove_tree(self.temp_dir)  # cleanup
-        AppSettings.db_close()
+        dcs_url.db_close()
         return build_log
     # end of do_post_processing()
 # end of ClientLinterCallback class

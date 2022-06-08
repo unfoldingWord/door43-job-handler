@@ -9,7 +9,7 @@ from typing import Dict, List, Set, Any, Optional, Union
 from door43_tools.td_language import TdLanguage
 from door43_tools.bible_books import BOOK_NAMES
 from general_tools.file_utils import load_json_object, load_yaml_object, read_file
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 
 
@@ -34,7 +34,7 @@ class Language:
         elif 'id' in self.language and self.language['id']:
             return self.language['id'].lower()
         else:
-            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'en' identifier")
+            dcs_url.logger.warning(f"Language '{self.language}' is assuming 'en' identifier")
             return 'en'
 
 
@@ -45,7 +45,7 @@ class Language:
         if 'dir'in self.language:
             return self.language['dir']
         else:
-            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'ltr' direction")
+            dcs_url.logger.warning(f"Language '{self.language}' is assuming 'ltr' direction")
             return 'ltr'
 
 
@@ -56,7 +56,7 @@ class Language:
         elif 'name'in self.language:
             return self.language['name']
         else:
-            AppSettings.logger.warning(f"Language '{self.language}' is assuming 'English' title")
+            dcs_url.logger.warning(f"Language '{self.language}' is assuming 'English' title")
             return 'English'
 # end of Language class
 
@@ -174,7 +174,7 @@ class RC:
         :param string repo_name:
         :param dict manifest:
         """
-        AppSettings.logger.debug(f"RC( dir='{directory}', rn='{repo_name}', man={manifest} )…")
+        dcs_url.logger.debug(f"RC( dir='{directory}', rn='{repo_name}', man={manifest} )…")
         self._dir = directory
         if directory is not None: assert os.path.isdir(directory)
         self._manifest = manifest
@@ -193,7 +193,7 @@ class RC:
 
 
     def get_manifest_from_dir(self) -> Dict[str,Any]:
-        AppSettings.logger.info(f"get_manifest_from_dir() with {self.path} …")
+        dcs_url.logger.info(f"get_manifest_from_dir() with {self.path} …")
         manifest = None
         self.loadeded_manifest_file = False
         if not self.path or not os.path.isdir(self.path):
@@ -202,7 +202,7 @@ class RC:
             manifest = load_yaml_object(os.path.join(self.path, 'manifest.yaml'))
         except (ParserError, ScannerError) as e:
             err_msg = f"Badly formed 'manifest.yaml' in {self.repo_name}: {e}"
-            AppSettings.logger.error(err_msg)
+            dcs_url.logger.error(err_msg)
             self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
@@ -211,7 +211,7 @@ class RC:
             manifest = load_json_object(os.path.join(self.path, 'manifest.json'))
         except JSONDecodeError as e:
                 err_msg = f"Badly formed 'manifest.json' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
@@ -220,7 +220,7 @@ class RC:
             manifest = load_json_object(os.path.join(self.path, 'package.json'))
         except JSONDecodeError as e:
                 err_msg = f"Badly formed 'package.json' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
@@ -229,7 +229,7 @@ class RC:
             manifest = load_json_object(os.path.join(self.path, 'project.json'))
         except JSONDecodeError as e:
                 err_msg = f"Badly formed 'project.json' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
@@ -238,7 +238,7 @@ class RC:
             manifest = load_json_object(os.path.join(self.path, 'meta.json'))
         except JSONDecodeError as e:
                 err_msg = f"Badly formed 'meta.json' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         if manifest:
             self.loadeded_manifest_file = True
@@ -451,7 +451,7 @@ class RC:
                 p.config_yaml = load_yaml_object(file_path)
             except (ParserError, ScannerError) as e:
                 err_msg = f"Badly formed 'config.yaml' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         return p.config_yaml
 
@@ -466,7 +466,7 @@ class RC:
                 p.toc_yaml = load_yaml_object(file_path)
             except (ParserError, ScannerError) as e:
                 err_msg = f"Badly formed 'toc.yaml' in {self.repo_name}: {e}"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.error_messages.add(err_msg)
         return p.toc_yaml
 # end of class RC
@@ -511,7 +511,7 @@ class Resource:
             return self.rc.manifest['format']
         elif self.rc.usfm_files(): # e.g., a plain USFM bundle (with no manifest, etc.)
             return 'text/usfm'
-        AppSettings.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
+        dcs_url.logger.critical(f"Returning Resource format=None{' for '+self.identifier if self.identifier else ''}.")
         return None
     # end of Resource.format() property
 
@@ -531,7 +531,7 @@ class Resource:
                 'text/tsv': 'tsv',
             }.get(self.format, 'txt')
         if not self.format and self.identifier=='bible':
-            AppSettings.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
+            dcs_url.logger.debug(f"Forcing file_ext='usfm' from identifier='{self.identifier}'")
             result = 'usfm'
         # AppSettings.logger.debug(f"Returning Resource file_ext='{result}' from format={self.format} for identifier={self.identifier}")
         return result
@@ -577,7 +577,7 @@ class Resource:
         elif 'slug' in self.resource and self.resource['slug']:
             # AppSettings.logger.debug(f"Returning Resource identifier='{self.resource['slug'].lower()}' from self.resource['slug']")
             return self.resource['slug'].lower()
-        AppSettings.logger.critical(f"Returning Resource identifier=None.")
+        dcs_url.logger.critical(f"Returning Resource identifier=None.")
         return None
     # end of Resource.identifier() property
 
@@ -629,20 +629,20 @@ class Resource:
             issued_result = self.resource.get('issued')
             if isinstance(issued_result, str):
                 return issued_result
-            AppSettings.logger.error(f"RC issued={issued_result!r}")
+            dcs_url.logger.error(f"RC issued={issued_result!r}")
             if isinstance(issued_result, (date, datetime)):
                 return issued_result.strftime('%Y-%m-%d')
-            AppSettings.logger.critical(f"RC issued={issued_result!r}")
+            dcs_url.logger.critical(f"RC issued={issued_result!r}")
         elif 'pub_date' in self.resource.get('status', {}):
             issued_pub_date = self.resource['status']['pub_date']
             if isinstance(issued_pub_date, str):
                 return issued_pub_date
-            AppSettings.logger.error(f"RC issued pub_date={issued_pub_date!r}")
+            dcs_url.logger.error(f"RC issued pub_date={issued_pub_date!r}")
             if isinstance(issued_result, (date, datetime)):
                 return issued_pub_date.strftime('%Y-%m-%d')
-            AppSettings.logger.critical(f"RC issued pub_date={issued_pub_date!r}")
+            dcs_url.logger.critical(f"RC issued pub_date={issued_pub_date!r}")
         else:
-            AppSettings.logger.debug("RC has no 'issued' date available")
+            dcs_url.logger.debug("RC has no 'issued' date available")
             return datetime.utcnow().strftime('%Y-%m-%d')
 
 
@@ -652,12 +652,12 @@ class Resource:
         if 'modified' in self.resource and self.resource['modified']:
             modified_result = self.resource.get('modified')
             if isinstance(modified_result, str): return modified_result
-            AppSettings.logger.error(f"RC modified={modified_result!r}")
+            dcs_url.logger.error(f"RC modified={modified_result!r}")
             if isinstance(modified_result, (date, datetime)):
                 return modified_result.strftime('%Y-%m-%d')
-            AppSettings.logger.critical(f"RC modified={modified_result!r}")
+            dcs_url.logger.critical(f"RC modified={modified_result!r}")
         else:
-            AppSettings.logger.debug("RC has no 'modified' date available")
+            dcs_url.logger.debug("RC has no 'modified' date available")
             return datetime.utcnow().strftime('%Y-%m-%d')
 
 
@@ -681,7 +681,7 @@ class Resource:
             elif 'target_language' in self.rc.manifest and self.rc.manifest['target_language']:
                 self._language = Language(self.rc, self.rc.manifest['target_language'])
             else:
-                AppSettings.logger.warning(f"Resource '{self.title}' is assuming 'English' language")
+                dcs_url.logger.warning(f"Resource '{self.title}' is assuming 'English' language")
                 # Always assume English by default
                 self._language = Language(self.rc, {
                     'identifier': 'en',
@@ -749,7 +749,7 @@ def get_manifest_from_repo_name(repo_name:str) -> Dict[str,Any]:
     """
     If no manifest file was given, try dissecting the repo name.
     """
-    AppSettings.logger.warning(f"Seems no manifest so getting details from repo name '{repo_name}'…")
+    dcs_url.logger.warning(f"Seems no manifest so getting details from repo name '{repo_name}'…")
     manifest:Dict[str,Any] = {
         'dublin_core': {},
     }
@@ -773,9 +773,9 @@ def get_manifest_from_repo_name(repo_name:str) -> Dict[str,Any]:
                 lang = TdLanguage.get_language(part)
                 if lang:
                     if 'language' in manifest['dublin_core']:
-                        AppSettings.logger.warning(f"Ignoring '{part}' potential language in repo name '{repo_name}' coz already have '{manifest['dublin_core']['language']}'")
+                        dcs_url.logger.warning(f"Ignoring '{part}' potential language in repo name '{repo_name}' coz already have '{manifest['dublin_core']['language']}'")
                     else: # we'll take this to be the language
-                        AppSettings.logger.info(f"Taking '{part}' to be the language code in repo name '{repo_name}'")
+                        dcs_url.logger.info(f"Taking '{part}' to be the language code in repo name '{repo_name}'")
                         manifest['dublin_core']['language'] = {
                             'identifier': lang.lc,
                             'title': lang.ln,

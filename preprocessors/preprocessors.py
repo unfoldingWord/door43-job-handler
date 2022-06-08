@@ -12,7 +12,7 @@ import unicodedata
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from door43_tools.bible_books import BOOK_NUMBERS, BOOK_NAMES, BOOK_CHAPTER_VERSES
 from general_tools.file_utils import write_file, read_file, make_dir, unzip, remove_file, remove_tree
 from general_tools.url_utils import get_url, download_file
@@ -27,32 +27,32 @@ USFM_BOOK_IDENTIFIERS:Set[str] = {x.upper() for x in BOOK_NAMES.keys()}
 def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
                                         repo_dir:str, output_dir:str) -> Tuple[int, List[str]]:
     if repo_subject == 'Open_Bible_Stories':
-        AppSettings.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using ObsPreprocessor for '{repo_subject}'…")
         preprocessor = ObsPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('OBS_Study_Notes','OBS_Study_Questions',
                             'OBS_Translation_Notes','OBS_Translation_Questions'):
-        AppSettings.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using ObsNotesPreprocessor for '{repo_subject}'…")
         preprocessor = ObsNotesPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Bible','Aligned_Bible', 'Greek_New_Testament','Hebrew_Old_Testament'):
-        AppSettings.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using BiblePreprocessor for '{repo_subject}'…")
         preprocessor = BiblePreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Academy':
-        AppSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
         preprocessor = TaPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Questions':
-        AppSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
         preprocessor = TqPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
-        AppSettings.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using TwPreprocessor for '{repo_subject}'…")
         preprocessor = TwPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Translation_Notes', 'TSV_Translation_Notes'):
-        AppSettings.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using TnPreprocessor for '{repo_subject}'…")
         preprocessor = TnPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject in ('Greek_Lexicon','Hebrew-Aramaic_Lexicon'):
-        AppSettings.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
+        dcs_url.logger.info(f"do_preprocess: using LexiconPreprocessor for '{repo_subject}'…")
         preprocessor = LexiconPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     else:
-        AppSettings.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
+        dcs_url.logger.warning(f"do_preprocess: using generic Preprocessor for '{repo_subject}' resource: {rc.resource.identifier} …")
         preprocessor = Preprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
 
     # So now lets actually run our chosen preprocessor and do the work
@@ -64,7 +64,7 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
         new_warnings_list.append("…………………………")
         new_warnings_list.extend(warnings_list[-9:])
         msg = f"Preprocessor warnings reduced from {len(warnings_list):,} to {len(new_warnings_list):,}"
-        AppSettings.logger.debug(f"Linter {msg}")
+        dcs_url.logger.debug(f"Linter {msg}")
         new_warnings_list.append(msg)
         warnings_list = new_warnings_list
 
@@ -117,13 +117,13 @@ class Preprocessor:
         Case #2: It's a directory of files, so we copy them over to the output directory
         Case #3: The project path is multiple chapters, so we piece them together
         """
-        AppSettings.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"Default preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
 
             if os.path.isfile(project_path):
                 # Case #1: Project path is a file, then we copy the file over to the output dir
-                AppSettings.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}' …")
+                dcs_url.logger.debug(f"Default preprocessor case #1: Copying single file for '{project.identifier}' …")
                 if project.identifier.lower() in BOOK_NUMBERS:
                     filename = f'{BOOK_NUMBERS[project.identifier.lower()]}-{project.identifier.upper()}.{self.rc.resource.file_ext}'
                 else:
@@ -132,7 +132,7 @@ class Preprocessor:
                 self.num_files_written += 1
             else:
                 # Case #2: It's a directory of files, so we copy them over to the output directory
-                AppSettings.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
+                dcs_url.logger.debug(f"Default preprocessor case #2: Copying files for '{project.identifier}' …")
                 files = glob(os.path.join(project_path, f'*.{self.rc.resource.file_ext}'))
                 if files:
                     for file_path in files:
@@ -143,9 +143,9 @@ class Preprocessor:
                             self.num_files_written += 1
                 else:
                     # Case #3: The project path is multiple chapters, so we piece them together
-                    AppSettings.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
+                    dcs_url.logger.debug(f"Default preprocessor case #3: piecing together chapters for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
-                    AppSettings.logger.debug(f"Merging chapters in '{project.identifier}' …")
+                    dcs_url.logger.debug(f"Merging chapters in '{project.identifier}' …")
                     if chapters:
                         text = ''
                         for chapter in chapters:
@@ -160,11 +160,11 @@ class Preprocessor:
                         write_file(os.path.join(self.output_dir, filename), text)
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"Default preprocessor didn't write any files")
+            dcs_url.logger.error(f"Default preprocessor didn't write any files")
             self.errors.append("No source files discovered")
         else:
-            AppSettings.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.errors)} errors and {len(self.warnings)} warnings")
-        AppSettings.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            dcs_url.logger.debug(f"Default preprocessor wrote {self.num_files_written} files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+        dcs_url.logger.debug(f"Default preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of Preprocessor.run()
 
@@ -363,9 +363,9 @@ class ObsPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"Obs preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
+            dcs_url.logger.debug(f"OBS preprocessor: Copying markdown files for '{project.identifier}' …")
             project_path = os.path.join(self.source_dir, project.path)
             # Copy all the markdown files in the project root directory to the output directory
             for file_path in glob(os.path.join(project_path, '*.md')):
@@ -395,11 +395,11 @@ class ObsPreprocessor(Preprocessor):
                         copy(f, os.path.join(self.output_dir, f'{chapter}.md'))
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"OBS preprocessor didn't write any markdown files")
+            dcs_url.logger.error(f"OBS preprocessor didn't write any markdown files")
             self.errors.append("No OBS source files discovered")
         else:
-            AppSettings.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
-        AppSettings.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            dcs_url.logger.debug(f"OBS preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+        dcs_url.logger.debug(f"OBS preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of ObsPreprocessor run()
 # end of class ObsPreprocessor
@@ -425,14 +425,14 @@ class ObsNotesPreprocessor(Preprocessor):
 
         Returns a True/False success flag
         """
-        AppSettings.logger.info(f"OBSNotes preprocessorpreload_original_text_archive({name}, {zip_url})…")
+        dcs_url.logger.info(f"OBSNotes preprocessorpreload_original_text_archive({name}, {zip_url})…")
         zip_path = os.path.join(self.preload_dir, f'{name}.zip')
         try:
             download_file(zip_url, zip_path)
             unzip(zip_path, self.preload_dir)
             remove_file(zip_path)
         except Exception as e:
-            AppSettings.logger.error(f"Unable to download {zip_url}: {e}")
+            dcs_url.logger.error(f"Unable to download {zip_url}: {e}")
             self.warnings.append(f"Unable to download '{name}' from {zip_url}")
             return False
 
@@ -462,7 +462,7 @@ class ObsNotesPreprocessor(Preprocessor):
 
         Sets self.need_to_check_quotes to True if successful.
         """
-        AppSettings.logger.debug("OBSNotes preprocessor get_quoted_version()…")
+        dcs_url.logger.debug("OBSNotes preprocessor get_quoted_version()…")
         rels = self.rc.resource.relation
         if isinstance(rels, list):
             for rel in rels:
@@ -479,7 +479,7 @@ class ObsNotesPreprocessor(Preprocessor):
                         self.messages.append(f"Note: Using {url} for checking OBS quotes against.")
                         self.need_to_check_quotes = True
         elif rels:
-            AppSettings.logger.debug(f"OBS notes preprocessor get_quoted_version expected a list not {rels!r}")
+            dcs_url.logger.debug(f"OBS notes preprocessor get_quoted_version expected a list not {rels!r}")
 
         if not self.need_to_check_quotes:
             self.warnings.append("Unable to find/load original language (OBS) sources for comparing snippets against.")
@@ -487,14 +487,14 @@ class ObsNotesPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"OBSNotes preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
 
         # print("repo_name", self.rc.repo_name)
         if self.rc.repo_name.endswith('-tn') or self.rc.repo_name.endswith('-sn'): # Don't do this for 'Questions' projects
             self.get_quoted_version() # Sets self.need_to_check_quotes
 
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
+            dcs_url.logger.debug(f"OBSNotes preprocessor: Copying folders and files for project '{project.identifier}' …")
             content_folder_path = os.path.join(self.source_dir, 'content/')
             if not os.path.isdir(content_folder_path):
                 self.warnings.append(f"Unable to find 'contents/' folder for '{project.identifier}'")
@@ -538,7 +538,7 @@ class ObsNotesPreprocessor(Preprocessor):
                     rc_count = markdown.count('rc://')
                     if rc_count:
                         msg = f"Story number {story_number_string} still has {rc_count} 'rc://' links!"
-                        AppSettings.logger.error(msg)
+                        dcs_url.logger.error(msg)
                         self.warnings.append(msg)
                     write_file(os.path.join(self.output_dir,f'{story_number_string}.md'), markdown)
                     self.num_files_written += 1
@@ -551,18 +551,18 @@ class ObsNotesPreprocessor(Preprocessor):
                     write_file(toc_filepath,toc_contents)
 
         if self.num_files_written == 0:
-            AppSettings.logger.error("OBSNotes preprocessor didn't write any markdown files")
+            dcs_url.logger.error("OBSNotes preprocessor didn't write any markdown files")
             self.errors.append("No OBSNotes source files discovered")
         else:
-            AppSettings.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"OBSNotes preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Delete temp folder
         if prefix and debug_mode_flag:
-            AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
+            dcs_url.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
         else:
             remove_tree(self.preload_dir)
 
-        AppSettings.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        dcs_url.logger.debug(f"OBSNotes preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of ObsNotesPreprocessor run()
 
@@ -634,12 +634,12 @@ class ObsNotesPreprocessor(Preprocessor):
                     if '…' in quote:
                         quoteBits = quote.split('…')
                         if ' …' in quote or '… ' in quote:
-                            AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quote}'")
+                            dcs_url.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quote}'")
                             self.warnings.append(f"Unexpected space(s) beside ellipse character in \"{qid}\": '{quote}'")
                     elif '...' in quote: # Yes, we still actually allow this
                         quoteBits = quote.split('...')
                         if ' ...' in quote or '... ' in quote:
-                            AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quote}'")
+                            dcs_url.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quote}'")
                             self.warnings.append(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quote}'")
                     else:
                         quoteBits = None
@@ -712,7 +712,7 @@ class BiblePreprocessor(Preprocessor):
                 text = text[:ixW] + adjusted_field + text[ixEnd+len(marker)+2:]
                 # AppSettings.logger.debug(f"Adjusted line to: '{text}'")
             else:
-                AppSettings.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
+                dcs_url.logger.error(f"Missing \\{marker}* in {B} {C}:{V} line: '{line}'")
                 self.errors.append(f"{B} {C}:{V} - Missing \\{marker}* closure")
                 text = text.replace(f'\\{marker} ', '', 1) # Attempt to limp on
             ixW = text.find(f'\\{marker} ', ixW) # Might be another one
@@ -747,7 +747,7 @@ class BiblePreprocessor(Preprocessor):
         B = main_filename_part[-3:].upper() # Extract book abbreviation from somepath/nn-BBB.usfm
         if B not in USFM_BOOK_IDENTIFIERS:
             error_msg = f"Unable to determine book code -- got {B!r}"
-            AppSettings.logger.critical(error_msg)
+            dcs_url.logger.critical(error_msg)
             self.errors.append(error_msg)
 
         has_USFM3_line = '\\usfm 3' in file_contents
@@ -758,7 +758,7 @@ class BiblePreprocessor(Preprocessor):
         for conflict_chars in ('<<<<<<<', '>>>>>>>', '======='): # 7-chars in each one
             if conflict_chars in file_contents:
                 error_msg = f"{B} - There appears to be {file_contents.count(conflict_chars)} unresolved conflicts in USFM file (See '{conflict_chars}')"
-                AppSettings.logger.critical(error_msg)
+                dcs_url.logger.critical(error_msg)
                 self.errors.append(error_msg)
                 break # Only want one error per file
 
@@ -767,7 +767,7 @@ class BiblePreprocessor(Preprocessor):
             if illegal_chars in file_contents:
                 count = file_contents.count( illegal_chars )
                 error_msg = f"{B} - {'One' if count==1 else count} unexpected '{illegal_chars}' in USFM file"
-                AppSettings.logger.error(error_msg)
+                dcs_url.logger.error(error_msg)
                 self.errors.append(error_msg)
 
         # Check unusual characters -- gives warnings
@@ -778,7 +778,7 @@ class BiblePreprocessor(Preprocessor):
             if unusual_chars in file_contents:
                 count = file_contents.count( unusual_chars )
                 error_msg = f"{B} - {'One' if count==1 else count} unusual '{unusual_chars.replace(' ','␣')}' in USFM file"
-                AppSettings.logger.error(error_msg)
+                dcs_url.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
         # Check USFM pairs
@@ -819,12 +819,12 @@ class BiblePreprocessor(Preprocessor):
             cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
             if cnt1 != cnt2:
                 error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
-                AppSettings.logger.error(error_msg)
+                dcs_url.logger.error(error_msg)
                 self.errors.append(error_msg)
             cnt = file_contents.count(f'{opener}{closer}') + file_contents.count(f'{opener} {closer}')
             if cnt:
                 error_msg = f"{B} - {'One' if cnt==1 else cnt} empty '{opener}{closer}' field{'' if cnt==1 else 's'}"
-                AppSettings.logger.error(error_msg)
+                dcs_url.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
         # Find and warn about (useless) paragraph formatting before a section break, etc.
@@ -886,7 +886,7 @@ class BiblePreprocessor(Preprocessor):
             cnt1, cnt2 = file_contents.count(opener), file_contents.count(closer)
             if cnt1 != cnt2:
                 error_msg = f"{B} - Mismatched '{opener}' ({cnt1:,}) and '{closer}' ({cnt2:,}) field counts"
-                AppSettings.logger.error(error_msg)
+                dcs_url.logger.error(error_msg)
                 self.warnings.append(error_msg)
 
         for pmarker in ('p','m','q','q1','q2'):
@@ -901,7 +901,7 @@ class BiblePreprocessor(Preprocessor):
 
         if '\\s5' in file_contents: # These are deprecated
             warning_msg = f"{B} - \\s5 fields should be coded as \\ts\\* milestones"
-            AppSettings.logger.warning(warning_msg)
+            dcs_url.logger.warning(warning_msg)
             self.warnings.append(warning_msg)
 
         C = V = '0'
@@ -943,12 +943,12 @@ class BiblePreprocessor(Preprocessor):
                     if ix == -1:
                         ix = adjusted_line.find('\\k-s') # Without expected trailing space
                     if ix != -1:
-                        AppSettings.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                        dcs_url.logger.error(f"Non-closed \\k-s milestone in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                         self.warnings.append(f"{B} {C}:{V} - Non-closed \\k-s milestone")
                         if '\\w ' in line:
                             ixW = adjusted_line.find('\\w ', ix+4) # See if \\w field follows \\k-s???
                             if ixW != -1: # Yip, there's word(s) on the end
-                                AppSettings.logger.debug(f"With {ix} {ixW} at {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                                dcs_url.logger.debug(f"With {ix} {ixW} at {B} {C}:{V} adjusted line: '{adjusted_line}'")
                                 assert ix < ixW # This code expects the \\k-s to be before the \\w
                                 adjusted_line = adjusted_line[:ix] + adjusted_line[ixW:]
                             else:
@@ -956,10 +956,10 @@ class BiblePreprocessor(Preprocessor):
                         else:
                             adjusted_line = adjusted_line[:ix] # Remove k-s field right up to end of line
                 if '\\k-s' in adjusted_line:
-                    AppSettings.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    dcs_url.logger.error(f"Remaining \\k-s in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-s field")
                 if '\\k-e' in adjusted_line:
-                    AppSettings.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    dcs_url.logger.error(f"Remaining \\k-e in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\k-e field")
 
                 # Find and save any RC links (from inside \w fields)
@@ -977,7 +977,7 @@ class BiblePreprocessor(Preprocessor):
                 for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
                                          '\\+w ', '\\+w\t', '\\+w\n', ):
                     if illegal_sequence in adjusted_line:
-                        AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
+                        dcs_url.logger.error(f"Missing \\w* in {B} {C}:{V} line: '{line}'")
                         self.errors.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                 if adjusted_line != line: # it's non-blank and it changed
@@ -1064,7 +1064,7 @@ class BiblePreprocessor(Preprocessor):
                 assert '\\k-e' not in adjusted_line
                 # HANDLE FAULTY USFM IN UGNT
                 if '\\w ' in adjusted_line and adjusted_line.endswith('\\w'):
-                    AppSettings.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
+                    dcs_url.logger.warning(f"Attempting to fix \\w error in {B} {C}:{V} line: '{line}'")
                     adjusted_line += '*' # Try a change to a closing marker
 
                 # Remove \w fields (just leaving the word)
@@ -1075,7 +1075,7 @@ class BiblePreprocessor(Preprocessor):
                 for illegal_sequence in ('\\w ', '\\w\t', '\\w\n',
                                          '\\+w ', '\\+w\t', '\\+w\n', ):
                     if illegal_sequence in adjusted_line:
-                        AppSettings.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
+                        dcs_url.logger.error(f"Unclosed '{illegal_sequence}' in {B} {C}:{V} line: '{line}'")
                         self.warnings.append(f"{B} {C}:{V} - Unprocessed '{illegal_sequence}' in line")
                         adjusted_line = adjusted_line.replace(illegal_sequence, '') # Attempt to limp on
                 # assert '\\w*' not in adjusted_line
@@ -1086,7 +1086,7 @@ class BiblePreprocessor(Preprocessor):
                     if ix != -1:
                         adjusted_line = adjusted_line[:ix] # Remove zaln-s field right up to end of line
                 if '\\z' in adjusted_line:
-                    AppSettings.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
+                    dcs_url.logger.error(f"Remaining \\z in {B} {C}:{V} adjusted line: '{adjusted_line}'")
                     self.warnings.append(f"{B} {C}:{V} - Remaining \\z field")
                 if not adjusted_line: # was probably just a \zaln-s milestone with nothing else
                     continue
@@ -1123,7 +1123,7 @@ class BiblePreprocessor(Preprocessor):
         # Write the modified USFM
         if prefix and debug_mode_flag:
             if '\\w ' in adjusted_file_contents or '\\w\t' in adjusted_file_contents or '\\w\n' in adjusted_file_contents:
-                AppSettings.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
+                dcs_url.logger.debug(f"Writing {file_name}: {adjusted_file_contents}")
             assert '\\w ' not in adjusted_file_contents and '\\w\t' not in adjusted_file_contents and '\\w\n' not in adjusted_file_contents # Raise error
         with open(file_name, 'wt', encoding='utf-8') as out_file:
             out_file.write(adjusted_file_contents)
@@ -1154,25 +1154,25 @@ class BiblePreprocessor(Preprocessor):
         Process the RC links that have been stored in self.RC_links.
         """
         num_links = len(self.RC_links)
-        AppSettings.logger.info(f"process_RC_links for {num_links:,} links…")
+        dcs_url.logger.info(f"process_RC_links for {num_links:,} links…")
         done_type_error = False
         cached_links = set()
         handled_count = 0
         for B,C,V, link_type,link_text in self.RC_links:
             handled_count += 1
             if handled_count % 1_000 == 0:
-                AppSettings.logger.info(f"  Handled {handled_count:,} links = {handled_count*100 // num_links}% (Got {len(cached_links):,} in cache)")
+                dcs_url.logger.info(f"  Handled {handled_count:,} links = {handled_count*100 // num_links}% (Got {len(cached_links):,} in cache)")
             # AppSettings.logger.debug(f"Got {B} {C}:{V} {link_type}={link_text}")
             if not link_type == 'tW':
                 if not done_type_error:
                     err_msg = f"{B} {C}:{V} - Unexpected '{link_type}' error '{link_text}'"
-                    AppSettings.logger.error(err_msg)
+                    dcs_url.logger.error(err_msg)
                     self.warnings.append(err_msg)
                     done_type_error = True
                     continue
             if not link_text.startswith('rc://*/tw/dict/bible/'):
                 err_msg = f"{B} {C}:{V} - Bad {link_type} link format: '{link_text}'"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.errors.append(err_msg)
                 continue
             link_word = link_text[21:]
@@ -1188,7 +1188,7 @@ class BiblePreprocessor(Preprocessor):
             except HTTPError:
                 cached_links.add(link_word) # So we only get one error per link_word
                 err_msg = f"{B} {C}:{V} - Missing {link_type} file for '{link_word}' expected at {link_url[8:]}" # Skip https:// part
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.warnings.append(err_msg)
                 continue
             # print(url, repr(file_start_byte))
@@ -1199,7 +1199,7 @@ class BiblePreprocessor(Preprocessor):
             else:
                 cached_links.add(link_word) # So we only get one error per link_word
                 err_msg = f"{B} {C}:{V} - Possible bad {link_type} file: '{link_text}'"
-                AppSettings.logger.error(err_msg)
+                dcs_url.logger.error(err_msg)
                 self.warnings.append(err_msg)
         # Not needed any more—empty the list to mark them as "processed"
         self.RC_links = []
@@ -1207,7 +1207,7 @@ class BiblePreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"Bible preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for idx, project in enumerate(self.rc.projects):
             project_path = os.path.join(self.source_dir, project.path)
             file_format = '{0}-{1}.usfm'
@@ -1224,7 +1224,7 @@ class BiblePreprocessor(Preprocessor):
                 self.num_files_written += 1
             else:
                 # Case #2: Project path is a dir with one or more USFM files, is one or more books of the Bible
-                AppSettings.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
+                dcs_url.logger.debug(f"Bible preprocessor case #2: Copying Bible files for '{project.identifier}' …")
                 usfm_files = glob(os.path.join(project_path, '*.usfm'))
                 if usfm_files:
                     for usfm_path in usfm_files:
@@ -1240,7 +1240,7 @@ class BiblePreprocessor(Preprocessor):
                         self.num_files_written += 1
                 else:
                     # Case #3: Project path is a dir with one or more chapter dirs with chunk & title files
-                    AppSettings.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
+                    dcs_url.logger.debug(f"Bible preprocessor case #3: Combining Bible chapter files for '{project.identifier}' …")
                     chapters = self.rc.chapters(project.identifier)
                     # print("chapters3:", chapters)
                     if chapters:
@@ -1297,7 +1297,7 @@ class BiblePreprocessor(Preprocessor):
                                         translated__chapter_title = re.sub(r' \d+$', '', complete_translated__chapter_title).strip()
                                         usfm += f'\\cl {translated__chapter_title}\n'
                                 if f'\\c {chapter_num}' not in first_chunk:
-                                    AppSettings.logger.error(f"Needed to add '\\c {chapter_num}' marker")
+                                    dcs_url.logger.error(f"Needed to add '\\c {chapter_num}' marker")
                                     self.errors.append(f"Needed to add '\\c {chapter_num}' marker")
                                 usfm += f'\\c {chapter_num}\n'
                                 # Following code doesn't work coz structure of HTML renderer
@@ -1332,15 +1332,15 @@ class BiblePreprocessor(Preprocessor):
                         self.book_filenames.append(filename)
                         self.num_files_written += 1
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"Bible preprocessor didn't write any usfm files")
+            dcs_url.logger.error(f"Bible preprocessor didn't write any usfm files")
             self.errors.append("No Bible source files discovered")
         else:
-            AppSettings.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"Bible preprocessor wrote {self.num_files_written} usfm files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         if self.RC_links:
             self.process_RC_links()
 
-        AppSettings.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        dcs_url.logger.debug(f"Bible preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         # AppSettings.logger.debug(f"Bible preprocessor returning {self.warnings if self.warnings else True}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of BiblePreprocessor.run()
@@ -1432,7 +1432,7 @@ class TaPreprocessor(Preprocessor):
             markdown = f"""{'#' * level} <a id="{link}"/>{self.get_title(project, link, section['title'])}\n\n"""
         except KeyError: # probably missing section title
             msg = f"Title seems missing for '{project.identifier}' level {level} '{link}'"
-            AppSettings.logger.warning(msg)
+            dcs_url.logger.warning(msg)
             self.warnings.append(msg)
             markdown = f"""{'#' * level} <a id="{link}"/>MISSING TITLE???\n\n"""
 
@@ -1471,12 +1471,12 @@ class TaPreprocessor(Preprocessor):
                         try: self.check_embedded_quotes(f"{project.identifier}/{section['title']}", subsection['title'], subsection_markdown)
                         except Exception as e:
                             msg = f"{project.identifier} {subsection} Unable to check embedded quotes: {e}"
-                            AppSettings.logger.warning(msg)
+                            dcs_url.logger.warning(msg)
                             self.warnings.append(msg)
                     markdown += subsection_markdown
             else: # why is it empty? probably user error
                 msg = f"'sections' seems empty for '{project.identifier}' toc.yaml: '{section['title']}'"
-                AppSettings.logger.warning(msg)
+                dcs_url.logger.warning(msg)
                 self.warnings.append(msg)
         return markdown
     # end of TaPreprocessor.compile_ta_section(self, project, section, level)
@@ -1488,7 +1488,7 @@ class TaPreprocessor(Preprocessor):
 
         Returns a True/False success flag
         """
-        AppSettings.logger.info(f"preload_translated_text_archive({name}, {zip_url})…")
+        dcs_url.logger.info(f"preload_translated_text_archive({name}, {zip_url})…")
 
         zip_path = os.path.join(self.preload_dir, f'{name}.zip')
         try:
@@ -1496,7 +1496,7 @@ class TaPreprocessor(Preprocessor):
             unzip(zip_path, self.preload_dir)
             remove_file(zip_path)
         except Exception as e:
-            AppSettings.logger.error(f"Unable to download {zip_url}: {e}")
+            dcs_url.logger.error(f"Unable to download {zip_url}: {e}")
             self.warnings.append(f"Unable to download '{name}' from {zip_url}")
             return False
         # AppSettings.logger.debug(f"Got {name} files: {os.listdir(self.preload_dir)}")
@@ -1513,7 +1513,7 @@ class TaPreprocessor(Preprocessor):
 
         Sets self.need_to_check_quotes to True if successful.
         """
-        AppSettings.logger.debug("tA preprocessor get_quoted_versions()…")
+        dcs_url.logger.debug("tA preprocessor get_quoted_versions()…")
 
         rels = self.rc.resource.relation
         if isinstance(rels, list):
@@ -1522,7 +1522,7 @@ class TaPreprocessor(Preprocessor):
                     if '?v=' in rel:
                         version = rel[rel.find('?v=')+3:]
                     else:
-                        AppSettings.logger.debug(f"No ULT version number specified in manifest: '{rel}'")
+                        dcs_url.logger.debug(f"No ULT version number specified in manifest: '{rel}'")
                         version = None
                     url = f"https://git.door43.org/unfoldingWord/en_ult/archive/v{version}.zip" \
                         if version else 'https://git.door43.org/unfoldingWord/en_ult/archive/master.zip'
@@ -1539,7 +1539,7 @@ class TaPreprocessor(Preprocessor):
                     if '?v=' in rel:
                         version = rel[rel.find('?v=')+3:]
                     else:
-                        AppSettings.logger.debug(f"No UST version number specified in manifest: '{rel}'")
+                        dcs_url.logger.debug(f"No UST version number specified in manifest: '{rel}'")
                         version = None
                     url = f"https://git.door43.org/unfoldingWord/en_ust/archive/v{version}.zip" \
                         if version else 'https://git.door43.org/unfoldingWord/en_ust/archive/master.zip'
@@ -1587,7 +1587,7 @@ class TaPreprocessor(Preprocessor):
                 #         self.warnings.append(f"Note: Using {url} for checking TW quotes against.{extra}")
                 #         self.need_to_check_quotes = True
         elif rels:
-            AppSettings.logger.debug(f"tA preprocessor get_quoted_versions expected a list not {rels!r}")
+            dcs_url.logger.debug(f"tA preprocessor get_quoted_versions expected a list not {rels!r}")
 
         if not self.need_to_check_quotes:
             self.warnings.append("Unable to find/load translated sources for comparing tA snippets against.")
@@ -1595,12 +1595,12 @@ class TaPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"tA preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
 
         self.get_quoted_versions() # Sets self.need_to_check_quotes
 
         for idx, project in enumerate(self.rc.projects):
-            AppSettings.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
+            dcs_url.logger.debug(f"tA preprocessor: Copying files for '{project.identifier}' …")
             self.section_container_id = 1
             toc = self.rc.toc(project.identifier)
             if project.identifier in self.manual_title_map:
@@ -1627,18 +1627,18 @@ class TaPreprocessor(Preprocessor):
             elif project.path!='./':
                 self.warnings.append(f"Possible missing config.yaml file in {project.path} folder")
         if self.num_files_written == 0:
-            AppSettings.logger.error("tA preprocessor didn't write any markdown files")
+            dcs_url.logger.error("tA preprocessor didn't write any markdown files")
             self.errors.append("No tA source files discovered")
         else:
-            AppSettings.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"tA preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Delete temp folder
         if prefix and debug_mode_flag:
-            AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
+            dcs_url.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
         else:
             remove_tree(self.preload_dir)
 
-        AppSettings.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        dcs_url.logger.debug(f"tA preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TaPreprocessor run()
 
@@ -1717,7 +1717,7 @@ class TaPreprocessor(Preprocessor):
 
         verse_text = self.get_passage(bookname,C,V, version_abbreviation)
         if not verse_text:
-            AppSettings.logger.error(f"Can't get verse text for {bookname} {C}:{V} {version_abbreviation}!")
+            dcs_url.logger.error(f"Can't get verse text for {bookname} {C}:{V} {version_abbreviation}!")
             return # nothing else we can do here
 
         if '...' in quoteField:
@@ -1727,12 +1727,12 @@ class TaPreprocessor(Preprocessor):
         if '…' in quoteField:
             quoteBits = quoteField.split('…')
             if ' …' in quoteField or '… ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quoteField}'")
+                dcs_url.logger.debug(f"Unexpected space(s) beside ellipse in \"{qid}\": '{quoteField}'")
                 self.warnings.append(f"Unexpected space(s) beside ellipse character in \"{qid}\": '{quoteField}'")
         elif '...' in quoteField: # Yes, we still actually allow this
             quoteBits = quoteField.split('...')
             if ' ...' in quoteField or '... ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quoteField}'")
+                dcs_url.logger.debug(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quoteField}'")
                 self.warnings.append(f"Unexpected space(s) beside ellipse characters in \"{qid}\": '{quoteField}'")
         else:
             quoteBits = None
@@ -1774,7 +1774,7 @@ class TaPreprocessor(Preprocessor):
         B = B.replace('1JO','1JN').replace('2JO','2JN').replace('3JO','3JN')
         try: book_number = BOOK_NUMBERS[B.lower()]
         except KeyError: # how can this happen?
-            AppSettings.logger.error(f"Unable to find book number for '{bookname} ({B}) {C}:{V}' in get_passage()")
+            dcs_url.logger.error(f"Unable to find book number for '{bookname} ({B}) {C}:{V}' in get_passage()")
             book_number = 0
 
         V1 = V2 = V
@@ -1786,7 +1786,7 @@ class TaPreprocessor(Preprocessor):
         book_path = os.path.join(self.preload_dir, f'{version_code}/{book_number}-{B}.usfm')
         # print("book_path", book_path)
         if not os.path.isfile(book_path):
-            AppSettings.logger.info(f"Non-existent {book_path}")
+            dcs_url.logger.info(f"Non-existent {book_path}")
             return None
         if self.loaded_file_path != book_path:
             # It's not cached already
@@ -1852,7 +1852,7 @@ class TaPreprocessor(Preprocessor):
                 adjusted_field = bits[0]
                 verseText = verseText[:ixW] + adjusted_field + verseText[ixEnd+3:]
             else:
-                AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} verseText: '{verseText}'")
+                dcs_url.logger.error(f"Missing \\w* in {B} {C}:{V} verseText: '{verseText}'")
                 verseText = verseText.replace('\\w ', '', 1) # Attempt to limp on
             ixW = verseText.find('\\w ', ixW+1) # Might be another one
         # print(f"Got verse text2: '{verseText}'")
@@ -1904,7 +1904,7 @@ class TaPreprocessor(Preprocessor):
 class TqPreprocessor(Preprocessor):
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"tQ preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -1912,7 +1912,7 @@ class TqPreprocessor(Preprocessor):
         }
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}' …")
+            dcs_url.logger.debug(f"tQ preprocessor: Combining chapters for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 markdown = ''
                 book = project.identifier.lower()
@@ -1955,7 +1955,7 @@ class TqPreprocessor(Preprocessor):
                                         # Can throw a ValueError if chunk is not an integer, e.g., '5&8' or contains \u00268 (ɨ)
                                         initial_string = os.path.splitext(os.path.basename(chunk_filepaths[chunk_idx+1]))[0]
                                         msg = f"{book} {chapter} had a problem handling '{initial_string}'"
-                                        AppSettings.logger.critical(msg)
+                                        dcs_url.logger.critical(msg)
                                         self.warnings.append(msg)
                                         # TODO: The following is probably not the best/right thing to do???
                                         end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
@@ -1963,7 +1963,7 @@ class TqPreprocessor(Preprocessor):
                                     try:
                                         end_verse = BOOK_CHAPTER_VERSES[book][chapter.lstrip('0')]
                                     except KeyError:
-                                        AppSettings.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
+                                        dcs_url.logger.critical(f"{book} does not normally contain chapter '{chapter}'")
                                         self.warnings.append(f"{book} does not normally contain chapter '{chapter}'")
                                         # TODO: The following is probably not the best/right thing to do???
                                         end_verse = '199'
@@ -1979,28 +1979,28 @@ class TqPreprocessor(Preprocessor):
                                 markdown += text
                         else: # no chunk files
                             msg = f"No .md chunk files found in {book} {chapter} folder"
-                            AppSettings.logger.warning(msg)
+                            dcs_url.logger.warning(msg)
                             self.warnings.append(msg)
                 else: # no chapter dirs
                     msg = f"No chapter folders found in {book} folder"
-                    AppSettings.logger.warning(msg)
+                    dcs_url.logger.warning(msg)
                     self.errors.append(msg)
                 file_path = os.path.join(self.output_dir, f'{BOOK_NUMBERS[book]}-{book.upper()}.md')
                 write_file(file_path, markdown)
                 self.num_files_written += 1
             else:
-                AppSettings.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
+                dcs_url.logger.debug(f'TqPreprocessor: extra project found: {project.identifier}')
 
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"tQ preprocessor didn't write any markdown files")
+            dcs_url.logger.error(f"tQ preprocessor didn't write any markdown files")
             self.errors.append("No tQ source files discovered")
         else:
-            AppSettings.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"tQ preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Write out TQ index.json
         output_file = os.path.join(self.output_dir, 'index.json')
         write_file(output_file, index_json)
-        AppSettings.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+        dcs_url.logger.debug(f"tQ preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TqPreprocessor run()
 # end of class TqPreprocessor
@@ -2022,7 +2022,7 @@ class TwPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"tW preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -2035,10 +2035,10 @@ class TwPreprocessor(Preprocessor):
         and '01' in dir_list and 'LICENSE.md' in dir_list and 'manifest.json' in dir_list:
             # TODO: Is the above the best way to detect these types of repos (One has .DS_Store file also)
             # Handle tW json (.txt) files containing "title" and "body" fields
-            AppSettings.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
+            dcs_url.logger.info(f"tW preprocessor moving to '01' folder (had {dir_list})…")
             assert len(self.rc.projects) == 1
             project = self.rc.projects[0]
-            AppSettings.logger.debug(f"tW preprocessor 01: Copying files for '{project.identifier}' …")
+            dcs_url.logger.debug(f"tW preprocessor 01: Copying files for '{project.identifier}' …")
             # AppSettings.logger.debug(f"tW preprocessor 01: project.path='{project.path}'")
             # Collect all the JSON MD data from the text files into dictionaries
             term_text = {}
@@ -2050,7 +2050,7 @@ class TwPreprocessor(Preprocessor):
             term_files = sorted(glob(os.path.join(self.source_dir, '01/', '*.txt')))
             for term_filepath in term_files:
                 # These .txt files actually contain JSON (which contains markdown)
-                AppSettings.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
+                dcs_url.logger.debug(f"tW preprocessor 01: processing '{term_filepath}' …")
                 term = os.path.splitext(os.path.basename(term_filepath))[0]
                 try: text = read_file(term_filepath)
                 except Exception as e:
@@ -2062,7 +2062,7 @@ class TwPreprocessor(Preprocessor):
                     # Clean-up the filepath for display (mostly removing /tmp folder names)
                     adjusted_filepath = '/'.join(term_filepath.split('/')[6:]) #.replace('/./','/')
                     error_message = f"Badly formed tW json file '{adjusted_filepath}': {e}"
-                    AppSettings.logger.error(error_message)
+                    dcs_url.logger.error(error_message)
                     self.errors.append(error_message)
                     json_data = {}
                 if json_data:
@@ -2088,7 +2088,7 @@ class TwPreprocessor(Preprocessor):
                     self.check_punctuation_pairs(body_text, f'{section}/{term}', allow_close_parenthesis_points=True)
                 else:
                     error_message = f"No tW json data found in file '{adjusted_filepath}'"
-                    AppSettings.logger.error(error_message)
+                    dcs_url.logger.error(error_message)
                     self.errors.append(error_message)
             # Now process the dictionaries to sort terms by title and add to markdown
             markdown = ''
@@ -2119,7 +2119,7 @@ class TwPreprocessor(Preprocessor):
             title_re = re.compile('^# +(.*?) *#*$', flags=re.MULTILINE)
             headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
             for project in self.rc.projects:
-                AppSettings.logger.debug(f"tW preprocessor 02: Copying files for '{project.identifier}' …")
+                dcs_url.logger.debug(f"tW preprocessor 02: Copying files for '{project.identifier}' …")
                 term_text = {}
                 section_dirs = sorted(glob(os.path.join(self.source_dir, project.path, '*')))
                 for section_dir in section_dirs:
@@ -2132,7 +2132,7 @@ class TwPreprocessor(Preprocessor):
                     index_json['book_codes'][key] = section
                     term_files = sorted(glob(os.path.join(section_dir, '*.md')))
                     for term_filepath in term_files:
-                        AppSettings.logger.debug(f"tW preprocessor 02: processing '{term_filepath}' …")
+                        dcs_url.logger.debug(f"tW preprocessor 02: processing '{term_filepath}' …")
                         term = os.path.splitext(os.path.basename(term_filepath))[0]
                         try: text = read_file(term_filepath)
                         except Exception as e:
@@ -2173,11 +2173,11 @@ class TwPreprocessor(Preprocessor):
                 write_file(output_file, index_json)
 
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"tW preprocessor didn't write any markdown files")
+            dcs_url.logger.error(f"tW preprocessor didn't write any markdown files")
             self.errors.append("No tW source files discovered")
         else:
-            AppSettings.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
-        AppSettings.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
+            dcs_url.logger.debug(f"tW preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+        dcs_url.logger.debug(f"tW preprocessor returning with {self.output_dir} = {os.listdir(self.output_dir)}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of TwPreprocessor run()
 
@@ -2215,13 +2215,13 @@ class TwPreprocessor(Preprocessor):
                     if '<h3 id="' in file_contents and len(file_contents)>200:
                         file_contents = 'good' # No need to store entire file contents
                     elif bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tW fix_linkA in '{sectionName}' fetching {file_url} only got '{file_contents}'")
+                        dcs_url.logger.debug(f"tW fix_linkA in '{sectionName}' fetching {file_url} only got '{file_contents}'")
                         self.warnings.append(f"Link in '{sectionName}' to {file_url} only found '{file_contents}'")
                     self.content_cache[file_url] = file_contents # Remember that we were successful
                 except Exception as e:
                     bad_file_count += 1
                     if bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tW '{sectionName}' fix_linkA fetching {file_url} got: {e}")
+                        dcs_url.logger.debug(f"tW '{sectionName}' fix_linkA fetching {file_url} got: {e}")
                         self.warnings.append(f"Error in '{sectionName}' with tA '{match.group(3)}' link {file_url}: {e}")
                     link_text = self.content_cache[file_url] = f'INVALID {match.group(3)}'
             content = f'{content[:match.start()]}{link_text}{content[match.end():]}'
@@ -2256,13 +2256,13 @@ class TwPreprocessor(Preprocessor):
                     if '## ' in file_contents and len(file_contents)>200:
                         file_contents = 'good' # No need to store entire file contents
                     elif bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tW fix_linkC in '{sectionName}' reading {filepath} only got '{file_contents}'")
+                        dcs_url.logger.debug(f"tW fix_linkC in '{sectionName}' reading {filepath} only got '{file_contents}'")
                         self.warnings.append(f"Link in '{sectionName}' to {filepath} only found '{file_contents}'")
                     self.content_cache[filepath] = file_contents # Remember that we were successful
                 except Exception as e:
                     bad_file_count += 1
                     if bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tW '{sectionName}' fix_linkC reading {filepath} got: {e}")
+                        dcs_url.logger.debug(f"tW '{sectionName}' fix_linkC reading {filepath} got: {e}")
                         self.warnings.append(f"Error with '{sectionName}' internal '{match.group(1)}' link {filepath}: {e}" \
                                                 .replace(f'{self.source_dir}/', ''))
                     self.content_cache[filepath] = f'INVALID {match.group(1)}'
@@ -2295,13 +2295,13 @@ class TwPreprocessor(Preprocessor):
                         if '## ' in file_contents and len(file_contents)>200:
                             file_contents = 'good' # No need to store entire file contents
                         elif bad_file_count < 15 and len(self.warnings) < 200:
-                            AppSettings.logger.debug(f"tW fix_linkD in '{sectionName}' reading {filepath} only got '{file_contents}'")
+                            dcs_url.logger.debug(f"tW fix_linkD in '{sectionName}' reading {filepath} only got '{file_contents}'")
                             self.warnings.append(f"Link in '{sectionName}' to {filepath} only found '{file_contents}'")
                         self.content_cache[filepath] = file_contents # Remember that we were successful
                     except Exception as e:
                         bad_file_count += 1
                         if bad_file_count < 15 and len(self.warnings) < 200:
-                            AppSettings.logger.debug(f"tW '{sectionName}' fix_linkD reading {filepath} got: {e}")
+                            dcs_url.logger.debug(f"tW '{sectionName}' fix_linkD reading {filepath} got: {e}")
                             self.warnings.append(f"Error with '{sectionName}' internal '{s}/{match.group(1)}' link {filepath}: {e}" \
                                                 .replace(f'{self.source_dir}/', ''))
                         self.content_cache[filepath] = f'INVALID {s}/{match.group(1)}'
@@ -2315,7 +2315,7 @@ class TwPreprocessor(Preprocessor):
         content = re.sub(r'\]\(([^# :/)]+)\)',
                          r'](#\1)', content)
         if content != contentSave1:
-            AppSettings.logger.debug("fix_tW_links still changed links here!")
+            dcs_url.logger.debug("fix_tW_links still changed links here!")
 
         # Convert URLs to links if not already
         contentSave2 = content
@@ -2323,7 +2323,7 @@ class TwPreprocessor(Preprocessor):
                          r'\1[\2](\2)',
                          content, flags=re.IGNORECASE)
         if content != contentSave2:
-            AppSettings.logger.debug("fix_tW_links still changed URLs here!")
+            dcs_url.logger.debug("fix_tW_links still changed URLs here!")
 
         # URLs wth just www at the start, no http
         contentSave3 = content
@@ -2331,7 +2331,7 @@ class TwPreprocessor(Preprocessor):
                          r'\1[\2](http://\2)',
                          content, flags=re.IGNORECASE)
         if content != contentSave3:
-            AppSettings.logger.debug("fix_tW_links still changed www's here!")
+            dcs_url.logger.debug("fix_tW_links still changed www's here!")
 
         return content
     # end of TwPreprocessor fix_tW_links function
@@ -2368,14 +2368,14 @@ class TnPreprocessor(Preprocessor):
 
         Returns a True/False success flag
         """
-        AppSettings.logger.info(f"preload_original_text_archive({name}, {zip_url})…")
+        dcs_url.logger.info(f"preload_original_text_archive({name}, {zip_url})…")
         zip_path = os.path.join(self.preload_dir, f'{name}.zip')
         try:
             download_file(zip_url, zip_path)
             unzip(zip_path, self.preload_dir)
             remove_file(zip_path)
         except Exception as e:
-            AppSettings.logger.error(f"Unable to download {zip_url}: {e}")
+            dcs_url.logger.error(f"Unable to download {zip_url}: {e}")
             self.warnings.append(f"Unable to download '{name}' from {zip_url}")
             return False
         # AppSettings.logger.debug(f"Got {name} files:", os.listdir(self.preload_dir))
@@ -2393,7 +2393,7 @@ class TnPreprocessor(Preprocessor):
 
         Sets self.need_to_check_quotes to True if successful.
         """
-        AppSettings.logger.debug("tN preprocessor get_quoted_versions()…")
+        dcs_url.logger.debug("tN preprocessor get_quoted_versions()…")
         rels = self.rc.resource.relation
         if isinstance(rels, list):
             for rel in rels:
@@ -2422,7 +2422,7 @@ class TnPreprocessor(Preprocessor):
                         self.messages.append(f"Note: Using {url} for checking Greek quotes against.")
                         self.need_to_check_quotes = True
         elif rels:
-            AppSettings.logger.debug(f"tN preprocessor get_quoted_versions expected a list not {rels!r}")
+            dcs_url.logger.debug(f"tN preprocessor get_quoted_versions expected a list not {rels!r}")
 
         if not self.need_to_check_quotes:
             self.warnings.append("Unable to find/load original language (Heb/Grk) sources for comparing tN snippets against.")
@@ -2430,7 +2430,7 @@ class TnPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"tN preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         index_json = {
             'titles': {},
             'chapters': {},
@@ -2438,10 +2438,10 @@ class TnPreprocessor(Preprocessor):
         }
         try:
             language_id = self.rc.manifest['dublin_core']['language']['identifier']
-            AppSettings.logger.debug(f"tN preprocessor: Got {language_id=}")
+            dcs_url.logger.debug(f"tN preprocessor: Got {language_id=}")
         except (KeyError, TypeError):
             language_id = 'en'
-            AppSettings.logger.debug(f"tN preprocessor: Defaulted to {language_id=}")
+            dcs_url.logger.debug(f"tN preprocessor: Defaulted to {language_id=}")
 
         self.get_quoted_versions() # Sets self.need_to_check_quotes
 
@@ -2531,7 +2531,7 @@ class TnPreprocessor(Preprocessor):
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         EXPECTED_TSV_SOURCE_TAB_COUNT = 8 # So there's one more column than this
         for project in self.rc.projects:
-            AppSettings.logger.debug(f"tN preprocessor: Adjusting/Copying file(s) for '{project.identifier}' …")
+            dcs_url.logger.debug(f"tN preprocessor: Adjusting/Copying file(s) for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
                 book = project.identifier.lower()
                 html_file = f'{BOOK_NUMBERS[book]}-{book.upper()}.html'
@@ -2544,7 +2544,7 @@ class TnPreprocessor(Preprocessor):
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv_filename_end): # We have the tsv file
                         found_tsv = True
-                        AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
+                        dcs_url.logger.debug(f"tN preprocessor got {this_filepath}")
                         line_number = 1
                         lastB = lastC = lastV = None
                         field_id_list:List[str] = []
@@ -2558,7 +2558,7 @@ class TnPreprocessor(Preprocessor):
                                         if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
                                             self.errors.append(f"Unexpected TSV header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
                                     elif tab_count != EXPECTED_TSV_SOURCE_TAB_COUNT:
-                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        dcs_url.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
                                     B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
@@ -2636,7 +2636,7 @@ class TnPreprocessor(Preprocessor):
 
                                     tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
                                     line_number += 1
-                        AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
+                        dcs_url.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
                         self.num_files_written += 1
                         break # Don't bother looking for other files since we found our TSV one for this book
                 # NOTE: This code will create an .md file if there is a missing TSV file
@@ -2723,7 +2723,7 @@ class TnPreprocessor(Preprocessor):
                                     # Clean-up the filepath for display (mostly removing /tmp folder names)
                                     adjusted_filepath = '/'.join(chunk_filepath.split('/')[6:]) #.replace('/./','/')
                                     error_message = f"Badly formed tN json file '{adjusted_filepath}': {e}"
-                                    AppSettings.logger.error(error_message)
+                                    dcs_url.logger.error(error_message)
                                     self.errors.append(error_message)
                                     json_data = {}
                                 for tn_unit in json_data:
@@ -2744,13 +2744,13 @@ class TnPreprocessor(Preprocessor):
                     write_file(file_path, markdown)
                     self.num_files_written += 1
             else:
-                AppSettings.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
+                dcs_url.logger.debug(f"TnPreprocessor: extra project found: {project.identifier}")
 
         if self.num_files_written == 0:
-            AppSettings.logger.error(f"tN preprocessor didn't write any markdown files")
+            dcs_url.logger.error(f"tN preprocessor didn't write any markdown files")
             self.errors.append("No tN source files discovered")
         else:
-            AppSettings.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"tN preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         # Write out TN index.json
         output_file = os.path.join(self.output_dir, 'index.json')
@@ -2758,7 +2758,7 @@ class TnPreprocessor(Preprocessor):
 
         # Delete temp folder
         if prefix and debug_mode_flag:
-            AppSettings.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
+            dcs_url.logger.debug(f"Temp folder '{self.preload_dir}' has been left on disk for debugging!")
         else:
             remove_tree(self.preload_dir)
 
@@ -2797,12 +2797,12 @@ class TnPreprocessor(Preprocessor):
         if '…' in quoteField:
             quoteBits = quoteField.split('…')
             if ' …' in quoteField or '… ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse in {TNid} '{quoteField}'")
+                dcs_url.logger.debug(f"Unexpected space(s) beside ellipse in {TNid} '{quoteField}'")
                 self.warnings.append(f"Unexpected space(s) beside ellipse character in {TNid} '{quoteField}'")
         elif '...' in quoteField: # Yes, we still actually allow this
             quoteBits = quoteField.split('...')
             if ' ...' in quoteField or '... ' in quoteField:
-                AppSettings.logger.debug(f"Unexpected space(s) beside ellipse characters in {TNid} '{quoteField}'")
+                dcs_url.logger.debug(f"Unexpected space(s) beside ellipse characters in {TNid} '{quoteField}'")
                 self.warnings.append(f"Unexpected space(s) beside ellipse characters in {TNid} '{quoteField}'")
         else:
             quoteBits = None
@@ -2832,12 +2832,12 @@ class TnPreprocessor(Preprocessor):
                 if remainingBits[0] and remainingBits[0][-1].isalpha():
                     badChar = remainingBits[0][-1]
                     badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
-                    AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not start at the beginning of a word—it's preceded {badCharString} in '{verse_text}'")
+                    dcs_url.logger.debug(f"Seems {TNid} '{quoteField}' might not start at the beginning of a word—it's preceded {badCharString} in '{verse_text}'")
                     self.warnings.append(f"Seems {TNid} '{quoteField}' might not start at the beginning of a word—it's (preceded {badCharString} in '{verse_text}'")
                 if remainingBits[1] and remainingBits[1][0].isalpha():
                     badChar = remainingBits[1][0]
                     badCharString = f" by '{badChar}' {unicodedata.name(badChar)}={hex(ord(badChar))}"
-                    AppSettings.logger.debug(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
+                    dcs_url.logger.debug(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
                     self.warnings.append(f"Seems {TNid} '{quoteField}' might not finish at the end of a word—it's followed {badCharString} in '{verse_text}'")
             else: # can't find the given text
                 # AppSettings.logger.debug(f"Unable to find {TNid} '{quoteField}' in '{verse_text}'")
@@ -2857,7 +2857,7 @@ class TnPreprocessor(Preprocessor):
 
         try: book_number = BOOK_NUMBERS[B.lower()]
         except KeyError: # how can this happen?
-            AppSettings.logger.error(f"Unable to find book number for '{B} {C}:{V}' in get_passage()")
+            dcs_url.logger.error(f"Unable to find book number for '{B} {C}:{V}' in get_passage()")
             book_number = 0
 
         # Look for OT book first—if not found, look for NT book
@@ -2876,7 +2876,7 @@ class TnPreprocessor(Preprocessor):
             return None
         if self.loaded_file_path != book_path:
             # It's not cached already
-            AppSettings.logger.info(f"Reading {book_path}…")
+            dcs_url.logger.info(f"Reading {book_path}…")
             with open(book_path, 'rt') as book_file:
                 self.loaded_file_contents = book_file.read()
             self.loaded_file_path = book_path
@@ -2917,7 +2917,7 @@ class TnPreprocessor(Preprocessor):
                 adjusted_field = bits[0]
                 verseText = verseText[:ixW] + adjusted_field + verseText[ixEnd+3:]
             else:
-                AppSettings.logger.error(f"Missing \\w* in {B} {C}:{V} verseText: '{verseText}'")
+                dcs_url.logger.error(f"Missing \\w* in {B} {C}:{V} verseText: '{verseText}'")
                 verseText = verseText.replace('\\w ', '', 1) # Attempt to limp on
             ixW = verseText.find('\\w ', ixW+1) # Might be another one
         # print(f"Got verse text2: '{verseText}'")
@@ -2934,7 +2934,7 @@ class TnPreprocessor(Preprocessor):
         # print(f"Got verse text3: '{verseText}'")
 
         if '\\' in verseText:
-            AppSettings.logger.error(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
+            dcs_url.logger.error(f"get_passage still has backslash in {B} {C}:{V} '{verseText}'")
 
         # Final clean-up
         return verseText.replace('  ', ' ')
@@ -2952,8 +2952,8 @@ class TnPreprocessor(Preprocessor):
 
         if shortReference.startswith('rc://'):
             revisedContents = self.fix_tN_links(f'{BCV}-{field_id}', shortReference, repo_owner, language_code)
-            AppSettings.logger.info( f"Got back revisedContents='{revisedContents}'")
-            AppSettings.logger.info( f"What if (anything) should we be doing next????") # Not really checked or finished (coz no data to test on yet)
+            dcs_url.logger.info( f"Got back revisedContents='{revisedContents}'")
+            dcs_url.logger.info( f"What if (anything) should we be doing next????") # Not really checked or finished (coz no data to test on yet)
         else: # it's just the short form
             file_url = f'https://git.door43.org/{repo_owner}/{language_code}_ta/src/branch/master/translate/{shortReference}/01.md'
             # print(f"check_support_reference: Got file URL='{file_url}'")
@@ -2967,33 +2967,33 @@ class TnPreprocessor(Preprocessor):
                 try:
                     file_contents = get_url(title_file_url)
                 except Exception as e:
-                    AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
+                    dcs_url.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
                     self.warnings.append(f"{BCV} error with tA '{shortReference}' link {title_file_url}: {e}")
                     file_contents = None
                 if file_contents:
                     link_title = file_contents
                     if '\n' in link_title or '\r' in link_title or '\t' in link_title:
-                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_title!r}")
+                        dcs_url.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_title!r}")
                         self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_title!r}")
                         link_title = link_title.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
                     if not link_title:
-                        AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                        dcs_url.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
                         self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
                         link_title = f"BLANK from '{shortReference}'"
                     self.title_cache[file_url] = link_title
                     # print(f"check_support_reference: Added to cache link_text='{link_text}' for {file_url}")
             if not link_title:
-                AppSettings.logger.error(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
+                dcs_url.logger.error(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
                 self.errors.append(f"Bad SupportReference='{shortReference}' at {BCV} ({field_id})")
             elif f'/{shortReference}' not in fullNote:
-                AppSettings.logger.warning(f"Possible tN mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
+                dcs_url.logger.warning(f"Possible tN mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
                 self.warnings.append(f"Possible mismatch at {BCV} ({field_id}) between SupportReference='{shortReference}' and expected link in '{fullNote}'")
             elif not shortReference.startswith('figs-') \
               and not shortReference.startswith('grammar-') \
               and not shortReference.startswith('translate-') \
               and not shortReference.startswith('writing-') \
               and shortReference != 'guidelines-sonofgodprinciples':
-                AppSettings.logger.warning(f"Unexpected tN {BCV} ({field_id}) SupportReference='{shortReference}' is not Just-In-Time article")
+                dcs_url.logger.warning(f"Unexpected tN {BCV} ({field_id}) SupportReference='{shortReference}' is not Just-In-Time article")
                 self.warnings.append(f"Unexpected {BCV} ({field_id}) SupportReference='{shortReference}' is not Just-In-Time article")
     # end of TnPreprocessor.check_support_reference function
 
@@ -3082,18 +3082,18 @@ class TnPreprocessor(Preprocessor):
                 except Exception as e:
                     bad_file_count += 1
                     if bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
+                        dcs_url.logger.debug(f"tN {BCV} fix_linkA fetching {title_file_url} got: {e}")
                         self.warnings.append(f"{BCV} error with tA '{match.group(2)}' link {title_file_url}: {e}")
                     link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
                     file_contents = None
                 if file_contents:
                     link_text = file_contents
                     if '\n' in link_text or '\r' in link_text or '\t' in link_text:
-                        AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
+                        dcs_url.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
                         self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
                         link_text = link_text.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
                     if not link_text:
-                        AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                        dcs_url.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
                         self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
                         link_text = f'BLANK from {match.group(2)}'
                     self.title_cache[file_url] = link_text
@@ -3129,7 +3129,7 @@ class TnPreprocessor(Preprocessor):
                 except Exception as e:
                     bad_file_count += 1
                     if bad_file_count < 15 and len(self.warnings) < 200:
-                        AppSettings.logger.debug(f"tN {BCV} fix_linkB fetching {title_file_url} got: {e}")
+                        dcs_url.logger.debug(f"tN {BCV} fix_linkB fetching {title_file_url} got: {e}")
                         self.warnings.append(f"{BCV} error with tW '{match.group(2)}' link {title_file_url}: {e}")
                     link_text = self.title_cache[file_url] = f'INVALID {match.group(2)}'
                     file_contents = None
@@ -3139,17 +3139,17 @@ class TnPreprocessor(Preprocessor):
                         if link_text.startswith('# '):
                             link_text = link_text[2:]
                         if '\n' in link_text or '\r' in link_text or '\t' in link_text:
-                            AppSettings.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
+                            dcs_url.logger.debug(f"tN {BCV} {title_file_url} contains illegal chars: {link_text!r}")
                             self.warnings.append(f"{BCV} unwanted characters in {title_file_url} title: {link_text!r}")
                             link_text = link_text.strip().replace('\n','NL').replace('\r','CR').replace('\t','TAB')
                         if not link_text:
-                            AppSettings.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
+                            dcs_url.logger.debug(f"tN {BCV} got effectively blank title from {title_file_url}")
                             self.warnings.append(f"{BCV} title in {title_file_url} seems blank")
                             link_text = f'BLANK from {match.group(2)}'
                         self.title_cache[file_url] = link_text
                         # print(f"cache length = {len(self.title_cache)}")
                     except Exception as e:
-                        AppSettings.logger.debug(f"tN fix_linkB getting title from {file_contents} got: {e}")
+                        dcs_url.logger.debug(f"tN fix_linkB getting title from {file_contents} got: {e}")
             # new_link_markdown = f'[{link_text}]({file_url})'
             # print(f"Match9e: New tW link = {new_link_markdown}")
             content = f'{content[:match.start()]}[{link_text}]({file_url}){content[match.end():]}'
@@ -3183,19 +3183,19 @@ class LexiconPreprocessor(Preprocessor):
         content_folderpath = os.path.join(self.source_dir, project.path, folder)
         file_list = os.listdir(content_folderpath)
         if len(file_list) != 1: # expecting '01.md'
-            AppSettings.logger.error(f"Unexpected files in {folder}: {file_list}")
+            dcs_url.logger.error(f"Unexpected files in {folder}: {file_list}")
         markdown = "" # f"# {folder}\n" # Not needed coz Strongs number is included inside the file
         content_filepath = os.path.join(content_folderpath, '01.md')
         if os.path.isfile(content_filepath):
             try: content = read_file(content_filepath)
             except Exception as e:
                 msg = f"Error reading {os.path.basename(content_folderpath)}/01.md: {e}"
-                AppSettings.logger.error(msg)
+                dcs_url.logger.error(msg)
                 self.errors.append(msg)
                 content = None
         else:
             msg = f"compile_lexicon_entry couldn't find any files for {folder}"
-            AppSettings.logger.error(msg)
+            dcs_url.logger.error(msg)
             self.warnings.append(msg)
             content = None
         if content:
@@ -3206,12 +3206,12 @@ class LexiconPreprocessor(Preprocessor):
 
 
     def run(self) -> Tuple[int, List[str]]:
-        AppSettings.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
+        dcs_url.logger.debug(f"Lexicon preprocessor starting with {self.source_dir} = {os.listdir(self.source_dir)} …")
         for project in self.rc.projects:
             project_path = os.path.join(self.source_dir, project.path)
             print("project_path", project_path)
 
-            AppSettings.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
+            dcs_url.logger.debug(f"Lexicon preprocessor: Copying files for '{project.identifier}' …")
 
             # Even though the .md files won't be converted, they still need to be copied
             #   so they can be linted
@@ -3257,7 +3257,7 @@ class LexiconPreprocessor(Preprocessor):
                 with open(readme_filepath, 'rt') as rmf:
                     readme_markdown = rmf.read()
             else:
-                AppSettings.logger.error("Lexicon preprocessor cannot find README.md")
+                dcs_url.logger.error("Lexicon preprocessor cannot find README.md")
                 readme_markdown = "No README.md found\n"
             link1 = "* [Lexicon entries (by number)](number_index.html)\n"
             link2 = "* [Lexicon entries (by word)](word_index.html)\n"
@@ -3266,15 +3266,15 @@ class LexiconPreprocessor(Preprocessor):
             self.num_files_written += 1
 
         if self.num_files_written == 0:
-            AppSettings.logger.error("Lexicon preprocessor didn't write any markdown files")
+            dcs_url.logger.error("Lexicon preprocessor didn't write any markdown files")
             self.errors.append("No lexicon source files discovered")
         else:
-            AppSettings.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
+            dcs_url.logger.debug(f"Lexicon preprocessor wrote {self.num_files_written} markdown files with {len(self.errors)} errors and {len(self.warnings)} warnings")
 
         str_list = str(os.listdir(self.output_dir))
         str_list_adjusted = str_list if len(str_list)<1500 \
                                 else f'{str_list[:1000]} …… {str_list[-500:]}'
-        AppSettings.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
+        dcs_url.logger.debug(f"Lexicon preprocessor returning with {self.output_dir} = {str_list_adjusted}")
         return self.num_files_written, self.errors + self.warnings + (self.messages if self.errors or self.warnings else [])
     # end of LexiconPreprocessor run()
 
@@ -3333,7 +3333,7 @@ class LexiconPreprocessor(Preprocessor):
                     with open(filepath, 'rt') as lex_file:
                         lex_content = lex_file.read()
                 except FileNotFoundError:
-                    AppSettings.logger.error(f"LexiconPreprocessor.change_index_entries could not find {filepath}")
+                    dcs_url.logger.error(f"LexiconPreprocessor.change_index_entries could not find {filepath}")
                     self.warnings.append(f"No lexicon entry file found for {strongs}")
                     lex_content = None
                     title = "-BAD-"
@@ -3341,7 +3341,7 @@ class LexiconPreprocessor(Preprocessor):
                     title = lex_content[2:8].replace('\n', ' ').replace(' ', ' ') # non-break space
                 # print("title", repr(title))
                 if lex_content and title is None: # Why?
-                    AppSettings.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
+                    dcs_url.logger.error("LexiconPreprocessor.change_index_entries could not find lemma string")
                     title = strongs
                 line = f"[{title:6}]({fileURL})"
             newLines.append(line)

@@ -24,7 +24,7 @@ dependenciesTest:
 #	TX_DATABASE_PW
 #	AWS_ACCESS_KEY_ID
 #	AWS_SECRET_ACCESS_KEY
-#	GOGS_USER_TOKEN
+#	DCS_USER_TOKEN
 checkEnvVariables:
 	@ if [ -z "${DB_ENDPOINT}" ]; then \
 		echo "Need to set DB_ENDPOINT"; \
@@ -42,8 +42,8 @@ checkEnvVariables:
 		echo "Need to set AWS_SECRET_ACCESS_KEY"; \
 		exit 1; \
 	fi
-	@ if [ -z "${GOGS_USER_TOKEN}" ]; then \
-		echo "Need to set GOGS_USER_TOKEN"; \
+	@ if [ -z "${DCS_USER_TOKEN}" ]; then \
+		echo "Need to set DCS_USER_TOKEN"; \
 		exit 1; \
 	fi
 

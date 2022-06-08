@@ -1,7 +1,7 @@
 import json
 import sqlalchemy
 from sqlalchemy.types import TypeDecorator
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 SIZE = 65535
 
@@ -20,5 +20,5 @@ class TextPickleType(TypeDecorator):
             try:
                 value = json.loads(value)
             except:
-                AppSettings.logger.debug(f"Bad JSON: {value}")
+                dcs_url.logger.debug(f"Bad JSON: {value}")
         return value

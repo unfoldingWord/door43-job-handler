@@ -2,7 +2,7 @@ import os
 import json
 import re
 
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 
 def txt2md(rootdir='.'):
@@ -36,7 +36,7 @@ def txt2md(rootdir='.'):
 
                             processedCount += 1
                         except BaseException as e:
-                            AppSettings.logger.debug(f"Error: {e}")
+                            dcs_url.logger.debug(f"Error: {e}")
 
                 if os.path.isfile(filepath):
                     os.remove(filepath)

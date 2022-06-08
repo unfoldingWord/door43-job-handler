@@ -6,7 +6,7 @@ import sqlalchemy
 from rq import get_current_job
 
 from rq_settings import prefix, callback_queue_name
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from callback import job
 
 
@@ -21,10 +21,10 @@ class TestCallback(TestCase):
 
     def setUp(self):
         # Make sure that other tests didn't mess up our prefix
-        AppSettings(prefix=prefix)
+        dcs_url(prefix=prefix)
 
     def test_prefix(self):
-        self.assertEqual(prefix, AppSettings.prefix)
+        self.assertEqual(prefix, dcs_url.prefix)
 
     @skip("Not currently working")
     @patch('callback.get_current_job', side_effect=my_get_current_job)

@@ -10,7 +10,7 @@ from time import sleep
 import urllib.request as urllib2
 from urllib.error import HTTPError
 
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 
 
@@ -36,7 +36,7 @@ def _get_url(url:str, catch_exception:bool, urlopen:Callable[[str],bytes]) -> Un
     while True:
         num_tries += 1
         if num_tries > 1:
-            AppSettings.logger.debug(f"  _get_url try #{num_tries}…")
+            dcs_url.logger.debug(f"  _get_url try #{num_tries}…")
         need_to_wait = False
         # e:Optional[Exception] = None
 
@@ -56,12 +56,12 @@ def _get_url(url:str, catch_exception:bool, urlopen:Callable[[str],bytes]) -> Un
             break
 
         adjusted_wait_time = INITIAL_WAIT_TIME * num_tries # Make the wait progressively longer
-        AppSettings.logger.warning(f"  _get_url: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
+        dcs_url.logger.warning(f"  _get_url: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
         sleep(adjusted_wait_time) # Then try again
     # end of loop
 
     if saved_e:
-        AppSettings.logger.debug(f"  _get_url: Got exception {saved_e}")
+        dcs_url.logger.debug(f"  _get_url: Got exception {saved_e}")
         if catch_exception: return False
         # else re-raise the exception
         raise saved_e
@@ -82,14 +82,14 @@ def _download_file(url:str, outfile:str, urlopen:Callable[[str],bytes]) -> None:
     """
     Handles "HTTP Error 503: Service Unavailable" internally with an automatic wait and retry.
     """
-    AppSettings.logger.debug(f"_download_file( {url}, outfile={outfile}, …)…")
+    dcs_url.logger.debug(f"_download_file( {url}, outfile={outfile}, …)…")
     MAX_TRIES = 5
     INITIAL_WAIT_TIME = 5 # seconds
     num_tries = 0
     while True:
         num_tries += 1
         if num_tries > 1:
-            AppSettings.logger.debug(f"  _download_file try #{num_tries}…")
+            dcs_url.logger.debug(f"  _download_file try #{num_tries}…")
         need_to_wait = False
         # err:Optional[Exception] = None
 
@@ -109,14 +109,14 @@ def _download_file(url:str, outfile:str, urlopen:Callable[[str],bytes]) -> None:
                 raise e
         except IOError as e:
             error_message = f"Error retrieving {url}: {e}"
-            AppSettings.logger.critical(error_message)
+            dcs_url.logger.critical(error_message)
             raise IOError(error_message)
         if not need_to_wait \
         or num_tries >= MAX_TRIES:
             break
 
         adjusted_wait_time = INITIAL_WAIT_TIME * num_tries # Make the wait progressively longer
-        AppSettings.logger.warning(f"  _download_file: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
+        dcs_url.logger.warning(f"  _download_file: Waiting {adjusted_wait_time}s to fetch {url} after {saved_e}…")
         sleep(adjusted_wait_time) # Then try again
     # end of loop
 # end of _download_file function

@@ -6,7 +6,7 @@ from moto import mock_dynamodb2
 
 from general_tools.file_utils import read_file
 from models.manifest import TxManifest
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 
 @mock_dynamodb2
@@ -15,7 +15,7 @@ class TxManifestTests(TestCase):
 
     def setUp(self):
         """Runs before each test."""
-        AppSettings(prefix=f'{self._testMethodName}-', db_connection_string='sqlite:///:memory:')
+        dcs_url(prefix=f'{self._testMethodName}-', db_connection_string='sqlite:///:memory:')
         self.items = {}
         self.init_items()
         self.populate_table()
@@ -107,7 +107,7 @@ class TxManifestTests(TestCase):
         tx_manifest.update()
         manifest_from_db = TxManifest.get(repo_name=repo_name, user_name=user_name)
         self.assertEqual(manifest_from_db.views, 5)
-        AppSettings.db_close()
+        dcs_url.db_close()
 
     def test_delete_manifest(self):
         repo_name = self.items['Door43/en_obs']['repo_name']

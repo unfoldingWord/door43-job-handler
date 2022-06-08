@@ -5,7 +5,7 @@ from yaml.parser import ParserError, ScannerError
 
 from bs4 import BeautifulSoup
 
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from general_tools import file_utils
 from general_tools.file_utils import write_file
 from resource_container.ResourceContainer import RC
@@ -22,29 +22,29 @@ def init_template(repo_subject:str, source_dir:str, output_dir:str, template_fil
                         'Greek_Lexicon','Hebrew-Aramaic_Lexicon',
                         'OBS_Study_Questions', # NOTE: I don't yet understand why this works better for righthand nav column
                         ):
-        AppSettings.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using ObsTemplater for '{repo_subject}' …")
         templater = ObsTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('OBS_Study_Notes','XXXOBS_Study_QuestionsXXX',
                           'OBS_Translation_Notes','OBS_Translation_Questions'):
-        AppSettings.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using ObsNotesTemplater for '{repo_subject}' …")
         templater = ObsNotesTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Academy',):
-        AppSettings.logger.info(f"Using TaTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using TaTemplater for '{repo_subject}' …")
         templater = TaTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Questions',):
-        AppSettings.logger.info(f"Using TqTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using TqTemplater for '{repo_subject}' …")
         templater = TqTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Words',):
-        AppSettings.logger.info(f"Using TwTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using TwTemplater for '{repo_subject}' …")
         templater = TwTemplater(repo_subject, source_dir, output_dir, template_file)
     elif repo_subject in ('Translation_Notes','TSV_Translation_Notes'):
-        AppSettings.logger.info(f"Using TnTemplater for '{repo_subject}' …")
+        dcs_url.logger.info(f"Using TnTemplater for '{repo_subject}' …")
         templater = TnTemplater(repo_subject, source_dir, output_dir, template_file)
     else:
         if repo_subject in ('Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament'):
-            AppSettings.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
+            dcs_url.logger.info(f"Using BibleTemplater for '{repo_subject}' …")
         else:
-            AppSettings.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
+            dcs_url.logger.critical(f"Choosing BibleTemplater for unexpected repo_subject='{repo_subject}'")
         templater = BibleTemplater(repo_subject, source_dir, output_dir, template_file)
     return templater
 #end of init_template function
@@ -63,7 +63,7 @@ def get_sorted_Bible_html_filepath_list(folder_path:str) -> List[str]:
                                      ('FRT','A0')): # must be in reverse of desired order!
         for ix, filepath in enumerate( HTMLfilepaths.copy() ):
             if book_code in filepath and number_string in filepath: # Allows for various ordering of filename bits
-                AppSettings.logger.info(f"Moving {book_code} HTML to front of filepath list…")
+                dcs_url.logger.info(f"Moving {book_code} HTML to front of filepath list…")
                 HTMLfilepaths.insert(0, HTMLfilepaths.pop(ix)) # Move to front of list
                 break
     return HTMLfilepaths
@@ -84,9 +84,9 @@ class Templater:
         # This templater_CSS_class is used to set the html body class
         #   so it must match the css in door43.org/_site/css/project-page.css
         assert self.templater_CSS_class # Must be set by subclass
-        AppSettings.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
+        dcs_url.logger.debug(f"Using templater for '{self.templater_CSS_class}' CSS class…")
         if self.templater_CSS_class not in ('obs','ta','tq','tw','tn','bible'):
-            AppSettings.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
+            dcs_url.logger.error(f"Unexpected templater_CSS_class='{self.templater_CSS_class}'")
         self.classes:List[str] = [] # These get appended to the templater_CSS_class
 
         self.source_dir = source_dir  # Local directory
@@ -119,7 +119,7 @@ class Templater:
                 for some_class in self.classes: # Check that we don't double unnecessarily
                     assert some_class != self.templater_CSS_class
                 soup.body['class'] = soup.body.get('class', []) + self.classes
-            AppSettings.logger.info(f"Have {self.template_file.split('/')[-1]} body class(es)={soup.body.get('class', [])}")
+            dcs_url.logger.info(f"Have {self.template_file.split('/')[-1]} body class(es)={soup.body.get('class', [])}")
             self.template_html = str(soup)
         self.apply_template()
         return True
@@ -180,7 +180,7 @@ class Templater:
         """
         Called from run()
         """
-        AppSettings.logger.info(f"Templater.apply_template() to all {len(self.HTMLfilepaths)} HTML files…")
+        dcs_url.logger.info(f"Templater.apply_template() to all {len(self.HTMLfilepaths)} HTML files…")
         language_code = self.rc.resource.language.identifier
         language_name = self.rc.resource.language.title
         language_dir = self.rc.resource.language.direction
@@ -211,7 +211,7 @@ class Templater:
         # Loop through the html files
         for filepath in self.HTMLfilepaths:
             if filepath not in self.already_converted:
-                AppSettings.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
+                dcs_url.logger.debug(f"Applying1 template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the downloaded file into a dom abject
                 with open(filepath, 'r') as f:
@@ -280,12 +280,12 @@ class Templater:
 
                 # write to output directory
                 out_file = os.path.join(self.output_dir, os.path.basename(filepath))
-                AppSettings.logger.debug(f'Templater writing {out_file} …')
+                dcs_url.logger.debug(f'Templater writing {out_file} …')
                 # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                 write_file(out_file, html)
 
             else:  # if already templated, need to update navigation bar
-                AppSettings.logger.debug(f"Applying2 template to {filepath.rsplit('/',1)[-1]}…")
+                dcs_url.logger.debug(f"Applying2 template to {filepath.rsplit('/',1)[-1]}…")
 
                 # Read the templated file into a dom abject
                 with open(filepath, 'r') as f:
@@ -303,7 +303,7 @@ class Templater:
 
                     # write to output directory
                     out_file = os.path.join(self.output_dir, os.path.basename(filepath))
-                    AppSettings.logger.debug(f'Updating nav in {out_file} …')
+                    dcs_url.logger.debug(f'Updating nav in {out_file} …')
                     # write_file(out_file, html.encode('ascii', 'xmlcharrefreplace'))
                     write_file(out_file, html)
     # end of Template.apply_template()
@@ -421,7 +421,7 @@ class ObsNotesTemplater(Templater):
                     toc = load_yaml_object(filepath)
                 except (ParserError, ScannerError) as e:
                     err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
-                    AppSettings.logger.critical("ObsNotes"+err_msg)
+                    dcs_url.logger.critical("ObsNotes"+err_msg)
                     self.error_messages.add(err_msg)
                     toc = None
                 if toc:
@@ -746,7 +746,7 @@ class TaTemplater(Templater):
                     toc = load_yaml_object(os.path.join(filepath))
                 except (ParserError, ScannerError) as e:
                     err_msg = f"Templater found badly formed '{os.path.basename(filepath)}': {e}"
-                    AppSettings.logger.critical("Ta"+err_msg)
+                    dcs_url.logger.critical("Ta"+err_msg)
                     self.error_messages.add(err_msg)
                     toc = None
                 if toc:
@@ -786,7 +786,7 @@ class BibleTemplater(Templater):
 
         Creates self.titles and self.book_codes and self.chapters
         """
-        AppSettings.logger.debug("BibleTemplater get_page_navigation()…")
+        dcs_url.logger.debug("BibleTemplater get_page_navigation()…")
         assert not self.titles
         assert not self.book_codes
         assert not self.chapters
@@ -827,7 +827,7 @@ class BibleTemplater(Templater):
         """
         Called from build_right_sidebar function
         """
-        AppSettings.logger.debug("BibleTemplater build_page_nav()…")
+        dcs_url.logger.debug("BibleTemplater build_page_nav()…")
 
         html = """
         <nav class="hidden-print hidden-xs hidden-sm content-nav" id="right-sidebar-nav">

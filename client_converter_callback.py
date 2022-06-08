@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime
 
 from rq_settings import prefix, debug_mode_flag
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from general_tools.file_utils import unzip, write_file, remove_tree, remove_file
 from general_tools.url_utils import download_file
 
@@ -27,15 +27,15 @@ class LocalJob:
 
     def log_message(self, msg:str) -> None:
         self.log.append(msg)
-        AppSettings.logger.debug(msg) # DEBUG coz we don't need all these displayed in production mode
+        dcs_url.logger.debug(msg) # DEBUG coz we don't need all these displayed in production mode
 
     def warnings_message(self, msg:str) -> None:
         self.warnings.append(msg)
-        AppSettings.logger.warning(msg)
+        dcs_url.logger.warning(msg)
 
     def error_message(self, msg:str) -> None:
         self.errors.append(msg)
-        AppSettings.logger.error(msg)
+        dcs_url.logger.error(msg)
 
 
 
@@ -52,7 +52,7 @@ class ClientConverterCallback:
         """
         w = f'({len(warnings):,})' if warnings and len(warnings)>10 else str(warnings)
         e = f'({len(errors):,})' if errors and len(errors)>10 else str(errors)
-        AppSettings.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e}, od={output_dir})…")
+        dcs_url.logger.debug(f"ClientConverterCallback.__init__({job_dict}, id={identifier}, s={success}, i={info}, w={w}, e={e}, od={output_dir})…")
         self.job = LocalJob(job_dict)
         self.identifier = identifier
         self.success = success
@@ -65,7 +65,7 @@ class ClientConverterCallback:
 
 
     def do_post_processing(self) -> Tuple[Optional[str], Dict[str,Any]]:
-        AppSettings.logger.debug(f"ClientConverterCallback.do_post_processing()…")
+        dcs_url.logger.debug(f"ClientConverterCallback.do_post_processing()…")
         self.job.ended_at = datetime.utcnow()
         self.job.success = self.success
         for message in self.log:
@@ -85,7 +85,7 @@ class ClientConverterCallback:
             self.job.success = False
             self.job.status = 'failed'
             message = "Conversion failed"
-            AppSettings.logger.debug(f"Conversion failed, success: {self.success}, errors: {self.job.errors}")
+            dcs_url.logger.debug(f"Conversion failed, success: {self.success}, errors: {self.job.errors}")
         elif self.job.warnings:
             self.job.success = True
             self.job.status = 'warnings'
@@ -108,7 +108,7 @@ class ClientConverterCallback:
         converted_zip_file = os.path.join(self.temp_dir, converted_zip_url.rpartition('/')[2])
         remove_file(converted_zip_file)  # make sure old file not present
         download_success = True
-        AppSettings.logger.debug(f"Downloading converted zip file from {converted_zip_url} …")
+        dcs_url.logger.debug(f"Downloading converted zip file from {converted_zip_url} …")
         try:
             download_file(converted_zip_url, converted_zip_file)
         except:
@@ -121,12 +121,12 @@ class ClientConverterCallback:
             if self.job.errors is None:
                 self.job.errors = []
             message = f"Missing converted file: {converted_zip_url}"
-            AppSettings.logger.debug(message)
+            dcs_url.logger.debug(message)
             if not self.job.errors or not self.job.errors[0].startswith("No converter "):
                 # Missing file error is irrelevant if no conversion was attempted
                 self.job.errors.append(message)
         finally:
-            AppSettings.logger.debug(f"Download finished, success={download_success}.")
+            dcs_url.logger.debug(f"Download finished, success={download_success}.")
 
         # self.job.update()
 
@@ -163,13 +163,13 @@ class ClientConverterCallback:
 
 
     def unzip_converted_files(self, converted_zip_filepath:str) -> str:
-        AppSettings.logger.debug(f"ClientConverterCallback.unzip_converted_files({converted_zip_filepath})…")
+        dcs_url.logger.debug(f"ClientConverterCallback.unzip_converted_files({converted_zip_filepath})…")
         unzip_dirpath = tempfile.mkdtemp(prefix='unzip_', dir=self.temp_dir)
         try:
-            AppSettings.logger.debug(f"Unzipping {converted_zip_filepath} …")
+            dcs_url.logger.debug(f"Unzipping {converted_zip_filepath} …")
             unzip(converted_zip_filepath, unzip_dirpath)
         finally:
-            AppSettings.logger.debug("Unzip finished.")
+            dcs_url.logger.debug("Unzip finished.")
         return unzip_dirpath
     # end of ClientConverterCallback.unzip_converted_files function
 
@@ -181,13 +181,13 @@ class ClientConverterCallback:
 
         NOTE: These are used from there by the Print button/function.
         """
-        AppSettings.logger.info(f"Uploading converted files from {unzip_dir} to {prefix}CDN {s3_commit_key} …")
+        dcs_url.logger.info(f"Uploading converted files from {unzip_dir} to {prefix}CDN {s3_commit_key} …")
         for root, _dirs, files in os.walk(unzip_dir):
             for filename in sorted(files):
                 filepath = os.path.join(root, filename)
                 key = s3_commit_key + filepath.replace(unzip_dir, '')
-                AppSettings.logger.debug(f"Uploading {filename} to {prefix}CDN {key} …")
-                AppSettings.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
+                dcs_url.logger.debug(f"Uploading {filename} to {prefix}CDN {key} …")
+                dcs_url.cdn_s3_handler().upload_file(filepath, key, cache_time=0)
     # end of ClientConverterCallback.upload_converted_files_to_CDN function
 
 
@@ -199,7 +199,7 @@ class ClientConverterCallback:
 
 
     def make_our_build_log(self) -> Dict[str,Any]:
-        AppSettings.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
+        dcs_url.logger.debug(f"ClientConverterCallback.make_our_build_log()…")
         build_log_dict = {}
         build_log_dict['started_at'] = self.job.started_at.strftime('%Y-%m-%dT%H:%M:%SZ') \
                                         if self.job.started_at else None

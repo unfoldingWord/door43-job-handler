@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Union
 
 from rq_settings import prefix, debug_mode_flag
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 from general_tools import file_utils
 from general_tools.file_utils import write_file, remove_tree
 from door43_tools.templaters import init_template, get_sorted_Bible_html_filepath_list
@@ -25,7 +25,7 @@ class ProjectDeployer:
     """
 
     def __init__(self, unzip_dir:str, temp_dir:str) -> None:
-        AppSettings.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
+        dcs_url.logger.debug(f"ProjectDeployer.__init__({unzip_dir}, {temp_dir})…")
         self.unzip_dir = unzip_dir
         self.temp_dir = tempfile.mkdtemp(prefix='deployer_', dir=temp_dir)
         self.error_messages:List[str] = []
@@ -47,7 +47,7 @@ class ProjectDeployer:
         :return bool:
         """
         start = time.time()
-        AppSettings.logger.debug(f"Deploying, build log: {json.dumps(build_log)[:256]} …")
+        dcs_url.logger.debug(f"Deploying, build log: {json.dumps(build_log)[:256]} …")
         assert 'multiple' not in build_log
         assert 'part' not in build_log
 
@@ -67,14 +67,14 @@ class ProjectDeployer:
         resource_type = build_log['resource_type']
         template_key = 'templates/project-page.html'
         template_file = os.path.join(template_dir, 'project-page.html')
-        AppSettings.logger.info(f"Downloading project page template from {AppSettings.door43_bucket_name} '{template_key}' to {template_file} …")
-        AppSettings.door43_s3_handler().download_file(template_key, template_file)
+        dcs_url.logger.info(f"Downloading project page template from {dcs_url.door43_bucket_name} '{template_key}' to {template_file} …")
+        dcs_url.door43_s3_handler().download_file(template_key, template_file)
         source_dir, success = self.template_converted_files(build_log, output_dir, repo_name,
                                             resource_type, s3_commit_key, source_dir, start,
                                             template_file)
         build_log['warnings'].extend(self.error_messages)
         if not success:
-            AppSettings.logger.critical("Templating failed—returning False")
+            dcs_url.logger.critical("Templating failed—returning False")
             return False
 
 
@@ -94,14 +94,14 @@ class ProjectDeployer:
         # Save master build_log.json
         build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         file_utils.write_file(os.path.join(output_dir, 'build_log.json'), build_log)
-        AppSettings.logger.debug(f"Final build_log.json: {json.dumps(build_log)[:256]} …")
+        dcs_url.logger.debug(f"Final build_log.json: {json.dumps(build_log)[:256]} …")
 
         # Clear out the door43.org bucket's commit dir
-        AppSettings.logger.info(f"Deleting all files in the website bucket directory: {AppSettings.door43_bucket_name}/{s3_commit_key} …")
-        AppSettings.door43_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
+        dcs_url.logger.info(f"Deleting all files in the website bucket directory: {dcs_url.door43_bucket_name}/{s3_commit_key} …")
+        dcs_url.door43_s3_handler().bucket.objects.filter(Prefix=s3_commit_key).delete()
 
         # Upload all files to the S3 door43.org bucket
-        AppSettings.logger.info(f"Uploading all files to the website bucket directory: {AppSettings.door43_bucket_name}/{s3_commit_key} …")
+        dcs_url.logger.info(f"Uploading all files to the website bucket directory: {dcs_url.door43_bucket_name}/{s3_commit_key} …")
         has_index_file = False
         for root, _dirs, files in os.walk(output_dir):
             for filename in sorted(files):
@@ -109,8 +109,8 @@ class ProjectDeployer:
                 if os.path.isdir(filepath):
                     continue
                 key = s3_commit_key + filepath.replace(output_dir, '').replace(os.path.sep, '/')
-                AppSettings.logger.debug(f"Uploading {filename} to {AppSettings.door43_bucket_name} bucket {key} …")
-                AppSettings.door43_s3_handler().upload_file(filepath, key, cache_time=0)
+                dcs_url.logger.debug(f"Uploading {filename} to {dcs_url.door43_bucket_name} bucket {key} …")
+                dcs_url.door43_s3_handler().upload_file(filepath, key, cache_time=0)
 
         redirect_to_file = "index.html"
         html_files = get_sorted_Bible_html_filepath_list(output_dir)
@@ -118,25 +118,25 @@ class ProjectDeployer:
             redirect_to_file = html_files[0].replace(output_dir, "").lstrip("/")
 
         # Now we place json files and redirect index.html for the whole repo to this index.html file
-        AppSettings.logger.info("Copying json files and setting up redirect…")
+        dcs_url.logger.info("Copying json files and setting up redirect…")
         try:
-            AppSettings.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=AppSettings.cdn_bucket_name)
-            AppSettings.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json', to_key=f'{s3_repo_key}/manifest.json')
-            master_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/master/index.html')
-            main_exists = AppSettings.door43_s3_handler().object_exists(f'{s3_repo_key}/main/index.html')
+            dcs_url.door43_s3_handler().copy(from_key=f'{s3_repo_key}/project.json', from_bucket=dcs_url.cdn_bucket_name)
+            dcs_url.door43_s3_handler().copy(from_key=f'{s3_commit_key}/manifest.json', to_key=f'{s3_repo_key}/manifest.json')
+            master_exists = dcs_url.door43_s3_handler().object_exists(f'{s3_repo_key}/master/index.html')
+            main_exists = dcs_url.door43_s3_handler().object_exists(f'{s3_repo_key}/main/index.html')
             if commit_id == 'master' or commit_id == 'main' or (not master_exists and not main_exists):
-                AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location=f"/{s3_commit_key}/{redirect_to_file}")
-                AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html', location=f"/{s3_commit_key}/{redirect_to_file}")
-            AppSettings.door43_s3_handler().redirect(key=s3_commit_key, location=f"/{s3_commit_key}/{redirect_to_file}")
+                dcs_url.door43_s3_handler().redirect(key=s3_repo_key, location=f"/{s3_commit_key}/{redirect_to_file}")
+                dcs_url.door43_s3_handler().redirect(key=s3_repo_key + '/index.html', location=f"/{s3_commit_key}/{redirect_to_file}")
+            dcs_url.door43_s3_handler().redirect(key=s3_commit_key, location=f"/{s3_commit_key}/{redirect_to_file}")
             if not has_index_file:
-                AppSettings.door43_s3_handler().redirect(key=f"{s3_commit_key}/index.html", location=f"/{s3_commit_key}/{redirect_to_file}")
+                dcs_url.door43_s3_handler().redirect(key=f"{s3_commit_key}/index.html", location=f"/{s3_commit_key}/{redirect_to_file}")
 
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
         except Exception as e:
-            AppSettings.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")
+            dcs_url.logger.critical(f"Deployer threw an exception: {e}: {traceback.format_exc()}")
 
         elapsed_seconds = int(time.time() - start)
-        AppSettings.logger.debug(f"Deploy completed in {elapsed_seconds} seconds.")
+        dcs_url.logger.debug(f"Deploy completed in {elapsed_seconds} seconds.")
         self.close()
         return True
     # end of ProjectDeployer.deploy_revision_to_door43(build_log)
@@ -145,7 +145,7 @@ class ProjectDeployer:
     def template_converted_files(self, build_log:Dict[str,Any], output_dir:str,
                                     repo_name:str, resource_type:str, s3_commit_key:str,
                                     source_dir:str, start_time, template_filepath:str):
-        AppSettings.logger.debug(f"template_converted_files((build_log), od={output_dir}, '{repo_name}'," \
+        dcs_url.logger.debug(f"template_converted_files((build_log), od={output_dir}, '{repo_name}'," \
                                    f" '{resource_type}', k={s3_commit_key}, sd={source_dir}," \
                                    f" {start_time}, tf={template_filepath}) with {self.unzip_dir}…")
         assert 'errors' in build_log
@@ -154,7 +154,7 @@ class ProjectDeployer:
         source_dir = self.unzip_dir
         html_files = sorted(glob(os.path.join(source_dir, '*.html')))
         if len(html_files) < 1:
-            AppSettings.logger.warning("No html files found by ProjectDeployer.template_converted_files!")
+            dcs_url.logger.warning("No html files found by ProjectDeployer.template_converted_files!")
             content = ""
             if build_log['errors']:
                 content += """
@@ -187,8 +187,8 @@ class ProjectDeployer:
             self.run_templater(templater)
             success = True
         except Exception as e:
-            AppSettings.logger.error(f"Error applying template {template_filepath} to resource type {resource_type}:")
-            AppSettings.logger.error(f'{e}: {traceback.format_exc()}')
+            dcs_url.logger.error(f"Error applying template {template_filepath} to resource type {resource_type}:")
+            dcs_url.logger.error(f'{e}: {traceback.format_exc()}')
             self.close()
             success = False
 
@@ -217,8 +217,8 @@ class ProjectDeployer:
         out_file = os.path.join(output_dir, fname)
         write_file(out_file, data)
         key = s3_commit_key + '/' + fname
-        AppSettings.logger.debug(f"Uploading '{fname}' to {AppSettings.cdn_bucket_name} {key} …")
-        AppSettings.cdn_s3_handler().upload_file(out_file, key, cache_time=0)
+        dcs_url.logger.debug(f"Uploading '{fname}' to {dcs_url.cdn_bucket_name} {key} …")
+        dcs_url.cdn_s3_handler().upload_file(out_file, key, cache_time=0)
     # end of ProjectDeployer.write_data_to_file_and_upload_to_CDN function
 
 
@@ -245,7 +245,7 @@ class ProjectDeployer:
 
     @staticmethod
     def get_templater_index(s3_commit_key:str, index_json_fname:str) -> Dict[str,Any]:
-        index_json = AppSettings.cdn_s3_handler().get_json(s3_commit_key + '/' + index_json_fname)
+        index_json = dcs_url.cdn_s3_handler().get_json(s3_commit_key + '/' + index_json_fname)
         if not index_json:
             index_json['titles'] = {}
             index_json['chapters'] = {}

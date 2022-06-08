@@ -8,7 +8,7 @@ from mimetypes import MimeTypes
 from typing import Dict, List, Any, Optional, Union
 
 from general_tools.data_utils import json_serial
-from app_settings.app_settings import AppSettings
+from app_settings.app_settings import dcs_url
 
 
 def unzip(source_file:str, destination_dir:str) -> None:
@@ -113,7 +113,7 @@ def read_file(filepath:str, encoding:str='utf-8') -> str:
     with open(filepath, 'r', encoding=encoding) as f:
         content = f.read()
     if content.startswith(chr(65279)): # U+FEFF or \ufeff
-        AppSettings.logger.info(f"Detected Unicode Byte Order Marker (BOM) in {filepath}")
+        dcs_url.logger.info(f"Detected Unicode Byte Order Marker (BOM) in {filepath}")
         content = content[1:] # remove (optional) BOM prefix
     content = content.replace('\r\n', '\n') # convert Windows line endings to Linux line endings
     return content
