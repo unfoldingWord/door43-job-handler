@@ -18,9 +18,9 @@ class User(AppSettings.Base, TxModel):
 class TestAppSettings(unittest.TestCase):
 
     def test_init(self):
-        gogs_url = 'https://my.gogs.org'
-        AppSettings(gogs_url=gogs_url)
-        self.assertEqual(AppSettings.gogs_url, gogs_url)
+        dcs_url = 'https://my.dcs.org'
+        AppSettings(dcs_url=dcs_url)
+        self.assertEqual(AppSettings.dcs_url, dcs_url)
 
     def test_construction_connection_string(self):
         """

@@ -403,7 +403,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     project_json = AppSettings.door43_s3_handler().get_json(project_json_key)
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{AppSettings.gogs_url}/{repo_owner_username}/{repo_name}'
+    project_json['repo_url'] = f'https://{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
     current_commit = {
         'id': commit_id,
         'job_id': build_log['job_id'],

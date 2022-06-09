@@ -5,13 +5,12 @@ import time
 import traceback
 from glob import glob
 from shutil import copyfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any, Union
 
-from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from general_tools import file_utils
-from general_tools.file_utils import write_file, remove_tree
+from general_tools.file_utils import write_file
 from door43_tools.templaters import init_template, get_sorted_Bible_html_filepath_list
 
 

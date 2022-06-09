@@ -72,10 +72,10 @@ class AppSettings:
     pre_convert_bucket_name = 'tx-webhook-client'
     cdn_bucket_name = 'cdn.door43.org'
     door43_bucket_name = 'door43.org'
-    gogs_user_token = None
-    gogs_url = 'https://git.door43.org'
-    gogs_domain_name = 'git.door43.org'
-    gogs_ip_address = '127.0.0.1'
+    dcs_user_token = None
+    dcs_url = 'https://git.door43.org'
+    dcs_domain_name = 'git.door43.org'
+    dcs_ip_address = '127.0.0.1'
     module_table_name = 'modules'
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'

@@ -28,7 +28,7 @@ from redis import exceptions as redis_exceptions
 from statsd import StatsClient # Graphite front-end
 
 # Local imports
-from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name, ENQUEUE_NAME # gogs_user_token
+from rq_settings import prefix, debug_mode_flag, tx_post_url, REDIS_JOB_LIST, webhook_queue_name, ENQUEUE_NAME # dcs_user_token
 from general_tools.file_utils import unzip, add_contents_to_zip, write_file, remove_tree, empty_folder
 from general_tools.url_utils import download_file
 from resource_container.ResourceContainer import RC
@@ -780,10 +780,10 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
                         else DOOR43_CALLBACK_URL,
-            # TODO: gogs_user_token logic can be completely removed from the program
+            # TODO: dcs_user_token logic can be completely removed from the program
             #           if we're certain we're not worried about Host header spoofing.
             #           (Checking Host header is our new/current ID mechanism.)
-            # 'user_token': gogs_user_token, # Used to be checked by tX enqueue job
+            # 'user_token': dcs_user_token, # Used to be checked by tX enqueue job
             #   but it now authenticates because we usually send this from git.door43.org
             #       (or when debugging, from 127.0.0.1:80).
             }
