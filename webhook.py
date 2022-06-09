@@ -1085,7 +1085,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     if 'echoed_from_production' in queued_json_payload and queued_json_payload['echoed_from_production']:
         AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
 
-    AppSettings.logger.debug(f"Clearing /tmp folder…")
+    AppSettings.logger.debug("Clearing /tmp folder…")
     empty_folder('/tmp/', only_prefix='Door43_') # Stops failed jobs from accumulating in /tmp
 
     current_job = get_current_job()
