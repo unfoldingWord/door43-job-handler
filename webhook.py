@@ -35,6 +35,7 @@ from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
 from app_settings.app_settings import AppSettings
+from urllib.parse import urlparse
 
 
 OUR_NAME = 'Door43_job_handler'
@@ -572,6 +573,8 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
+
+
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
@@ -769,9 +772,15 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
         # Pass the work request onto the tX system
         AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
+        url_parts = urlparse(repo_data_url)
+        dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
         tx_payload = {
-            'job_id': our_job_id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
+            'repo': repo_name,
+            'repo_owner': repo_owner_username,
+            'repo_ref': commit_id,
+            'repo_data_url': repo_data_url,
+            'dcs_domain': dcs_domain,
             'resource_type': resource_subject, # This used to be rc.resource.identifier
             'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                                 else input_format, # special case for .txt Bibles
