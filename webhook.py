@@ -775,6 +775,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         url_parts = urlparse(repo_data_url)
         dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
         tx_payload = {
+            'job_id': our_job_id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
             'repo': repo_name,
             'repo_owner': repo_owner_username,
