@@ -653,7 +653,8 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             AppSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
         else:
             remove_tree(base_temp_dir_name)  # cleanup
-        raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+        if not resource_subject or not input_format:
+            raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
 
 
     # Save manifest to manifest table
