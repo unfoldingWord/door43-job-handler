@@ -786,7 +786,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         tx_payload = {
             'job_id': our_job_id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
-            'repo': repo_name,
+            'repo_name': repo_name,
             'repo_owner': repo_owner_username,
             'repo_ref': commit_id,
             'repo_data_url': repo_data_url,
