@@ -127,7 +127,7 @@ class ProjectDeployer:
                 AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location=f"/{s3_commit_key}/{redirect_to_file}")
                 AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html', location=f"/{s3_commit_key}/{redirect_to_file}")
             AppSettings.door43_s3_handler().redirect(key=s3_commit_key, location=f"/{s3_commit_key}/{redirect_to_file}")
-            if not has_index_file:
+            if not has_index_file and redirect_to_file != "index.html":
                 AppSettings.door43_s3_handler().redirect(key=f"{s3_commit_key}/index.html", location=f"/{s3_commit_key}/{redirect_to_file}")
 
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished

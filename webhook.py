@@ -35,11 +35,12 @@ from resource_container.ResourceContainer import RC
 from preprocessors.preprocessors import do_preprocess
 from models.manifest import TxManifest
 from app_settings.app_settings import AppSettings
+from urllib.parse import urlparse
 
 
 OUR_NAME = 'Door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
-            'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon',
+            'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon', 'Greek_Grammar', 'Hebrew_Grammar',
             # and 14 from https://api.door43.org/v3/subjects (last checked Mar 2020)
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
@@ -58,16 +59,24 @@ RESOURCE_SUBJECT_MAP = {
             'obs-tq': 'OBS_Translation_Questions',
             'obs-sg': 'Generic_Markdown', # See if this works for OBS Study Guide
 
-            'bible': 'Bible', 'reg': 'Bible',
-                'ulb': 'Bible', 'udb': 'Bible', # These sometimes don't have the correct subject in the manifest
+            'bible': 'Bible',
+            'reg': 'Bible',
+            'ulb': 'Bible',
+            'udb': 'Bible', # These sometimes don't have the correct subject in the manifest
+            'ult': 'Aligned_Bible',
+            'ust': 'Aligned_Bible',
+            'glt': 'Bible',
+            'gst': 'Bible',
 
             'ta': 'Translation_Academy',
             'tn': 'Translation_Notes',
             'tq': 'Translation_Questions',
             'tw': 'Translation_Words',
 
-            'ugl': 'Greek_Lexicon', # Subject for en_ugl is 'Greek English Lexicon' but we want to stay more generic
+            'ugl': 'Greek_Lexicon',
             'uhal': 'Hebrew-Aramaic_Lexicon',
+            'ugg': 'Greek_Grammar',
+            'uhg': 'Hebrew_Grammmar',
 
             # TODO: Have I got these next two correct???
             #'help':'Translation_Academy',
@@ -572,6 +581,8 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
 
 # user_projects_invoked_string = 'user-projects.invoked.unknown--unknown'
 project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknown'
+
+
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
@@ -636,14 +647,15 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
     AppSettings.logger.info(f"Got resource_subject='{resource_subject}', input_format='{input_format}'")
     if resource_subject not in KNOWN_RESOURCE_SUBJECTS:
         AppSettings.logger.critical(f"Got unexpected resource_subject={resource_subject} with input_format={input_format}")
-    if not resource_subject or not input_format:
-        # Might as well fail here if they're not set properly
+    if not resource_subject or not input_format or resource_subject in ('Greek_Lexicon', 'Hebrew-Aramaic_Lexicon', 'Greek_Grammar', 'Hebrew_Grammar'):
+        # Might as well fail here if they're not set properly or is a repo that redirects to readthedocs (Lexicon and Grammar repos)
         if prefix and debug_mode_flag:
             AppSettings.logger.debug(f"Temp folder '{base_temp_dir_name}' has been left on disk for debugging!")
-        else:
+        elif os.path.exists(base_temp_dir_name):
             remove_tree(base_temp_dir_name)  # cleanup
-        raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
-
+        if not resource_subject or not input_format:
+            raise Exception(f"Unable to find a type or format for {repo_owner_username}/{repo_name}: id={rc.resource.identifier!r} subject={rc.resource.subject!r}, RC type={rc.resource.type!r} format={input_format!r}")
+        return
 
     # Save manifest to manifest table
     # AppSettings.logger.debug(f'Creating manifest dictionary…')
@@ -769,9 +781,16 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
         # Pass the work request onto the tX system
         AppSettings.logger.info(f"Post request to tX system @ {tx_post_url} …")
+        url_parts = urlparse(repo_data_url)
+        dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
         tx_payload = {
             'job_id': our_job_id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
+            'repo_name': repo_name,
+            'repo_owner': repo_owner_username,
+            'repo_ref': commit_id,
+            'repo_data_url': repo_data_url,
+            'dcs_domain': dcs_domain,
             'resource_type': resource_subject, # This used to be rc.resource.identifier
             'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                                 else input_format, # special case for .txt Bibles
