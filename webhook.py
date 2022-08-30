@@ -586,7 +586,7 @@ project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknow
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
-                        source_url_base:str, our_identifier:str,
+                        source_url_base:str, our_identifier:str, our_output_format:str,
                         our_queue) -> str:
     """
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
@@ -756,7 +756,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
         pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
         pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-        pj_job_dict['output_format'] = 'html'
+        pj_job_dict['output_format'] = our_output_format
         # NOTE: following line removed as stats recording used too much disk space
         # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
         pj_job_dict['links'] = {
@@ -911,7 +911,8 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     repo_name = queued_json_payload['repository']['name']
 
     commit_branch = commit_hash = repo_data_url = tag_name = None
-    if queued_json_payload['DCS_event'] == 'push':
+    our_output_format = 'html'
+    if queued_json_payload['DCS_event'] == 'push' or queued_json_payload['DCS_event'] == 'pdf_request':
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
         except (IndexError, AttributeError):
@@ -943,6 +944,8 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
             pusher_dict = {'username': commit['author']['username']}
         pusher_username = pusher_dict['username']
         our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
+        if queued_json_payload['DCS_event'] == 'pdf':
+            our_output_format = 'pdf'
 
     elif queued_json_payload['DCS_event'] == 'release':
         # Note: payload doesn't include a commit hash
@@ -1074,7 +1077,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
                             commit_type, commit_id, commit_hash, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
-                            our_identifier, our_queue)
+                            our_identifier, our_output_format, our_queue)
     else:
         AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
 
