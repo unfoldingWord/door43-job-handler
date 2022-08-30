@@ -39,7 +39,7 @@ def do_preprocess(repo_subject:str, repo_owner:str, commit_url:str, rc:RC,
     elif repo_subject == 'Translation_Academy':
         AppSettings.logger.info(f"do_preprocess: using TaPreprocessor for '{repo_subject}'…")
         preprocessor = TaPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
-    elif repo_subject == 'Translation_Questions':
+    elif repo_subject in ('Translation_Questions', 'TSV_Translation_Questions'):
         AppSettings.logger.info(f"do_preprocess: using TqPreprocessor for '{repo_subject}'…")
         preprocessor = TqPreprocessor(commit_url, rc, repo_owner, repo_dir, output_dir)
     elif repo_subject == 'Translation_Words':
