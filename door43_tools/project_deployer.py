@@ -5,13 +5,12 @@ import time
 import traceback
 from glob import glob
 from shutil import copyfile
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any, Union
 
-from rq_settings import prefix, debug_mode_flag
 from app_settings.app_settings import AppSettings
 from general_tools import file_utils
-from general_tools.file_utils import write_file, remove_tree
+from general_tools.file_utils import write_file
 from door43_tools.templaters import init_template, get_sorted_Bible_html_filepath_list
 
 
@@ -128,7 +127,7 @@ class ProjectDeployer:
                 AppSettings.door43_s3_handler().redirect(key=s3_repo_key, location=f"/{s3_commit_key}/{redirect_to_file}")
                 AppSettings.door43_s3_handler().redirect(key=s3_repo_key + '/index.html', location=f"/{s3_commit_key}/{redirect_to_file}")
             AppSettings.door43_s3_handler().redirect(key=s3_commit_key, location=f"/{s3_commit_key}/{redirect_to_file}")
-            if not has_index_file:
+            if not has_index_file and redirect_to_file != "index.html":
                 AppSettings.door43_s3_handler().redirect(key=f"{s3_commit_key}/index.html", location=f"/{s3_commit_key}/{redirect_to_file}")
 
             self.write_data_to_file_and_upload_to_CDN(output_dir, s3_commit_key, fname='deployed', data=' ')  # flag that deploy has finished
