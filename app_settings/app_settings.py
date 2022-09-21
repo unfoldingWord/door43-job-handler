@@ -68,7 +68,7 @@ class AppSettings:
     dirty = False
 
     # Stage Variables, defaults
-    prefix = os.getenv('QUEUE_PREFIX', '')
+    prefix = ''
     api_url = os.getenv('API_URL', 'https://api.door43.org')
     pre_convert_bucket_name = os.getenv('PRE_CONVERT_BUCKET_NAME', 'tx-webhook-client')
     cdn_bucket_name = os.getenv('CDN_BUCKET_NAME', 'cdn.door43.org')
