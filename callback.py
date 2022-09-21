@@ -649,17 +649,18 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         # Now update the PDF_details.json file in the root dir of this repo in the door43.org bucket (create if doesn't exist) for this ref
         pdf_details_key = f'u/{this_job_dict["repo_owner_username"]}/{this_job_dict["repo_name"]}/PDF_details.json'
         pdf_details_contents = AppSettings.door43_s3_handler().get_file_contents(pdf_details_key)
-        pdf_details_dict = {}
         if pdf_details_contents:
             pdf_details_dict = json.loads(pdf_details_contents)
+        else:
+            pdf_details_dict = {}
         ref = queued_json_payload['repo_ref']
         if ref not in pdf_details_dict:
             pdf_details_dict[ref] = {}
         pdf_details_dict[ref]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
         pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
-        AppSettings.door43_s3_handler().put_contents(pdf_details_key)
- 
+        AppSettings.door43_s3_handler().put_json(pdf_details_key, pdf_details_dict)
+
     deployed = True
     update_project_file(final_build_log, our_temp_dir)
 
