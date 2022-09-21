@@ -658,7 +658,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_details_dict[ref]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
         pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
-        AppSettings.door43_s3_handler().put_file_contents(pdf_details_key)
+        AppSettings.door43_s3_handler().put_contents(pdf_details_key)
  
     deployed = True
     update_project_file(final_build_log, our_temp_dir)
