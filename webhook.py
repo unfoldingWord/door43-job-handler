@@ -794,7 +794,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'resource_type': resource_subject, # This used to be rc.resource.identifier
             'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                                 else input_format, # special case for .txt Bibles
-            'output_format': 'html',
+            'output_format': our_output_format,
             'source': source_url_base + '/' + file_key,
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
