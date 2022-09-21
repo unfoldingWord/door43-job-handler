@@ -937,20 +937,19 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         commit_hash = commit_hash[:10]  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
 
-        repo_data_url = ""
-        action_message = ""
-        if commit:
-            repo_data_url = commit['url']
-            action_message = commit['message'].strip() # Seems to always end with a newline
+        repo_data_url = commit['url']
+        action_message = commit['message'].strip() # Seems to always end with a newline
 
         if 'pusher' in queued_json_payload:
             pusher_dict = queued_json_payload['pusher']
         else:
             pusher_dict = {'username': commit['author']['username']}
         pusher_username = pusher_dict['username']
-        our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
-        if queued_json_payload['DCS_event'] == 'pdf':
+        if queued_json_payload['DCS_event'] == 'pdf_request':
+            our_identifier = f"'{pusher_username}' requesting PDF of '{repo_owner_username}/{repo_name}'"
             our_output_format = 'pdf'
+        else:
+            our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
 
     elif queued_json_payload['DCS_event'] == 'release':
         # Note: payload doesn't include a commit hash
