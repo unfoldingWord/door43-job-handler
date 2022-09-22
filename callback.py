@@ -424,7 +424,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             'success': False,
             'pdf_status': None,
             'pdf_success': False,
-            'pdf_url': None,
+            'pdf_zip_url': None,
         }
         project_json['commits'].append(current_commit)
         
@@ -437,7 +437,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     if build_log['output_format'] == 'pdf':
         current_commit['pdf_status'] = build_log['status']
         current_commit['pdf_success'] = build_log['success']
-        current_commit['pdf_url'] = build_log['pdf_url']
+        current_commit['pdf_zip_url'] = f'{build_log["repo_name"]}_{build_log["commit_id"]}.zip'
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
@@ -659,6 +659,9 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_details_dict[ref]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
         pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
+        pdf_details_dict[ref]['zip_url'] = f'{queued_json_payload["commit_id"]}/{queued_json_payload["repo_name"]}_{queued_json_payload["commit_id"]}.zip'
+        pdf_details_dict[ref]['job_id'] = queued_json_payload['job_id']
+        pdf_details_dict[ref]['commit_hash'] = queued_json_payload['commit_hash']
         AppSettings.door43_s3_handler().put_json(pdf_details_key, pdf_details_dict)
 
     deployed = True
