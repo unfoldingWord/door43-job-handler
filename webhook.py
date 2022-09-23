@@ -788,6 +788,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'repo_name': repo_name,
             'repo_owner': repo_owner_username,
             'repo_ref': commit_id,
+            'commit_hash': commit_hash,
             'repo_data_url': repo_data_url,
             'dcs_domain': dcs_domain,
             'resource_type': resource_subject, # This used to be rc.resource.identifier
