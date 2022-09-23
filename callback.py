@@ -659,7 +659,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_details_dict[ref]['PDF_creator'] = MY_NAME
         pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
         pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
-        pdf_details_dict[ref]['zip_url'] = f'{queued_json_payload["commit_id"]}/{queued_json_payload["repo_name"]}_{queued_json_payload["commit_id"]}.zip'
+        pdf_details_dict[ref]['zip_url'] = f'{queued_json_payload["repo_ref"]}/{queued_json_payload["repo_name"]}_{queued_json_payload["repo_ref"]}.zip'
         pdf_details_dict[ref]['job_id'] = queued_json_payload['job_id']
         pdf_details_dict[ref]['commit_hash'] = queued_json_payload['commit_hash']
         pdf_details_dict[ref]['status'] = 'success'
