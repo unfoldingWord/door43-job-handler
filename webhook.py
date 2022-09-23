@@ -223,7 +223,6 @@ def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str
     download_and_unzip_repo(base_temp_dir_name, commit_url, temp_folderpath)
     repo_folderpath = os.path.join(temp_folderpath, repo_name.lower())
     if os.path.isdir(repo_folderpath):
-        print("Returning1", repo_folderpath)
         return repo_folderpath
     # else the folder that we were expecting from inside the zipped repo is not there
     # NOTE: This can happen if the repo has been renamed in DCS -- maybe a Gitea bug???

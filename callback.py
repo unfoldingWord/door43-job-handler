@@ -662,6 +662,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         pdf_details_dict[ref]['zip_url'] = f'{queued_json_payload["commit_id"]}/{queued_json_payload["repo_name"]}_{queued_json_payload["commit_id"]}.zip'
         pdf_details_dict[ref]['job_id'] = queued_json_payload['job_id']
         pdf_details_dict[ref]['commit_hash'] = queued_json_payload['commit_hash']
+        pdf_details_dict[ref]['status'] = 'success'
         AppSettings.door43_s3_handler().put_json(pdf_details_key, pdf_details_dict)
 
     deployed = True
