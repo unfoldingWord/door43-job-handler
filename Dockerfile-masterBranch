@@ -6,7 +6,7 @@ FROM python:alpine
 COPY . /code
 WORKDIR /code
 
-RUN apk add --no-cache --virtual .build-deps gcc musl-dev
+RUN apk add --no-cache --virtual .build-deps gcc g++
 RUN pip3 install --upgrade pip
 RUN pip3 install --requirement requirements.txt
 
