@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import re
+import dcs_api_client
 import boto3
 
 from sqlalchemy import create_engine
@@ -11,7 +12,7 @@ from sqlalchemy.pool import NullPool
 
 from aws_tools.s3_handler import S3Handler
 from watchtower import CloudWatchLogHandler
-
+from aws_tools.s3_handler import S3Handler
 from rq_settings import debug_mode_flag
 
 
@@ -68,14 +69,14 @@ class AppSettings:
 
     # Stage Variables, defaults
     prefix = ''
-    api_url = 'https://api.door43.org'
-    pre_convert_bucket_name = 'tx-webhook-client'
-    cdn_bucket_name = 'cdn.door43.org'
-    door43_bucket_name = 'door43.org'
-    dcs_user_token = None
-    dcs_url = 'https://git.door43.org'
-    dcs_domain_name = 'git.door43.org'
-    dcs_ip_address = '127.0.0.1'
+    api_url = os.getenv('API_URL', 'https://api.door43.org')
+    pre_convert_bucket_name = os.getenv('PRE_CONVERT_BUCKET_NAME', 'tx-webhook-client')
+    cdn_bucket_name = os.getenv('CDN_BUCKET_NAME', 'cdn.door43.org')
+    door43_bucket_name = os.getenv('DOOR43_BUCKET_NAME', 'door43.org')
+    dcs_user_token = os.getenv('DCS_USER_TOKEN', None)
+    dcs_url = os.getenv('DCS_URL', default='https://develop.door43.org' if prefix else 'https://git.door43.org')
+    dcs_domain_name = os.getenv('DCS_DOMAIN_NAME', 'git.door43.org')
+    dcs_ip_address = os.getenv('DCS_IP_ADDRESS', '127.0.0.1')
     module_table_name = 'modules'
     language_stats_table_name = 'language-stats'
     linter_messaging_name = 'linter_complete'
@@ -87,7 +88,7 @@ class AppSettings:
     db_end_point = os.environ['DB_ENDPOINT']
     db_port = '3306'
     db_name = 'tx'
-    db_connection_string = None
+    db_connection_string = os.getenv('DB_CONNECTION_STRING', None)
     db_connection_string_params = 'charset=utf8mb4&use_unicode=0'
 
     # Prefixing vars
@@ -158,6 +159,10 @@ class AppSettings:
         setup_logger(cls.logger, cls.watchtower_log_handler,
                             logging.DEBUG if debug_mode_flag else logging.INFO)
         cls.logger.debug(f"Logging to AWS CloudWatch group '{log_group_name}' using key '…{cls.aws_access_key_id[-2:]}'.")
+
+        api_config = dcs_api_client.Configuration()
+        api_config.host = f"{cls.dcs_url}/api/v1"
+        cls.repo_api = dcs_api_client.RepositoryApi(dcs_api_client.ApiClient(api_config))
 
 
     @classmethod

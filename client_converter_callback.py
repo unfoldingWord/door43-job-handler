@@ -1,14 +1,13 @@
 from typing import Dict, List, Any, Optional, Tuple
 import os
 import tempfile
+import shutil
 from datetime import datetime
 
 from rq_settings import prefix
 from app_settings.app_settings import AppSettings
 from general_tools.file_utils import unzip, remove_file
 from general_tools.url_utils import download_file
-
-
 
 class LocalJob:
     """

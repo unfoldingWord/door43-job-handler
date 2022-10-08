@@ -18,7 +18,7 @@ class User(AppSettings.Base, TxModel):
 class TestAppSettings(unittest.TestCase):
 
     def test_init(self):
-        dcs_url = 'https://my.dcs.org'
+        dcs_url = 'https://my.dcs'
         AppSettings(dcs_url=dcs_url)
         self.assertEqual(AppSettings.dcs_url, dcs_url)
 

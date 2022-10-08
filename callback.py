@@ -33,7 +33,9 @@ from client_linter_callback import ClientLinterCallback
 from door43_tools.project_deployer import ProjectDeployer
 from general_tools.file_utils import write_file, remove_tree
 
-
+MY_NAME = 'tX PDF creator'
+MY_VERSION_STRING = '2.0.0' # Mostly to determine PDF fixes
+MY_NAME_VERSION_STRING = f"{MY_NAME} v{MY_VERSION_STRING}"
 
 AppSettings(prefix=prefix)
 if prefix not in ('', 'dev-'):
@@ -191,20 +193,20 @@ def clear_commit_directory_from_bucket(s3_bucket_handler, s3_commit_key: str) ->
 # end of clear_commit_directory_from_bucket function
 
 
-def get_list_from_Gitea(Gitea_url:str) -> List[str]:
+def get_list_from_dcs(dcs_url:str) -> List[str]:
     """
     Send a GET request to the URL
         and return the list from the returned JSON.
     """
-    AppSettings.logger.debug(f"get_list_from_Gitea({Gitea_url})…")
+    AppSettings.logger.debug(f"get_list_from_dcs({dcs_url})…")
 
     this_list = []
     response:Optional[requests.Response]
     try:
-        # AppSettings.logger.debug(f"GETting list from '{Gitea_url}'…")
-        response = requests.get(Gitea_url)
+        # AppSettings.logger.debug(f"Getting list from '{dcs_url}'…")
+        response = requests.get(dcs_url)
     except requests.exceptions.ConnectionError as e:
-        AppSettings.logger.critical(f"get_list_from_Gitea connection error: {e}")
+        AppSettings.logger.critical(f"get_list_from_dcs connection error: {e}")
         response = None
     if response:
         # AppSettings.logger.info(f"response.status_code = {response.status_code}, response.reason = {response.reason}")
@@ -217,25 +219,25 @@ def get_list_from_Gitea(Gitea_url:str) -> List[str]:
             AppSettings.logger.info("No valid list response JSON found")
             AppSettings.logger.debug(f"response.text = {response.text}")
         if response.status_code != 200:
-            AppSettings.logger.critical(f"Failed to submit list request to Gitea:"
+            AppSettings.logger.critical(f"Failed to submit list request to DCS:"
                                         f" {response.status_code}={response.reason}")
     else: # no response
-        error_msg = "Submission of list request to Gitea got no response"
+        error_msg = "Submission of list request to DCS got no response"
         AppSettings.logger.critical(error_msg)
         # raise Exception(error_msg) # So we go into the FAILED queue and monitoring system
 
     # AppSettings.logger.debug(f"  Returning this_list={this_list}")
     return this_list
-# end of get_list_from_Gitea function
+# end of get_list_from_dcs function
 
 
 def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
-    Ask Gitea for a list of all current branches.
+    Ask DCS for a list of all current branches.
     """
     AppSettings.logger.debug(f"get_current_branch_names_list({repo_owner_username}, {repo_name})…")
 
-    current_branch_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
+    current_branch_list = get_list_from_dcs(f'{AppSettings.dcs_url}/api/v1/repos/{repo_owner_username}/{repo_name}/branches')
     current_branch_names_list = [this_dict['name'] for this_dict in current_branch_list]
     AppSettings.logger.info(f"Returning current_branch_names_list={current_branch_names_list}")
     return current_branch_names_list
@@ -244,11 +246,11 @@ def get_current_branch_names_list(repo_owner_username:str, repo_name:str) -> Lis
 
 def get_current_tag_names_list(repo_owner_username:str, repo_name:str) -> List[str]:
     """
-    Ask Gitea for a list of all current release tags.
+    Ask DCS for a list of all current release tags.
     """
     AppSettings.logger.debug(f"get_current_tag_names_list({repo_owner_username}, {repo_name})…")
 
-    current_tag_list = get_list_from_Gitea(f'https://git.door43.org/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
+    current_tag_list = get_list_from_dcs(f'{AppSettings.dcs_url}/api/v1/repos/{repo_owner_username}/{repo_name}/releases')
     current_tag_names_list = [this_dict['tag_name'] for this_dict in current_tag_list]
     AppSettings.logger.info(f"Returning current_tag_names_list={current_tag_names_list}")
     return current_tag_names_list
@@ -400,20 +402,42 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
     repo_name = build_log['repo_name']
     project_folder_key = f'u/{repo_owner_username}/{repo_name}/'
     project_json_key = f'{project_folder_key}project.json'
+    AppSettings.logger.info(f"Fetching project file with {project_json_key}...")
     project_json = AppSettings.door43_s3_handler().get_json(project_json_key)
+    AppSettings.logger.info(f"Got project file from {project_json_key}: {project_json}")
     project_json['user'] = repo_owner_username
     project_json['repo'] = repo_name
-    project_json['repo_url'] = f'https://{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
-    current_commit = {
-        'id': commit_id,
-        'job_id': build_log['job_id'],
-        'type': build_log['commit_type'],
-        'created_at': build_log['created_at'],
-        'status': build_log['status'],
-        'success': build_log['success'],
-        # 'started_at': None,
-        # 'ended_at': None
-    }
+    project_json['repo_url'] = f'{AppSettings.dcs_url}/{repo_owner_username}/{repo_name}'
+
+    if 'commits' not in project_json:
+        project_json['commits'] = []
+
+    current_commit = None
+    for commit in project_json['commits']:
+        if commit['id'] == commit_id:
+            current_commit = commit
+            break
+    if not current_commit:
+        current_commit = {
+            'id': commit_id,
+            'status': None,
+            'success': False,
+            'pdf_status': None,
+            'pdf_success': False,
+            'pdf_zip_url': None,
+        }
+        project_json['commits'].append(current_commit)
+        
+    current_commit['job_id'] = build_log['job_id']
+    current_commit['type'] = build_log['commit_type']
+    current_commit['created_at'] = build_log['created_at']
+    if build_log['output_format'] == 'html':
+        current_commit['status'] = build_log['status']
+        current_commit['success'] = build_log['success']
+    if build_log['output_format'] == 'pdf':
+        current_commit['pdf_status'] = build_log['status']
+        current_commit['pdf_success'] = build_log['success']
+        current_commit['pdf_zip_url'] = f'{build_log["repo_name"]}_{build_log["commit_id"]}.zip'
     if build_log['commit_hash']:
         current_commit['commit_hash'] = build_log['commit_hash']
     # if 'started_at' in build_log:
@@ -430,9 +454,7 @@ def update_project_file(build_log:Dict[str,Any], output_dirpath:str) -> None:
             if char not in 'abcdef1234567890': return False
         return True
 
-    if 'commits' not in project_json:
-        project_json['commits'] = []
-    AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
+    # AppSettings.logger.info(f"Rebuilding commits list (currently {len(project_json['commits']):,}) for project.json…")
     commits:List[Dict[str,Any]] = []
     no_job_id_count = 0
     for ix, c in enumerate(project_json['commits']):
@@ -523,14 +545,13 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     this_job_dict = queued_json_payload.copy()
     # Get needed fields that we saved but didn't submit to or receive back from tX
     for fieldname in ('repo_owner_username', 'repo_name', 'commit_id', 'commit_hash',
-                                        'input_format', 'door43_webhook_received_at'):
-        if prefix and debug_mode_flag: assert fieldname not in this_job_dict
+                      'output', 'cdn_file', 'cdn_bucket',
+                      'input_format', 'door43_webhook_received_at'):
         this_job_dict[fieldname] = matched_job_dict[fieldname]
     # Remove unneeded fields that we saved or received back from tX
     for fieldname in ('callback',):
         if fieldname in this_job_dict:
             del this_job_dict[fieldname]
-
     if 'preprocessor_warnings' in matched_job_dict:
         # AppSettings.logger.debug(f"Got {len(matched_job_dict['preprocessor_warnings'])}"
         #                            f" remembered preprocessor_warnings: {matched_job_dict['preprocessor_warnings']}")
@@ -608,19 +629,44 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         final_build_log['warnings'].append(f"{len(final_build_log['warnings']):,} total preprocessor and linter warnings")
     final_build_log['success'] = queued_json_payload['converter_success']
     final_build_log['ended_at'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    update_project_file(final_build_log, our_temp_dir)
     # NOTE: The following is disabled coz it's done (again) later by the deployer
     # upload_build_log(final_build_log, 'build_log.json', output_dir, url_part2, cache_time=600)
 
     if unzip_dir is None:
         AppSettings.logger.critical("Unable to deploy because file download failed previously")
         deployed = False
-    else:
+    elif queued_json_payload['output_format'] == 'html':
         # Now deploy the new pages (was previously a separate AWS Lambda call)
         AppSettings.logger.info(f"Deploying to the website (convert status='{final_build_log['status']}')…")
         deployer = ProjectDeployer(unzip_dir, our_temp_dir)
         deployer.deploy_revision_to_door43(final_build_log) # Does templating and uploading
-        deployed = True
+    elif queued_json_payload['output_format'] == 'pdf':
+        # Now copy the zip file with the PDF to the door43.org bucket
+        AppSettings.logger.info(f"Deploying PDF zip file to the website (convert status='{final_build_log['status']}')…")
+        pdf_zip_file_key = f"{url_part2}/{this_job_dict['repo_name']}_{this_job_dict['commit_id']}.zip"
+        AppSettings.logger.info(f"Copying {this_job_dict['output']} to {AppSettings.door43_bucket_name}/{pdf_zip_file_key}…")
+        AppSettings.door43_s3_handler().copy(from_key=this_job_dict['cdn_file'], from_bucket=this_job_dict['cdn_bucket'], to_key=pdf_zip_file_key)
+        # Now update the PDF_details.json file in the root dir of this repo in the door43.org bucket (create if doesn't exist) for this ref
+        pdf_details_key = f'u/{this_job_dict["repo_owner_username"]}/{this_job_dict["repo_name"]}/PDF_details.json'
+        pdf_details_contents = AppSettings.door43_s3_handler().get_file_contents(pdf_details_key)
+        if pdf_details_contents:
+            pdf_details_dict = json.loads(pdf_details_contents)
+        else:
+            pdf_details_dict = {}
+        ref = queued_json_payload['repo_ref']
+        if ref not in pdf_details_dict:
+            pdf_details_dict[ref] = {}
+        pdf_details_dict[ref]['PDF_creator'] = MY_NAME
+        pdf_details_dict[ref]['PDF_creator_version'] = MY_VERSION_STRING
+        pdf_details_dict[ref]['source_url'] = queued_json_payload['source']
+        pdf_details_dict[ref]['zip_url'] = f'{queued_json_payload["repo_ref"]}/{queued_json_payload["repo_name"]}_{queued_json_payload["repo_ref"]}.zip'
+        pdf_details_dict[ref]['job_id'] = queued_json_payload['job_id']
+        pdf_details_dict[ref]['commit_hash'] = queued_json_payload['commit_hash']
+        pdf_details_dict[ref]['status'] = 'success'
+        AppSettings.door43_s3_handler().put_json(pdf_details_key, pdf_details_dict)
+
+    deployed = True
+    update_project_file(final_build_log, our_temp_dir)
 
     if prefix and debug_mode_flag:
         AppSettings.logger.debug(f"Temp folder '{our_temp_dir}' has been left on disk for debugging!")
@@ -634,7 +680,6 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     AppSettings.logger.info(f"Door43-Job-Handler process_callback_job() for {job_descriptive_name} is finishing with {str_final_build_log_adjusted}")
     if 'echoed_from_production' in matched_job_dict and matched_job_dict['echoed_from_production']:
         AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
-        AppSettings.logger.info("  (Use https://git.door43.org/tx-manager-test-data/echo_prodn_to_dev_off/settings/hooks/44079 to turn that off.)")
     if deployed:
         AppSettings.logger.info(f"{'Should become available' if final_build_log['success'] is True or final_build_log['success']=='True' or final_build_log['status'] in ('success', 'warnings') else 'Would be'}"
                                f" at https://{AppSettings.door43_bucket_name.replace('dev-door43','dev.door43')}/{url_part2}/")

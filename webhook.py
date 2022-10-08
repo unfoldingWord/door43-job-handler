@@ -223,7 +223,6 @@ def download_repos_files_into_temp_folder(base_temp_dir_name:str, commit_url:str
     download_and_unzip_repo(base_temp_dir_name, commit_url, temp_folderpath)
     repo_folderpath = os.path.join(temp_folderpath, repo_name.lower())
     if os.path.isdir(repo_folderpath):
-        print("Returning1", repo_folderpath)
         return repo_folderpath
     # else the folder that we were expecting from inside the zipped repo is not there
     # NOTE: This can happen if the repo has been renamed in DCS -- maybe a Gitea bug???
@@ -586,7 +585,7 @@ project_types_invoked_string = f'{job_handler_stats_prefix}.types.invoked.unknow
 def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,Any], redis_connection,
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
-                        source_url_base:str, our_identifier:str,
+                        source_url_base:str, our_identifier:str, our_output_format:str,
                         our_queue) -> str:
     """
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
@@ -756,7 +755,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         pj_job_dict['cdn_file'] = f'tx/job/{our_job_id}.zip'
         pj_job_dict['output'] = f"https://{AppSettings.cdn_bucket_name}/{pj_job_dict['cdn_file']}"
         pj_job_dict['callback'] = f'{AppSettings.api_url}/client/callback'
-        pj_job_dict['output_format'] = 'html'
+        pj_job_dict['output_format'] = our_output_format
         # NOTE: following line removed as stats recording used too much disk space
         # pj_job_dict['user_projects_invoked_string'] = user_projects_invoked_string # Need to save this for reuse
         pj_job_dict['links'] = {
@@ -789,12 +788,13 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             'repo_name': repo_name,
             'repo_owner': repo_owner_username,
             'repo_ref': commit_id,
+            'commit_hash': commit_hash,
             'repo_data_url': repo_data_url,
             'dcs_domain': dcs_domain,
             'resource_type': resource_subject, # This used to be rc.resource.identifier
             'input_format': 'usfm' if resource_subject=='bible' and input_format=='txt' \
                                 else input_format, # special case for .txt Bibles
-            'output_format': 'html',
+            'output_format': our_output_format,
             'source': source_url_base + '/' + file_key,
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
@@ -911,7 +911,8 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     repo_name = queued_json_payload['repository']['name']
 
     commit_branch = commit_hash = repo_data_url = tag_name = None
-    if queued_json_payload['DCS_event'] == 'push':
+    our_output_format = 'html'
+    if queued_json_payload['DCS_event'] == 'push' or queued_json_payload['DCS_event'] == 'pdf_request':
         try:
             commit_branch = queued_json_payload['ref'].split('/')[2]
         except (IndexError, AttributeError):
@@ -928,12 +929,14 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
 
         commit_hash = queued_json_payload['after']
         commit = None
-        for some_commit in queued_json_payload['commits']:
-            if some_commit['id'] == commit_hash:
-                commit = some_commit
-                break
+        if 'commits' in queued_json_payload:
+            for some_commit in queued_json_payload['commits']:
+                if some_commit['id'] == commit_hash:
+                    commit = some_commit
+                    break
         commit_hash = commit_hash[:10]  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
+
         repo_data_url = commit['url']
         action_message = commit['message'].strip() # Seems to always end with a newline
 
@@ -942,7 +945,11 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         else:
             pusher_dict = {'username': commit['author']['username']}
         pusher_username = pusher_dict['username']
-        our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
+        if queued_json_payload['DCS_event'] == 'pdf_request':
+            our_identifier = f"'{pusher_username}' requesting PDF of '{repo_owner_username}/{repo_name}'"
+            our_output_format = 'pdf'
+        else:
+            our_identifier = f"'{pusher_username}' pushing '{repo_owner_username}/{repo_name}'"
 
     elif queued_json_payload['DCS_event'] == 'release':
         # Note: payload doesn't include a commit hash
@@ -1074,7 +1081,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
                             commit_type, commit_id, commit_hash, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
-                            our_identifier, our_queue)
+                            our_identifier, our_output_format, our_queue)
     else:
         AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
 
