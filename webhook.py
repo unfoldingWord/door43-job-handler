@@ -1036,6 +1036,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
 
     else:
         AppSettings.logger.critical(f"Can't handle '{queued_json_payload['DCS_event']}' yet!")
+        return
 
     if commit_branch == default_branch:
         commit_type = 'defaultBranch'
