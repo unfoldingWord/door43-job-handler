@@ -713,8 +713,8 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     our_queue= Queue(callback_queue_name, connection=current_job.connection)
     len_our_queue = len(our_queue) # Should normally sit at zero here
     # AppSettings.logger.debug(f"Queue '{callback_queue_name}' length={len_our_queue}")
-    stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.callback.queue.length.current', len_our_queue)
-    AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.callback.queue.length.current' to {len_our_queue}")
+    stats_client.gauge(f'"{callback_stats_prefix}.queue.length.current', len_our_queue)
+    AppSettings.logger.info(f"Updated stats for '{callback_stats_prefix}.queue.length.current' to {len_our_queue}")
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")

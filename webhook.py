@@ -38,7 +38,7 @@ from app_settings.app_settings import AppSettings
 from urllib.parse import urlparse
 
 
-OUR_NAME = 'Door43_job_handler'
+OUR_NAME = 'door43_job_handler'
 KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
             'Greek_Lexicon', 'Hebrew-Aramaic_Lexicon', 'Greek_Grammar', 'Hebrew_Grammar',
             # and 14 from https://api.door43.org/v3/subjects (last checked Mar 2020)
@@ -103,6 +103,8 @@ ADJUSTED_DOOR43_CALLBACK_URL = 'http://127.0.0.1:8080/tx-callback/' \
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
 graphite_url = os.getenv('GRAPHITE_HOSTNAME', 'localhost')
+stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
+enqueue_job_stats_prefix = f"{stats_prefix}.enqueue-job"
 stats_client = StatsClient(host=graphite_url, port=8125)
 
 
@@ -1147,7 +1149,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     abort_duplicate_flag, job_descriptive_name = check_for_forthcoming_pushes_in_queue(queued_json_payload, our_queue)
     if not abort_duplicate_flag:
         # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
-        stats_client.gauge(f'"{door43_stats_prefix}.enqueue-job.{ENQUEUE_NAME}.queue.length.current', len_our_queue)
+        stats_client.gauge(f'"{enqueue_job_stats_prefix}.queue.length.current', len_our_queue)
         AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.{ENQUEUE_NAME}.queue.length.current' to {len_our_queue}")
 
         #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
