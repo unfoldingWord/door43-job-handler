@@ -42,7 +42,7 @@ if prefix not in ('', 'dev-'):
     AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' — expected '' or 'dev-'")
 door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
 job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler" # Can't add .callback here coz we also have .total
-callback_stats_prefix = f"{job_handler_stats_prefix}.callback"
+callback_job_stats_prefix = f"{door43_stats_prefix}.enqueue-callback-job"
 
 
 # Get the Graphite URL from the environment, otherwise use a local test instance
@@ -713,8 +713,8 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     our_queue= Queue(callback_queue_name, connection=current_job.connection)
     len_our_queue = len(our_queue) # Should normally sit at zero here
     # AppSettings.logger.debug(f"Queue '{callback_queue_name}' length={len_our_queue}")
-    stats_client.gauge(f'"{callback_stats_prefix}.queue.length.current', len_our_queue)
-    AppSettings.logger.info(f"Updated stats for '{callback_stats_prefix}.queue.length.current' to {len_our_queue}")
+    stats_client.gauge(f'"{callback_job_stats_prefix}.queue.length.current', len_our_queue)
+    AppSettings.logger.info(f"Updated stats for '{callback_job_stats_prefix}.queue.length.current' to {len_our_queue}")
 
     #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
     #print(f"\nGot job {current_job.id} from {current_job.origin} queue")

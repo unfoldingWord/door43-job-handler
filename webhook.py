@@ -90,7 +90,6 @@ if prefix not in ('', 'dev-'):
     AppSettings.logger.critical(f"Unexpected prefix: '{prefix}' — expected '' or 'dev-'")
 door43_stats_prefix = f"door43.{'dev' if prefix else 'prod'}"
 job_handler_stats_prefix = f"{door43_stats_prefix}.job-handler"
-webhook_stats_prefix = f'{job_handler_stats_prefix}.webhook'
 prefixed_our_name = prefix + OUR_NAME
 
 
@@ -869,17 +868,17 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     #  Update repo/owner/pusher stats
     #   (all the following fields are expected from the Gitea webhook from push)
     try:
-        stats_client.set(f'{webhook_stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
+        stats_client.set(f'{job_handler_stats_prefix}.repo_ids', queued_json_payload['repository']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{webhook_stats_prefix}.repo_ids', 'No id')
+        stats_client.set(f'{job_handler_stats_prefix}.repo_ids', 'No id')
     try:
-        stats_client.set(f'{webhook_stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
+        stats_client.set(f'{job_handler_stats_prefix}.owner_ids', queued_json_payload['repository']['owner']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{webhook_stats_prefix}.owner_ids', 'No id')
+        stats_client.set(f'{job_handler_stats_prefix}.owner_ids', 'No id')
     try:
-        stats_client.set(f'{webhook_stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
+        stats_client.set(f'{job_handler_stats_prefix}.pusher_ids', queued_json_payload['pusher']['id'])
     except (KeyError, AttributeError, IndexError, TypeError):
-        stats_client.set(f'{webhook_stats_prefix}.pusher_ids', 'No id')
+        stats_client.set(f'{job_handler_stats_prefix}.pusher_ids', 'No id')
 
 
     # Setup a temp folder to use
@@ -1067,7 +1066,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
     adjusted_repo_owner_username = ascii_repo_owner_username_bytes.decode('utf-8') # Recode as a str
     # ascii_repo_name_bytes = repo_name.encode('ascii', 'replace') # Replaces non-ASCII chars with '?'
     # adjusted_repo_name = ascii_repo_name_bytes.decode('utf-8') # Recode as a str
-    stats_client.incr(f'{webhook_stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
+    stats_client.incr(f'{job_handler_stats_prefix}.users.invoked.{adjusted_repo_owner_username}')
     # Using a hyphen as separator as forward slash gets changed to hyphen anyway
     # NOTE: following line removed as stats recording used too much disk space
     # user_projects_invoked_string = f'{job_handler_stats_prefix}.user-projects.invoked.{adjusted_repo_owner_username}--{adjusted_repo_name}'
@@ -1110,7 +1109,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     """
     AppSettings.logger.debug(f"{OUR_NAME} received a job" + (" (in debug mode)" if debug_mode_flag else ""))
     start_time = time()
-    stats_client.incr(f'{webhook_stats_prefix}.jobs.attempted')
+    stats_client.incr(f'{job_handler_stats_prefix}.jobs.attempted')
     if 'echoed_from_production' in queued_json_payload and queued_json_payload['echoed_from_production']:
         AppSettings.logger.info("This job was ECHOED FROM PRODUCTION (for dev- chain testing)!")
 
@@ -1190,13 +1189,13 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
             raise e # We raise the exception again so it goes into the failed queue
 
     elapsed_milliseconds = round((time() - start_time) * 1000)
-    stats_client.timing(f'{webhook_stats_prefix}.job.duration', elapsed_milliseconds)
+    stats_client.timing(f'{job_handler_stats_prefix}.job.duration', elapsed_milliseconds)
     if elapsed_milliseconds < 2000:
         AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {elapsed_milliseconds:,} milliseconds.")
     else:
         AppSettings.logger.info(f"{prefixed_our_name} webhook job handling for {job_descriptive_name} completed in {round(time() - start_time)} seconds.")
 
-    stats_client.incr(f'{webhook_stats_prefix}.jobs.completed')
+    stats_client.incr(f'{job_handler_stats_prefix}.jobs.completed')
     AppSettings.close_logger() # Ensure queued logs are uploaded to AWS CloudWatch
 # end of job function
 
