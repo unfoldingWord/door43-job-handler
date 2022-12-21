@@ -44,7 +44,7 @@ KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
             # and 14 from https://api.door43.org/v3/subjects (last checked Mar 2020)
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
-            'Translation_Notes', 'TSV_Translation_Notes',
+            # 'Translation_Notes', 'TSV_Translation_Notes',
             'Open_Bible_Stories', 'OBS_Study_Notes', 'OBS_Study_Questions',
                                 'OBS_Translation_Notes', 'OBS_Translation_Questions',
             )
@@ -323,9 +323,9 @@ def get_tX_subject(gts_repo_name:str, gts_rc) -> str:
         else:
             AppSettings.logger.warning("No resource.type in RC manifest")
 
-    if repo_subject=='Translation_Notes' and gts_rc.resource.format=='tsv':
-        repo_subject = 'TSV_Translation_Notes'
-        AppSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
+    # if repo_subject=='Translation_Notes' and gts_rc.resource.format=='tsv':
+    #     repo_subject = 'TSV_Translation_Notes'
+    #     AppSettings.logger.info(f"Using rc.resource.format='{gts_rc.resource.format}' to change repo_subject from 'Translation_Notes' to '{repo_subject}'")
 
     if not repo_subject and ('-obs' in gts_repo_name or '_obs' in gts_repo_name):
         repo_subject = 'Open_Bible_Stories'
