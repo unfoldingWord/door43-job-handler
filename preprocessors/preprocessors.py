@@ -2660,7 +2660,13 @@ class TnPreprocessor(Preprocessor):
                                         continue # otherwise we crash on the next line
                                     ref, field_id, Tags, SupportReference, Quote, Occurrence, OccurrenceNote = tsv_line.split('\t')
                                     B = book.upper()
-                                    C, V = ref.split(':')
+                                    ref_parts = ref.split(':', maxsplit=1)
+                                    if len(ref_parts) >= 2:
+                                        C = ref_parts[0]
+                                        V = ref_parts[1]
+                                    else:
+                                        self.errors.append(f"Unexpected reference: '{tsv_line}' in {os.path.basename(this_filepath)}: "+ref)
+                                        continue                                        
                                     if ':' in V:
                                         V = V.split('-')[0]
                                     if B!=lastB or C!=lastC or V!=lastV:
