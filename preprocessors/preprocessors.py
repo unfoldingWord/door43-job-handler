@@ -2725,8 +2725,8 @@ class TnPreprocessor(Preprocessor):
                                         elif OccurrenceNote == '-1' and '…' in OrigQuote:
                                             self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
 
-                                        if GLQuote:
-                                            do_basic_text_checks('GLQuote', GLQuote)
+                                        # if GLQuote:
+                                        #     do_basic_text_checks('GLQuote', GLQuote)
 
                                         if OccurrenceNote:
                                             do_basic_text_checks('OccurrenceNote', OccurrenceNote)
