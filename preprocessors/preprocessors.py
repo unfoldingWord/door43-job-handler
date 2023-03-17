@@ -2658,7 +2658,7 @@ class TnPreprocessor(Preprocessor):
                                         AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
-                                    ref, field_id, Tags, SupportReference, Quote, Occurrence, OccurrenceNote = tsv_line.split('\t')
+                                    ref, field_id, Tags, SupportReference, OrigQuote, Occurrence, OccurrenceNote = tsv_line.split('\t')
                                     B = book.upper()
                                     ref_parts = ref.split(':', maxsplit=1)
                                     if len(ref_parts) >= 2:
