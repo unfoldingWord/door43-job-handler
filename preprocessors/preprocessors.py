@@ -2559,8 +2559,8 @@ class TnPreprocessor(Preprocessor):
                                         if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
                                             self.errors.append(f"Unexpected TSV9 header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
                                     elif tab_count != EXPECTED_TSV9_SOURCE_TAB_COUNT:
-                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV9_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV9_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
                                     B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
                                     if B!=lastB or C!=lastC or V!=lastV:
@@ -2647,7 +2647,7 @@ class TnPreprocessor(Preprocessor):
                         lastB = lastC = lastV = None
                         field_id_list:List[str] = []
                         with open(this_filepath, 'rt') as tsv_source_file:
-                            with open(os.path.join(self.output_dir, os.path.basename(this_filepath)), 'wt') as tsv_output_file:
+                            with open(os.path.join(self.output_dir, tsv9_filename_end), 'wt') as tsv_output_file:
                                 for n, tsv_line in enumerate(tsv_source_file, start=1):
                                     tsv_line = tsv_line.rstrip('\n')
                                     tab_count = tsv_line.count('\t')
@@ -2655,8 +2655,8 @@ class TnPreprocessor(Preprocessor):
                                         if tsv_line != 'Reference	ID	Tags	SupportReference	Quote	Occurrence	Note':
                                             self.errors.append(f"Unexpected TSV7 header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
                                     elif tab_count != EXPECTED_TSV7_SOURCE_TAB_COUNT:
-                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV7_SOURCE_TAB_COUNT}): '{tsv_line}'")
+                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV7_SOURCE_TAB_COUNT}): '{tsv_line}'")
                                         continue # otherwise we crash on the next line
                                     ref, field_id, Tags, SupportReference, OrigQuote, Occurrence, OccurrenceNote = tsv_line.split('\t')
                                     B = book.upper()
