@@ -9,6 +9,7 @@ from shutil import copy, copytree
 from urllib.request import urlopen
 from urllib.error import HTTPError
 import unicodedata
+import csv
 
 # Local imports
 from rq_settings import prefix, debug_mode_flag
@@ -2530,7 +2531,9 @@ class TnPreprocessor(Preprocessor):
 
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
         EXPECTED_TSV9_SOURCE_TAB_COUNT = 8 # So there's one more column than this
+        EXPECTED_TSV9_HEADER = 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote'
         EXPECTED_TSV7_SOURCE_TAB_COUNT = 6 # So there's one more column than this
+        EXPECTED_TSV7_HEADER = 'Reference	ID	Tags	SupportReference	Quote	Occurrence	Note'
         for project in self.rc.projects:
             AppSettings.logger.debug(f"tN preprocessor: Adjusting/Copying file(s) for '{project.identifier}' …")
             if project.identifier in BOOK_NAMES:
@@ -2541,211 +2544,144 @@ class TnPreprocessor(Preprocessor):
                 index_json['titles'][html_file] = name
                 # If there's a TSV file, copy it across
                 found_tsv = False
-                tsv9_filename_end = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
-                tsv7_filename_end = f'tn_{book.upper()}.tsv'
+                tsv9_filename = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
+                tsv7_filename = f'tn_{book.upper()}.tsv'
+                is_tsv7 = False
+                is_tsv9 = False
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
-                    if this_filepath.endswith(tsv9_filename_end): # We have the tsv 9 file
-                        found_tsv = True
-                        AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
-                        line_number = 1
-                        lastB = lastC = lastV = None
-                        field_id_list:List[str] = []
-                        with open(this_filepath, 'rt') as tsv_source_file:
-                            with open(os.path.join(self.output_dir, os.path.basename(this_filepath)), 'wt') as tsv_output_file:
-                                for n, tsv_line in enumerate(tsv_source_file, start=1):
-                                    tsv_line = tsv_line.rstrip('\n')
-                                    tab_count = tsv_line.count('\t')
-                                    if line_number == 1:
-                                        if tsv_line != 'Book	Chapter	Verse	ID	SupportReference	OrigQuote	Occurrence	GLQuote	OccurrenceNote':
-                                            self.errors.append(f"Unexpected TSV9 header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
-                                    elif tab_count != EXPECTED_TSV9_SOURCE_TAB_COUNT:
-                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV9_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV9_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        continue # otherwise we crash on the next line
-                                    B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
-                                    if B!=lastB or C!=lastC or V!=lastV:
-                                        field_id_list:List[str] = [] # IDs only need to be unique within each verse
-                                        lastB, lastC, lastV = B, C, V
+                    if this_filepath.endswith(tsv7_filename):
+                        is_tsv7 = True
+                        tsv_type = "TSV7"
+                        expected_col_tab_count = EXPECTED_TSV7_SOURCE_TAB_COUNT
+                        expected_header = EXPECTED_TSV7_HEADER
+                    elif this_filepath.endswith(tsv9_filename):
+                        is_tsv9 = True
+                        tsv_type = "TSV9"
+                        expected_col_tab_count = EXPECTED_TSV9_SOURCE_TAB_COUNT
+                        expected_header = EXPECTED_TSV9_HEADER
+                    else:
+                        continue
 
-                                    if line_number > 1: # not the headings line
-                                        # Check book identifier and C V fields
-                                        if not B:
-                                            self.warnings.append(f"Missing book code at {C}:{V} with '{field_id}'")
-                                        if B not in USFM_BOOK_IDENTIFIERS:
-                                            self.warnings.append(f"Bad book code '{B}' at {C}:{V} with '{field_id}' (Should be exactly three uppercase letters or digits)")
-                                        if not C:
-                                            self.warnings.append(f"Missing chapter number at {B} {V} with '{field_id}'")
-                                        if C not in ('front',) and not C.isdigit():
-                                            self.warnings.append(f"Bad chapter number '{C}' at {B} {V} with '{field_id}'")
-                                        if not V:
-                                            self.warnings.append(f"Missing verse number at {C}:{V} with '{field_id}'")
-                                        if V not in ('intro',) and not V.isdigit():
-                                            self.warnings.append(f"Bad verse number '{V}' at {C}:{V} with '{field_id}'")
-                                        if C == 'front' and V != 'intro':
-                                            self.warnings.append(f"Unexpected C:V combination at {B} {C}:{V} with '{field_id}'")
-                                        if line_number > 2: # compare BCV progressions
-                                                if B != lastB:
-                                                    self.warnings.append(f"Only expected one book code: have '{B}' at {C}:{V} with '{field_id}' after having '{lastB}'")
-                                                if C.isdigit() and lastC.isdigit() and int(C) < int(lastC):
-                                                    self.warnings.append(f"Chapter numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
-                                                if C==lastC and V.isdigit() and lastV.isdigit() and int(V) < int(lastV):
-                                                    self.warnings.append(f"Verse numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
+                    found_tsv = True
+                    AppSettings.logger.debug(f"tN preprocessor got {this_filepath} ({tsv_type})")
+                    line_number = 1
+                    lastB = lastC = lastV = None
+                    field_id_list:List[str] = []
+                    processed_rows = [["Book", "Chapter", "Verse", "OrigQuote", "OccurrenceNote"]]
 
-                                        # Check ID field
-                                        if not field_id:
-                                            self.warnings.append(f"Missing ID at {B} {C}:{V}")
-                                        elif len(field_id) != 4:
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should be exactly four characters long)")
-                                        elif not field_id[0].isalpha():
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should start with a letter)")
-                                        elif not field_id.replace('-','x').isalnum():
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should only contain letters, digits, and hyphens)")
-                                        elif field_id.lower() != field_id:
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Letters should be lowercase)")
-                                        if field_id in field_id_list:
-                                            self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
-                                        field_id_list.append(field_id)
+                    with open(this_filepath, 'rt') as tsv_source_file:
+                        for n, tsv_line in enumerate(tsv_source_file, start=1):
+                            tsv_line = tsv_line.rstrip('\n')
+                            tab_count = tsv_line.count('\t')
 
-                                        if SupportReference:
-                                            do_basic_text_checks('SupportReference', SupportReference)
-                                            self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
+                            if line_number == 1:
+                                if tsv_line != expected_header:
+                                    self.errors.append(f"Unexpected {tsv_type} header line #1: '{tsv_line}' (expected '{expected_header}') in {os.path.basename(this_filepath)}")
+                                elif tab_count != expected_col_tab_count:
+                                    AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {expected_col_tab_count}): '{tsv_line}'")
+                                    self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {expected_col_tab_count}): '{tsv_line}'")
+                                continue
 
-                                        if OrigQuote:
-                                            do_basic_text_checks('OrigQuote', OrigQuote)
+                            if is_tsv9:
+                                B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
+                            else:
+                                GLQuote = ''
+                                ref, field_id, _, SupportReference, OrigQuote, Occurrence, OccurrenceNote = tsv_line.split('\t')
+                                B = book.upper()
+                                C = ''
+                                V = ''
+                                ref_parts = ref.split(':', maxsplit=1)
+                                if len(ref_parts) >= 2:
+                                    C = ref_parts[0]
+                                    V = ref_parts[1]
+                                else:
+                                    self.errors.append(f"Unexpected reference: '{tsv_line}' in {os.path.basename(this_filepath)}: "+ref)
+                                    continue
+                                if ':' in V:
+                                    V = V.split('-')[0]
 
-                                        if (not Occurrence.replace('-','0').isdigit() # allows for -1 as well
-                                        or -1>int(Occurrence)>30): # How many words in the longest verse???
-                                            self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (Should be number -1,0,1,2,…)")
-                                        elif OccurrenceNote == '-1' and '…' in OrigQuote:
-                                            self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
+                            if B != lastB or C != lastC or V != lastV:
+                                field_id_list:List[str] = [] # IDs only need to be unique within each verse
+                                lastB, lastC, lastV = B, C, V
 
-                                        if GLQuote:
-                                            do_basic_text_checks('GLQuote', GLQuote)
+                            # Check book identifier and C V fields
+                            if not B:
+                                self.warnings.append(f"Missing book code at {C}:{V} with '{field_id}'")
+                            if B not in USFM_BOOK_IDENTIFIERS:
+                                self.warnings.append(f"Bad book code '{B}' at {C}:{V} with '{field_id}' (Should be exactly three uppercase letters or digits)")
+                            if not C:
+                                self.warnings.append(f"Missing chapter number at {B} {V} with '{field_id}'")
+                            if C not in ('front',) and not C.isdigit():
+                                self.warnings.append(f"Bad chapter number '{C}' at {B} {V} with '{field_id}'")
+                            if not V:
+                                self.warnings.append(f"Missing verse number at {C}:{V} with '{field_id}'")
+                            if V not in ('intro',) and not V.isdigit():
+                                self.warnings.append(f"Bad verse number '{V}' at {C}:{V} with '{field_id}'")
+                            if C == 'front' and V != 'intro':
+                                self.warnings.append(f"Unexpected C:V combination at {B} {C}:{V} with '{field_id}'")
+                            if line_number > 2: # compare BCV progressions
+                                if B != lastB:
+                                    self.warnings.append(f"Only expected one book code: have '{B}' at {C}:{V} with '{field_id}' after having '{lastB}'")
+                                if C.isdigit() and lastC.isdigit() and int(C) < int(lastC):
+                                    self.warnings.append(f"Chapter numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
+                                if C==lastC and V.isdigit() and lastV.isdigit() and int(V) < int(lastV):
+                                    self.warnings.append(f"Verse numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
 
-                                        if OccurrenceNote:
-                                            do_basic_text_checks('OccurrenceNote', OccurrenceNote)
-                                        if '://' in OccurrenceNote or '[[' in OccurrenceNote:
-                                            OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
-                                        if 'rc://' in OccurrenceNote:
-                                            self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
-                                        if B != 'Book' \
-                                        and self.need_to_check_quotes \
-                                        and OrigQuote:
-                                            try: self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
-                                            except Exception as e:
-                                                self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
+                            # Check ID field
+                            if not field_id:
+                                self.warnings.append(f"Missing ID at {B} {C}:{V}")
+                            elif len(field_id) != 4:
+                                self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should be exactly four characters long)")
+                            elif not field_id[0].isalpha():
+                                self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should start with a letter)")
+                            elif not field_id.replace('-','x').isalnum():
+                                self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should only contain letters, digits, and hyphens)")
+                            elif field_id.lower() != field_id:
+                                self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Letters should be lowercase)")
+                            if field_id in field_id_list:
+                                self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
+                            field_id_list.append(field_id)
 
-                                    tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
-                                    line_number += 1
-                        AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
-                        self.num_files_written += 1
-                        break # Don't bother looking for other files since we found our TSV one for this book
-                    elif this_filepath.endswith(tsv7_filename_end): # We have the tsv 7 file
-                        found_tsv = True
-                        AppSettings.logger.debug(f"tN preprocessor got {this_filepath}")
-                        line_number = 1
-                        lastB = lastC = lastV = None
-                        field_id_list:List[str] = []
-                        with open(this_filepath, 'rt') as tsv_source_file:
-                            with open(os.path.join(self.output_dir, tsv9_filename_end), 'wt') as tsv_output_file:
-                                for n, tsv_line in enumerate(tsv_source_file, start=1):
-                                    tsv_line = tsv_line.rstrip('\n')
-                                    tab_count = tsv_line.count('\t')
-                                    if line_number == 1:
-                                        if tsv_line != 'Reference	ID	Tags	SupportReference	Quote	Occurrence	Note':
-                                            self.errors.append(f"Unexpected TSV7 header line: '{tsv_line}' in {os.path.basename(this_filepath)}")
-                                    elif tab_count != EXPECTED_TSV7_SOURCE_TAB_COUNT:
-                                        AppSettings.logger.debug(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV7_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {EXPECTED_TSV7_SOURCE_TAB_COUNT}): '{tsv_line}'")
-                                        continue # otherwise we crash on the next line
-                                    ref, field_id, Tags, SupportReference, OrigQuote, Occurrence, OccurrenceNote = tsv_line.split('\t')
-                                    B = book.upper()
-                                    ref_parts = ref.split(':', maxsplit=1)
-                                    if len(ref_parts) >= 2:
-                                        C = ref_parts[0]
-                                        V = ref_parts[1]
-                                    else:
-                                        self.errors.append(f"Unexpected reference: '{tsv_line}' in {os.path.basename(this_filepath)}: "+ref)
-                                        continue                                        
-                                    if ':' in V:
-                                        V = V.split('-')[0]
-                                    if B!=lastB or C!=lastC or V!=lastV:
-                                        field_id_list:List[str] = [] # IDs only need to be unique within each verse
-                                        lastB, lastC, lastV = B, C, V
+                            if SupportReference:
+                                do_basic_text_checks('SupportReference', SupportReference)
+                                self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
 
-                                    if line_number > 1: # not the headings line
-                                        # Check book identifier and C V fields
-                                        if not B:
-                                            self.warnings.append(f"Missing book code at {C}:{V} with '{field_id}'")
-                                        if B not in USFM_BOOK_IDENTIFIERS:
-                                            self.warnings.append(f"Bad book code '{B}' at {C}:{V} with '{field_id}' (Should be exactly three uppercase letters or digits)")
-                                        if not C:
-                                            self.warnings.append(f"Missing chapter number at {B} {V} with '{field_id}'")
-                                        if C not in ('front',) and not C.isdigit():
-                                            self.warnings.append(f"Bad chapter number '{C}' at {B} {V} with '{field_id}'")
-                                        if not V:
-                                            self.warnings.append(f"Missing verse number at {C}:{V} with '{field_id}'")
-                                        if V not in ('intro',) and not V.isdigit():
-                                            self.warnings.append(f"Bad verse number '{V}' at {C}:{V} with '{field_id}'")
-                                        if C == 'front' and V != 'intro':
-                                            self.warnings.append(f"Unexpected C:V combination at {B} {C}:{V} with '{field_id}'")
-                                        if line_number > 2: # compare BCV progressions
-                                                if B != lastB:
-                                                    self.warnings.append(f"Only expected one book code: have '{B}' at {C}:{V} with '{field_id}' after having '{lastB}'")
-                                                if C.isdigit() and lastC.isdigit() and int(C) < int(lastC):
-                                                    self.warnings.append(f"Chapter numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
-                                                if C==lastC and V.isdigit() and lastV.isdigit() and int(V) < int(lastV):
-                                                    self.warnings.append(f"Verse numbers out of order at {B} {C}:{V} with '{field_id}' after {lastB} {lastC}:{lastV}")
+                            if OrigQuote:
+                                do_basic_text_checks('OrigQuote', OrigQuote)
 
-                                        # Check ID field
-                                        if not field_id:
-                                            self.warnings.append(f"Missing ID at {B} {C}:{V}")
-                                        elif len(field_id) != 4:
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should be exactly four characters long)")
-                                        elif not field_id[0].isalpha():
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should start with a letter)")
-                                        elif not field_id.replace('-','x').isalnum():
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Should only contain letters, digits, and hyphens)")
-                                        elif field_id.lower() != field_id:
-                                            self.warnings.append(f"Bad ID at {B} {C}:{V} with '{field_id}' (Letters should be lowercase)")
-                                        if field_id in field_id_list:
-                                            self.warnings.append(f"Duplicate ID at {B} {C}:{V} with '{field_id}'")
-                                        field_id_list.append(field_id)
+                            if (not Occurrence.replace('-','0').isdigit() # allows for -1 as well
+                            or -1>int(Occurrence)>30): # How many words in the longest verse???
+                                self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (Should be number -1,0,1,2,…)")
+                            elif OccurrenceNote == '-1' and '…' in OrigQuote:
+                                self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
 
-                                        if SupportReference:
-                                            do_basic_text_checks('SupportReference', SupportReference)
-                                            self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
+                            if GLQuote:
+                                do_basic_text_checks('GLQuote', GLQuote)
 
-                                        if OrigQuote:
-                                            do_basic_text_checks('OrigQuote', OrigQuote)
+                            if OccurrenceNote:
+                                do_basic_text_checks('OccurrenceNote', OccurrenceNote)
+                            if '://' in OccurrenceNote or '[[' in OccurrenceNote:
+                                OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
+                            if 'rc://' in OccurrenceNote:
+                                self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
+                            if B != 'Book' \
+                            and self.need_to_check_quotes \
+                            and OrigQuote:
+                                try:
+                                    self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
+                                except Exception as e:
+                                    self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
+                            processed_rows.append([B, C, V, OrigQuote, OccurrenceNote])
+                            line_number += 1
 
-                                        if (not Occurrence.replace('-','0').isdigit() # allows for -1 as well
-                                        or -1>int(Occurrence)>30): # How many words in the longest verse???
-                                            self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (Should be number -1,0,1,2,…)")
-                                        elif OccurrenceNote == '-1' and '…' in OrigQuote:
-                                            self.warnings.append(f"Bad Occurrence number '{Occurrence}' at {B} {C}:{V} with '{field_id}' (-1 can't combine with ellipsis in OrigQuote)")
+                        tsv_output_filename = os.path.join(self.output_dir, os.path.basename(this_filepath))
+                        with open(tsv_output_filename, "w", newline="") as tsv_output_file:
+                            tsv_output_writer = csv.writer(tsv_output_file)
+                            tsv_output_writer.writerows(processed_rows)
 
-                                        # if GLQuote:
-                                        #     do_basic_text_checks('GLQuote', GLQuote)
-
-                                        if OccurrenceNote:
-                                            do_basic_text_checks('OccurrenceNote', OccurrenceNote)
-                                        if '://' in OccurrenceNote or '[[' in OccurrenceNote:
-                                            OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
-                                        if 'rc://' in OccurrenceNote:
-                                            self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
-                                        if B != 'Book' \
-                                        and self.need_to_check_quotes \
-                                        and OrigQuote:
-                                            try: self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
-                                            except Exception as e:
-                                                self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
-
-                                    tsv_output_file.write(f'{B}\t{C}\t{V}\t{OrigQuote}\t{OccurrenceNote}\n')
-                                    line_number += 1
-                        AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
-                        self.num_files_written += 1
-                        break # Don't bother looking for other files since we found our TSV one for this book
+                    AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
+                    self.num_files_written += 1
+                    break # Don't bother looking for other files since we found our TSV one for this book
 
                 # NOTE: This code will create an .md file if there is a missing TSV file
                 if not found_tsv: # Look for markdown or json .txt
