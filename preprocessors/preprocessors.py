@@ -2640,7 +2640,7 @@ class TnPreprocessor(Preprocessor):
 
                             if SupportReference:
                                 do_basic_text_checks('SupportReference', SupportReference)
-                                self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
+                                # self.check_support_reference(f'{B} {C}:{V}', field_id, SupportReference, OccurrenceNote, self.repo_owner, language_id)
 
                             if OrigQuote:
                                 do_basic_text_checks('OrigQuote', OrigQuote)
