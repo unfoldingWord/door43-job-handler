@@ -928,17 +928,17 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         #     return False, {'error': f"{err_msg}."}
         AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
-        commit_hash = queued_json_payload['after']
+        commit_hash = queued_json_payload['after'] if 'after' in queued_json_payload else ''
         commit = None
         if 'commits' in queued_json_payload:
             for some_commit in queued_json_payload['commits']:
                 if some_commit['id'] == commit_hash:
                     commit = some_commit
                     break
-        commit_hash = commit_hash[:10]  # Only use the short form
+        commit_hash = commit_hash[:10] if commit_hash else ''  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
 
-        repo_data_url = commit['url']
+        repo_data_url = commit['url'] if commit else ''
         action_message = commit['message'].strip() # Seems to always end with a newline
 
         if 'pusher' in queued_json_payload:
