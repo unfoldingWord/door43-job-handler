@@ -558,7 +558,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
         # Prepend preprocessor results to linter warnings
         # total_warnings = len(matched_job_dict['preprocessor_warnings']) + len(queued_json_payload['linter_warnings'])
         queued_json_payload['linter_warnings'] = matched_job_dict['preprocessor_warnings'] \
-                                               + queued_json_payload['linter_warnings']
+                                               + queued_json_payload['linter_warnings'] if 'linter_warnings' in queued_json_payload else []
         # AppSettings.logger.debug(f"Now have {len(queued_json_payload['linter_warnings'])}"
         #                             f" linter_warnings: {queued_json_payload['linter_warnings']}")
         # assert len(queued_json_payload['linter_warnings']) == total_warnings
@@ -596,7 +596,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     clc = ClientLinterCallback(this_job_dict, identifier,
                                queued_json_payload['linter_success'],
                                queued_json_payload['linter_info'] if 'linter_info' in queued_json_payload else None,
-                               queued_json_payload['linter_warnings'],
+                               queued_json_payload['linter_warnings'] if 'linter_warnings' in queued_json_payload else None,
                                queued_json_payload['linter_errors'] if 'linter_errors' in queued_json_payload else None,
                                 )
                             #    s3_results_key=url_part2)
