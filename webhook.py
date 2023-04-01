@@ -44,7 +44,7 @@ KNOWN_RESOURCE_SUBJECTS = ('Generic_Markdown',
             # and 14 from https://api.door43.org/v3/subjects (last checked Mar 2020)
             'Bible', 'Aligned_Bible', 'Greek_New_Testament', 'Hebrew_Old_Testament',
             'Translation_Academy', 'Translation_Questions', 'Translation_Words',
-            # 'Translation_Notes', 'TSV_Translation_Notes',
+            'Translation_Notes', 'TSV_Translation_Notes',
             'Open_Bible_Stories', 'OBS_Study_Notes', 'OBS_Study_Questions',
                                 'OBS_Translation_Notes', 'OBS_Translation_Questions',
             )
