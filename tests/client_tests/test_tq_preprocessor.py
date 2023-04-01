@@ -41,6 +41,22 @@ class TestTqPreprocessor(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
         self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '57-TIT.md')))
 
+    def test_tq_preprocessor_tsv7(self):
+        # given
+        repo_name = 'en_tq_tsv7'
+        file_name = os.path.join('raw_sources', repo_name + '.zip')
+        rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
+        repo_dir = os.path.join(repo_dir)
+        self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
+
+        # when
+        do_preprocess('Translation_Questions', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
+
+        # then
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '51-PHP.md')))
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '57-TIT.md')))
+
 
     #
     # helpers

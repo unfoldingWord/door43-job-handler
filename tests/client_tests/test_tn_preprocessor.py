@@ -75,6 +75,32 @@ class TestTnPreprocessor(unittest.TestCase):
         lev = read_file(os.path.join(self.out_dir, '03-LEV.md'))
         self.assertGreater(len(lev), 1000)
 
+    def test_tn_preprocessor_short_tsv7(self):
+        # given
+        repo_name = 'en_tn_2books_tsv7'
+        file_name = os.path.join('raw_sources', repo_name + '.zip')
+        rc, repo_dir, self.temp_dir = self.extractFiles(file_name, repo_name)
+        repo_dir = os.path.join(repo_dir)
+        self.out_dir = tempfile.mkdtemp(prefix='Door43_test_output_')
+        # repo_name = 'dummy_repo'
+
+        # when
+        do_preprocess('Translation_Notes', 'dummyOwner', 'dummyURL', rc, repo_dir, self.out_dir)
+
+        # then
+        # self.assertTrue(preproc.is_multiple_jobs())
+        # self.assertEqual(len(preproc.get_book_list()), 2)
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, 'index.json')))
+        self.assertFalse(os.path.isfile(os.path.join(self.out_dir, '01-GEN.md')))
+        self.assertFalse(os.path.isfile(os.path.join(self.out_dir, '67-REV.md')))
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '02-EXO.md')))
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, '03-LEV.md')))
+        read_file(os.path.join(self.out_dir, 'index.json'))
+        exo = read_file(os.path.join(self.out_dir, '02-EXO.md'))
+        self.assertGreater(len(exo), 1000)
+        lev = read_file(os.path.join(self.out_dir, '03-LEV.md'))
+        self.assertGreater(len(lev), 1000)
+
     def test_tn_links(self):
         repo_name = 'en_tn_2books'
         file_name = os.path.join('raw_sources', repo_name + '.zip')
