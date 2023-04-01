@@ -2457,76 +2457,76 @@ class TnPreprocessor(Preprocessor):
 
             len_field_data = len(field_data)
             if field_data[0]==' ':
-                self.warnings.append(f"Unexpected leading space(s) in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected leading space(s) in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             elif field_data.lstrip() != field_data:
-                self.warnings.append(f"Unexpected leading whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected leading whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data.startswith('<br>'):
-                self.warnings.append(f"Unexpected leading break in '{field_data[:10].replace('<','&lt;').replace('>','&gt;')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected leading break in '{field_data[:10].replace('<','&lt;').replace('>','&gt;')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data[-1]==' ':
-                self.warnings.append(f"Unexpected trailing space(s) in '…{field_data[-10:].replace(' ','␣')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected trailing space(s) in '…{field_data[-10:].replace(' ','␣')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             elif field_data.rstrip() != field_data:
-                self.warnings.append(f"Unexpected trailing whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected trailing whitespace in '{field_data[:10].replace(' ','␣')}…' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data.endswith('<br>'):
-                self.warnings.append(f"Unexpected trailing break in '…{field_data[-10:].replace('<','&lt;').replace('>','&gt;')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected trailing break in '…{field_data[-10:].replace('<','&lt;').replace('>','&gt;')}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
 
             beforeCount, afterCount = 5, 6
             if (ix:=field_data.find('  ')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected double spaces in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected double spaces in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if (ix:=field_data.find('\u00A0')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u00A0','⍽')
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected non-break space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected non-break space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if (ix:=field_data.find('\u200B')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200B','⍽')
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected zero-width space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected zero-width space in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data[0] == '\u200D':
                 extract = field_data[:afterCount].replace('\u200D','⍽')
                 if afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Starts with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Starts with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data[-1] == '\u200D':
                 extract = field_data[-beforeCount:].replace('\u200D','⍽')
                 if beforeCount < len_field_data: extract = f'…{extract}'
-                self.warnings.append(f"Ends with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Ends with zero-width word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             # if (ix:=field_data.find('\u200D')) != -1:
             #     extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace('\u200D','⍽')
             #     if ix-beforeCount > 0: extract = f'…{extract}'
             #     if ix+afterCount < len_field_data: extract = f'{extract}…'
-            #     self.warnings.append(f"Unexpected zero-width joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+            #     self.warnings.append(f"Unexpected zero-width joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data[0] == '\u2060':
                 extract = field_data[:afterCount].replace('\u2060','⍽')
                 if afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Starts with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Starts with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_data[-1] == '\u2060':
                 extract = field_data[-beforeCount:].replace('\u2060','⍽')
                 if beforeCount < len_field_data: extract = f'…{extract}'
-                self.warnings.append(f"Ends with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Ends with word joiner in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if (ix:=field_data.find('\n')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount]
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected newLine character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected newLine character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if (ix:=field_data.find('\r')) != -1:
                 extract = field_data[max(ix-beforeCount,0):ix+afterCount]
                 if ix-beforeCount > 0: extract = f'…{extract}'
                 if ix+afterCount < len_field_data: extract = f'{extract}…'
-                self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                self.warnings.append(f"Unexpected carriageReturn character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
             if field_name == 'OrigQuote':
                 if (ix:=field_data.find(' …')) != -1:
                     extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
                     if ix-beforeCount > 0: extract = f'…{extract}'
                     if ix+afterCount < len_field_data: extract = f'{extract}…'
-                    self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                    self.warnings.append(f"Unexpected space before ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
                 if (ix:=field_data.find('… ')) != -1:
                     extract = field_data[max(ix-beforeCount,0):ix+afterCount].replace(' ','␣')
                     if ix-beforeCount > 0: extract = f'…{extract}'
                     if ix+afterCount < len_field_data: extract = f'{extract}…'
-                    self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {n}")
+                    self.warnings.append(f"Unexpected space after ellipse character in '{extract}' in {field_name} at {B} {C}:{V} ({field_id}) in line {line_number}")
         # end of do_basic_text_checks
 
         headers_re = re.compile('^(#+) +(.+?) *#*$', flags=re.MULTILINE)
