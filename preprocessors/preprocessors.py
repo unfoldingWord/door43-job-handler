@@ -2674,7 +2674,7 @@ class TnPreprocessor(Preprocessor):
                             processed_rows.append([B, C, V, OrigQuote, OccurrenceNote])
                             line_number += 1
 
-                        tsv_output_filename = os.path.join(self.output_dir, os.path.basename(this_filepath))
+                        tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
                         with open(tsv_output_filename, "w", newline="") as tsv_output_file:
                             tsv_output_writer = csv.writer(tsv_output_file)
                             tsv_output_writer.writerows(processed_rows)
