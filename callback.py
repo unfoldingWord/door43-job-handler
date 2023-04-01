@@ -594,7 +594,7 @@ def process_callback_job(pc_prefix:str, queued_json_payload:Dict[str,Any], redis
     AppSettings.logger.info("Running linter post-processing…")
     url_part2 = f"u/{this_job_dict['repo_owner_username']}/{this_job_dict['repo_name']}/{this_job_dict['commit_id']}"
     clc = ClientLinterCallback(this_job_dict, identifier,
-                               queued_json_payload['linter_success'],
+                               queued_json_payload['linter_success'] if 'linter_success' in queued_json_payload else None,
                                queued_json_payload['linter_info'] if 'linter_info' in queued_json_payload else None,
                                queued_json_payload['linter_warnings'] if 'linter_warnings' in queued_json_payload else None,
                                queued_json_payload['linter_errors'] if 'linter_errors' in queued_json_payload else None,

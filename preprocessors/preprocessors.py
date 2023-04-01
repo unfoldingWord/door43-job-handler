@@ -2546,16 +2546,12 @@ class TnPreprocessor(Preprocessor):
                 found_tsv = False
                 tsv9_filename = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
                 tsv7_filename = f'tn_{book.upper()}.tsv'
-                is_tsv7 = False
-                is_tsv9 = False
                 for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
                     if this_filepath.endswith(tsv7_filename):
-                        is_tsv7 = True
                         tsv_type = "TSV7"
                         expected_col_tab_count = EXPECTED_TSV7_SOURCE_TAB_COUNT
                         expected_header = EXPECTED_TSV7_HEADER
                     elif this_filepath.endswith(tsv9_filename):
-                        is_tsv9 = True
                         tsv_type = "TSV9"
                         expected_col_tab_count = EXPECTED_TSV9_SOURCE_TAB_COUNT
                         expected_header = EXPECTED_TSV9_HEADER
@@ -2570,7 +2566,7 @@ class TnPreprocessor(Preprocessor):
                     processed_rows = [["Book", "Chapter", "Verse", "OrigQuote", "OccurrenceNote"]]
 
                     with open(this_filepath, 'rt') as tsv_source_file:
-                        for n, tsv_line in enumerate(tsv_source_file, start=1):
+                        for line_number, tsv_line in enumerate(tsv_source_file, start=1):
                             tsv_line = tsv_line.rstrip('\n')
                             tab_count = tsv_line.count('\t')
 
@@ -2582,7 +2578,7 @@ class TnPreprocessor(Preprocessor):
                                     self.warnings.append(f"Unexpected line #{line_number} with {tab_count} tabs (expected {expected_col_tab_count}): '{tsv_line}'")
                                 continue
 
-                            if is_tsv9:
+                            if tsv_type == "TSV9":
                                 B, C, V, field_id, SupportReference, OrigQuote, Occurrence, GLQuote, OccurrenceNote = tsv_line.split('\t')
                             else:
                                 GLQuote = ''
@@ -2595,7 +2591,7 @@ class TnPreprocessor(Preprocessor):
                                     C = ref_parts[0]
                                     V = ref_parts[1]
                                 else:
-                                    self.errors.append(f"Unexpected reference: '{tsv_line}' in {os.path.basename(this_filepath)}: "+ref)
+                                    self.warnings.append(f"Unexpected reference: '{tsv_line}' in {os.path.basename(this_filepath)}: "+ref)
                                     continue
                                 if ':' in V:
                                     V = V.split('-')[0]
@@ -2672,12 +2668,11 @@ class TnPreprocessor(Preprocessor):
                                 except Exception as e:
                                     self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
                             processed_rows.append([B, C, V, OrigQuote, OccurrenceNote])
-                            line_number += 1
 
-                        tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
-                        with open(tsv_output_filename, "w", newline="") as tsv_output_file:
-                            tsv_output_writer = csv.writer(tsv_output_file)
-                            tsv_output_writer.writerows(processed_rows)
+                    tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
+                    with open(tsv_output_filename, "w", newline='', encoding='utf-8') as tsv_output_file:
+                        tsv_output_writer = csv.writer(tsv_output_file)
+                        tsv_output_writer.writerows(processed_rows)
 
                     AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
                     self.num_files_written += 1
