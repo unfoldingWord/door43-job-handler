@@ -2671,7 +2671,7 @@ class TnPreprocessor(Preprocessor):
 
                     tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
                     with open(tsv_output_filename, "w", newline='', encoding='utf-8') as tsv_output_file:
-                        tsv_output_writer = csv.writer(tsv_output_file)
+                        tsv_output_writer = csv.writer(tsv_output_file, delimiter="\t")
                         tsv_output_writer.writerows(processed_rows)
 
                     AppSettings.logger.info(f"Loaded {line_number:,} TSV lines from {os.path.basename(this_filepath)}.")
