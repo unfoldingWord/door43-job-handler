@@ -554,7 +554,7 @@ def check_for_forthcoming_pushes_in_queue(submitted_json_payload:Dict[str,Any], 
     """
     len_our_queue = len(our_queue)
     if submitted_json_payload['DCS_event'] == 'push' \
-    and len(submitted_json_payload['commits']) == 1 \
+    and 'commits' in submitted_json_payload and len(submitted_json_payload['commits']) == 1 \
     and len_our_queue: # Have other entries
         AppSettings.logger.info(f"Checking for duplicate pushes in {len_our_queue} other queued job entr{'y' if len_our_queue==1 else 'ies'}…")
         my_url_bits = submitted_json_payload['commits'][0]['url'].split('/')
