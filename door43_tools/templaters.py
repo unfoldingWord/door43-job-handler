@@ -597,28 +597,28 @@ class TnTemplater(Templater):
         """
         for fname in self.HTMLfilepaths:
             key = os.path.basename(fname)
-            if key in self.titles:  # skip if we already have data
-                continue
-            filebase = os.path.splitext(os.path.basename(fname))[0]
-            # Getting the book code for HTML tag references
-            fileparts = filebase.split('-')
-            if len(fileparts) == 2:
-                # Assuming filename of ##-<name>.usfm, such as 01-GEN.usfm
-                book_code = fileparts[1].lower()
-            else:
-                # Assuming filename of <name.usfm, such as GEN.usfm
-                book_code = fileparts[0].lower()
-            book_code.replace(' ', '-').replace('.', '-')  # replacing spaces and periods since used as tag class
-            with open(fname, 'r') as f:
-                soup = BeautifulSoup(f.read(), 'html.parser')
-            if soup.select('div#content h1'):
-                title = soup.select('div#content h1')[0].text.strip()
-            else:
-                title = f'{book_code}.'
-            self.titles[key] = title
-            self.book_codes[key] = book_code
-            chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
-            self.chapters[key] = [c['id'] for c in chapters]
+            if not key in self.titles:  # skip if we already have titles
+                filebase = os.path.splitext(os.path.basename(fname))[0]
+                # Getting the book code for HTML tag references
+                fileparts = filebase.split('-')
+                if len(fileparts) == 2:
+                    # Assuming filename of ##-<name>.usfm, such as 01-GEN.usfm
+                    book_code = fileparts[1].lower()
+                else:
+                    # Assuming filename of <name.usfm, such as GEN.usfm
+                    book_code = fileparts[0].lower()
+                book_code.replace(' ', '-').replace('.', '-')  # replacing spaces and periods since used as tag class
+                with open(fname, 'r') as f:
+                    soup = BeautifulSoup(f.read(), 'html.parser')
+                if soup.select('div#content h1'):
+                    title = soup.select('div#content h1')[0].text.strip()
+                else:
+                    title = f'{book_code}.'
+                self.titles[key] = title
+                self.book_codes[key] = book_code
+            if key not in self.chapters or not self.chapters[key]: # skip if we already have chapters
+                chapters = soup.find_all('h2', {'section-header'}) # Returns a list of bs4.element.Tag's
+                self.chapters[key] = [c['id'] for c in chapters]
     # end of TnTemplater.get_page_navigation()
 
 
