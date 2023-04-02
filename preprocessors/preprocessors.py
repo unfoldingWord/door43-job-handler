@@ -2564,6 +2564,7 @@ class TnPreprocessor(Preprocessor):
                     lastB = lastC = lastV = None
                     field_id_list:List[str] = []
                     processed_rows = [["Book", "Chapter", "Verse", "OrigQuote", "OccurrenceNote"]]
+                    index_json['chapters'][html_file]:List[str] = []
 
                     with open(this_filepath, 'rt') as tsv_source_file:
                         for line_number, tsv_line in enumerate(tsv_source_file, start=1):
