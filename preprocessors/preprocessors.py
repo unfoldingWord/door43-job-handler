@@ -2597,11 +2597,13 @@ class TnPreprocessor(Preprocessor):
                                 if ':' in V:
                                     V = V.split('-')[0]
 
+                            if B != lastB or C != lastC:
+                                link = f'tn-chapter-{B}-{C.zfill(3)}'
+                                index_json['chapters'][html_file].append(link)
+
                             if B != lastB or C != lastC or V != lastV:
                                 field_id_list:List[str] = [] # IDs only need to be unique within each verse
                                 lastB, lastC, lastV = B, C, V
-                                link = f'tn-chapter-{B}-{C.zfill(3)}'
-                                index_json['chapters'][html_file].append(link)
 
                             # Check book identifier and C V fields
                             if not B:
