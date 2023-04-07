@@ -2546,7 +2546,7 @@ class TnPreprocessor(Preprocessor):
                 found_tsv = False
                 tsv9_filename = f'{BOOK_NUMBERS[book]}-{book.upper()}.tsv'
                 tsv7_filename = f'tn_{book.upper()}.tsv'
-                for this_filepath in glob(os.path.join(self.source_dir, '*.tsv')):
+                for this_filepath in sorted(glob(os.path.join(self.source_dir, '*.tsv'))):
                     if this_filepath.endswith(tsv7_filename):
                         tsv_type = "TSV7"
                         expected_col_tab_count = EXPECTED_TSV7_SOURCE_TAB_COUNT
@@ -2563,7 +2563,7 @@ class TnPreprocessor(Preprocessor):
                     line_number = 1
                     lastB = lastC = lastV = None
                     field_id_list:List[str] = []
-                    processed_rows = [["Book", "Chapter", "Verse", "OrigQuote", "OccurrenceNote"]]
+                    processed_rows = [["Book", "Chapter", "Verse", "Occurrence", "OrigQuote", "OccurrenceNote"]]
                     index_json['chapters'][html_file]:List[str] = []
 
                     with open(this_filepath, 'rt') as tsv_source_file:
@@ -2672,7 +2672,7 @@ class TnPreprocessor(Preprocessor):
                                     self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
                                 except Exception as e:
                                     self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
-                            processed_rows.append([B, C, V, OrigQuote, OccurrenceNote])
+                            processed_rows.append([B, C, V, Occurrence, OrigQuote, OccurrenceNote])
 
                     tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
                     with open(tsv_output_filename, "w", newline='', encoding='utf-8') as tsv_output_file:
