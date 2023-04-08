@@ -2665,13 +2665,13 @@ class TnPreprocessor(Preprocessor):
                                 OccurrenceNote = self.fix_tN_links(f'{B} {C}:{V}', OccurrenceNote, self.repo_owner, language_id)
                             if 'rc://' in OccurrenceNote:
                                 self.warnings.append(f"Unable to process link at {B} {C}:{V} in '{OccurrenceNote}'")
-                            if B != 'Book' \
-                            and self.need_to_check_quotes \
-                            and OrigQuote:
-                                try:
-                                    self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
-                                except Exception as e:
-                                    self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
+                            # if B != 'Book' \
+                            # and self.need_to_check_quotes \
+                            # and OrigQuote:
+                            #     try:
+                            #         self.check_original_language_TN_quotes(B,C,V, field_id, OrigQuote)
+                            #     except Exception as e:
+                            #         self.warnings.append(f"{B} {C}:{V} Unable to check original language quotes: {e}")
                             processed_rows.append([B, C, V, SupportReference, OrigQuote, Occurrence, OccurrenceNote])
 
                     tsv_output_filename = os.path.join(self.output_dir, os.path.basename(tsv9_filename)) # We always want to save as the TSV9 file name with book number
