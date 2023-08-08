@@ -557,7 +557,7 @@ class TwTemplater(Templater):
                         <a class="content-nav-expand collapsed" data-target="#section-{section}-sub" data-toggle="collapse" href="#"></a>
                         <ul class="collapse" id="section-{section}-sub">
             """
-            titles = self.chapters[key]
+            titles = self.chapters[key] if key in self.chapters else []
             terms_sorted_by_title = sorted(titles, key=lambda i: titles[i].lower())
             for term in terms_sorted_by_title:
                 html += f"""
