@@ -21,6 +21,7 @@ QUEUE_NAME_SUFFIX = '' # Used to switch to a different queue, e.g., '_1'
 webhook_queue_name = prefix + ENQUEUE_NAME + QUEUE_NAME_SUFFIX
 callback_queue_name = prefix + ENQUEUE_NAME + CALLBACK_SUFFIX + QUEUE_NAME_SUFFIX
 QUEUES = [callback_queue_name, webhook_queue_name] # Callback (i.e., finishing off jobs) is higher priority
+WORKER_NAME = getenv('WORKER_NAME', 'worker-1')
 
 # If you're using Sentry to collect your runtime exceptions, you can use this
 # to configure RQ for it in a single step
