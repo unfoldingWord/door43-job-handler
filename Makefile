@@ -82,7 +82,7 @@ run:
 	# This runs the rq job handler
 	#   which removes and then processes jobs from the production redis queue
 	# TODO: Can the AWS redis url go in here (i.e., is it public)?
-	REDIS_URL="dadada" rq worker --config rq_settings --name D43_JobHandler
+	REDIS_URL="dadada" rq worker --config rq_settings --name worker-1
 
 imageDev:
 	docker build --file Dockerfile-developBranch --tag unfoldingword/door43_job_handler:develop .
