@@ -731,6 +731,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
 
         # Upload zipped file to the S3 pre-convert bucket
         AppSettings.logger.info("Uploading zip file to S3 pre-convert bucket…")
+        current_job = get_current_job()
         our_job_id = current_job.id
         file_key = upload_preconvert_zip_file(job_id=our_job_id, zip_filepath=preprocessed_zip_file.name)
 
@@ -785,7 +786,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
         dcs_domain = f'{url_parts.scheme}://{url_parts.netloc}'
         current_job = get_current_job()
         tx_payload = {
-            'job_id': current_job.job_id,
+            'job_id': current_job.id,
             'identifier': our_identifier, # So we can recognise this job inside tX Job Handler
             'repo_name': repo_name,
             'repo_owner': repo_owner_username,
