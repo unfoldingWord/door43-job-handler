@@ -931,13 +931,16 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         #     return False, {'error': f"{err_msg}."}
         AppSettings.logger.debug(f"Got commit_branch='{commit_branch}'")
 
-        commit_hash = queued_json_payload['after'] if 'after' in queued_json_payload else ''
+        commit_hash = queued_json_payload['after'] if 'after' in queued_json_payload else queued_json_payload['head_commit']['id'] if 'head_commit' in queued_json_payload else ''
         commit = None
         if 'commits' in queued_json_payload:
             for some_commit in queued_json_payload['commits']:
                 if some_commit['id'] == commit_hash:
                     commit = some_commit
                     break
+        if not commit and 'head_commit' in queued_json_payload:
+            commit = queued_json_payload['head_commit']
+
         commit_hash = commit_hash[:10] if commit_hash else ''  # Only use the short form
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
 
