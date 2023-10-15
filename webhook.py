@@ -942,7 +942,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         AppSettings.logger.debug(f"Got original commit_hash='{commit_hash}'")
 
         repo_data_url = commit['url'] if commit else ''
-        action_message = commit['message'].strip() if 'message' in commit else '' # Seems to always end with a newline
+        action_message = commit['message'].strip() if commit and 'message' in commit else '' # Seems to always end with a newline
 
         if 'pusher' in queued_json_payload:
             pusher_dict = queued_json_payload['pusher']
