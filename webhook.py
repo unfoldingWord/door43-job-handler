@@ -587,7 +587,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
                         commit_type:str, commit_id:str, commit_hash:Optional[str],
                         repo_data_url:str, repo_owner_username:str, repo_name:str,
                         source_url_base:str, our_identifier:str, our_output_format:str,
-                        our_queue) -> str:
+                        our_queue, dcs_event) -> str:
     """
     It downloads a zip file from the DCS repo to the temp folder and unzips the files,
         and then creates a ResourceContainer (RC) object.
@@ -772,6 +772,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
             pj_job_dict['echoed_from_production'] = submitted_json_payload['echoed_from_production']
         pj_job_dict['status'] = None
         pj_job_dict['success'] = False
+        pj_job_dict['DCS_event'] = dcs_event
 
         # Save the job info in Redis for the callback to use
         remember_job(pj_job_dict, redis_connection)
@@ -800,6 +801,7 @@ def handle_page_build(base_temp_dir_name:str, submitted_json_payload:Dict[str,An
                                 else input_format, # special case for .txt Bibles
             'output_format': our_output_format,
             'source': source_url_base + '/' + file_key,
+            'DCS_event': dcs_event,
             'callback': 'http://127.0.0.1:8080/tx-callback/' \
                             if prefix and debug_mode_flag and ':8090' in tx_post_url \
                         else DOOR43_CALLBACK_URL,
@@ -1089,7 +1091,7 @@ def process_webhook_job(queued_json_payload:Dict[str,Any], redis_connection, our
         job_descriptive_name = handle_page_build(base_temp_dir_name, queued_json_payload, redis_connection,
                             commit_type, commit_id, commit_hash, repo_data_url,
                             repo_owner_username, repo_name, source_url_base,
-                            our_identifier, our_output_format, our_queue)
+                            our_identifier, our_output_format, our_queue, queued_json_payload['DCS_event'])
     else:
         AppSettings.logger.critical(f"Nothing to process for '{queued_json_payload['DCS_event']}!")
 
