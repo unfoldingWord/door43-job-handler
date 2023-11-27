@@ -1391,10 +1391,14 @@ class TaPreprocessor(Preprocessor):
         project_config = project.config()
         if project_config and link in project_config:
             return f'#{link}'
-        for p in self.rc.projects:
+        for i, p in enumerate(self.rc.projects):
             p_config = p.config()
             if p_config and link in p_config:
-                return f'{p.identifier}.html#{link}'
+                try:
+                    manual_num = '%02d' % (int(p.sort) + 1)
+                except:
+                    manual_num = '%02d' % (int(i) + 1)
+                return f'{manual_num}-{p.identifier}.html#{link}'
         return f'#{link}'
 
 

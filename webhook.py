@@ -391,7 +391,7 @@ def remember_job(rj_job_dict:Dict[str,Any], rj_redis_connection) -> None:
     # Write the updated job list to Redis
     assert outstanding_jobs_dict # Should always contain at least one entry (the current new one)
     outstanding_jobs_json_string = json.dumps(outstanding_jobs_dict)
-    rj_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string)
+    rj_redis_connection.set(REDIS_JOB_LIST, outstanding_jobs_json_string, keepttl=True)
 # end of remember_job function
 
 
@@ -1157,7 +1157,7 @@ def job(queued_json_payload:Dict[str,Any]) -> None:
     if not abort_duplicate_flag:
         # AppSettings.logger.debug(f"Queue '{webhook_queue_name}' length={len_our_queue}")
         stats_client.gauge(f'"{enqueue_job_stats_prefix}.queue.length.current', len_our_queue)
-        AppSettings.logger.info(f"Updated stats for '{door43_stats_prefix}.enqueue-job.{ENQUEUE_NAME}.queue.length.current' to {len_our_queue}")
+        AppSettings.logger.info(f"Updated stats for '{enqueue_job_stats_prefix}.queue.length.current' to {len_our_queue}")
 
         #print(f"Got a job from {current_job.origin} queue: {queued_json_payload}")
         #print(f"\nGot job {current_job.id} from {current_job.origin} queue")
