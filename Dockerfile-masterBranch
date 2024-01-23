@@ -13,7 +13,8 @@ RUN pip3 install --requirement requirements.txt
 ENV WORKER_NAME="worker-1"
 ENV WITH_SCHEDULER=""
 
-CMD rq worker --config rq_settings --name $WORKER_NAME $WITH_SCHEDULER
+#CMD rq worker --config rq_settings --name $WORKER_NAME $WITH_SCHEDULER
+CMD rq worker --config rq_settings --name $WORKER_NAME-$(date +%s) $WITH_SCHEDULER
 
 # Define environment variables
 # NOTE: The following environment variables are expected to be set:
